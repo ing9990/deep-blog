@@ -56,9 +56,19 @@ CLAUDE.md §12는 다크모드를 Phase 6으로 분류했지만, shadcn 토큰 �
 
 JetBrains Mono는 Shiki 라인 하이라이트 도입 단계(Phase 2 후반)에 동일 방식으로 추가한다. 그 전까지는 `ui-monospace` 시스템 스택 사용.
 
-### 2.5 TOC — Velite 빌드타임 추출
+### 2.5 TOC — Velite 내장 `s.toc()` 활용
 
-`velite.config.ts`의 스키마에 `toc: TocItem[]` computed field를 추가하고, `plugins/velite-toc.ts`의 자체 작성 추출기로 h2/h3을 파싱한다. 런타임 DOM 파싱 대신 **순수 서버 데이터**를 사용해 §8.2 "client 경계를 leaf로" 원칙을 지킨다. `github-slugger`가 `rehype-slug`와 동일한 id를 생성하므로 Intersection Observer가 정확히 매칭된다.
+Velite는 이미 `s.toc()` 스키마 헬퍼를 제공하고, 현재 `velite.config.ts`에도 `toc: s.toc()`로 선언되어 있다. 자체 플러그인은 불필요하다. `s.toc()`는 `github-slugger` 기반으로 계층적 TOC 트리를 반환한다:
+
+```typescript
+type VeliteTocEntry = { title: string; url: string; items: VeliteTocEntry[] }
+```
+
+**필요한 작업**:
+1. MDX 렌더링 파이프라인에 `rehype-slug`를 추가해 실제 `<h2>`/`<h3>`에 `id` 속성을 부여한다. 현재는 id가 없어 Intersection Observer가 동작하지 않는다. `rehype-slug`와 Velite `s.toc()` 모두 `github-slugger`를 사용하므로 id와 `url`이 일치한다.
+2. `TableOfContents` 컴포넌트는 Velite의 계층 구조(`items` 배열에 h3 중첩)를 **flat 배열로 변환**해 렌더한다. 변환기는 `lib/toc.ts`의 `flattenToc()` 순수 함수로 분리한다.
+
+런타임 DOM 파싱 대신 **순수 서버 데이터**를 사용해 §8.2 "client 경계를 leaf로" 원칙을 지킨다.
 
 ### 2.6 테스트 범위 — 순수 함수만
 
@@ -194,12 +204,10 @@ lib/
 ├── posts.ts                          [수정 최소]
 ├── filters.ts                        [신규] filterByTag / searchPosts / sortPosts / applyFilters / extractAllTags
 ├── reading-time.ts                   [신규]
+├── toc.ts                            [신규] flattenToc() — Velite 계층 TOC → flat 배열
 └── utils.ts                          [신규] cn(), buildPostsUrl()
 
-plugins/
-└── velite-toc.ts                     [신규] extractToc()
-
-velite.config.ts                      [수정] rehype-slug, toc/readingTime computed fields
+velite.config.ts                      [수정] rehype-slug 추가, readingTime computed field (toc는 기존 s.toc() 유지)
 tailwind.config.ts                    [수정] shadcn 토큰 매핑, Pretendard
 components.json                       [신규]
 public/fonts/PretendardVariable.woff2 [신규, ~1.2MB]
@@ -207,7 +215,7 @@ public/fonts/PretendardVariable.woff2 [신규, ~1.2MB]
 tests/
 ├── filters.test.ts                   [신규, ~14 케이스]
 ├── reading-time.test.ts              [신규, ~5 케이스]
-└── velite-toc.test.ts                [신규, ~6 케이스]
+└── toc.test.ts                       [신규, ~6 케이스] — flattenToc() + Velite 출력 검증
 ```
 
 ### 4.2 Server vs Client 경계
@@ -490,31 +498,37 @@ export function calculateReadingTime(content: string): number {
 
 Velite 스키마의 computed field로 빌드 타임에 계산 → `post.readingTime: number` 저장.
 
-### 6.5 TOC 추출기
+### 6.5 TOC 평탄화 (`lib/toc.ts`)
+
+Velite의 `s.toc()`는 h2의 `items`에 h3을 중첩한 트리를 반환한다. `TableOfContents`는 flat 리스트로 렌더하므로 순수 함수로 평탄화한다:
 
 ```typescript
-// plugins/velite-toc.ts
-import { remark } from 'remark';
-import { visit } from 'unist-util-visit';
-import { toString } from 'mdast-util-to-string';
-import GithubSlugger from 'github-slugger';
+// lib/toc.ts
+export interface VeliteTocEntry {
+  title: string;
+  url: string;        // "#slug"
+  items: VeliteTocEntry[];
+}
 
-export interface TocItem { title: string; slug: string; depth: 2 | 3 }
+export interface FlatTocItem {
+  title: string;
+  slug: string;       // "#" 제거된 id
+  depth: 2 | 3;
+}
 
-export function extractToc(markdown: string): TocItem[] {
-  const tree = remark().parse(markdown);
-  const slugger = new GithubSlugger();
-  const items: TocItem[] = [];
-  visit(tree, 'heading', (node: any) => {
-    if (node.depth !== 2 && node.depth !== 3) return;
-    const title = toString(node);
-    items.push({ title, slug: slugger.slug(title), depth: node.depth });
-  });
-  return items;
+export function flattenToc(entries: VeliteTocEntry[]): FlatTocItem[] {
+  const out: FlatTocItem[] = [];
+  for (const h2 of entries) {
+    out.push({ title: h2.title, slug: h2.url.replace(/^#/, ''), depth: 2 });
+    for (const h3 of h2.items) {
+      out.push({ title: h3.title, slug: h3.url.replace(/^#/, ''), depth: 3 });
+    }
+  }
+  return out;
 }
 ```
 
-`github-slugger`는 `rehype-slug`가 내부적으로 쓰는 동일 패키지 → id 일관성 보장.
+h4+ 헤딩은 무시한다(블로그 글 구조상 3 depth면 충분).
 
 ### 6.6 Velite 스키마 확장
 
@@ -527,13 +541,24 @@ const posts = defineCollection({
     .extend({
       slug: s.slug('post'),
       body: s.mdx(),
-      toc: s.custom().transform((_, { meta }) => extractToc(meta.content)),
-      readingTime: s.custom().transform((_, { meta }) => calculateReadingTime(meta.content)),
+      toc: s.toc(),  // 기존 유지 — Velite 내장 헬퍼
+      readingTime: s.markdown().transform((md) => calculateReadingTime(md)),
     })
 });
 ```
 
-`rehype-pretty-code` 파이프라인에 `rehype-slug`를 추가해 헤딩에 id를 부여한다.
+`s.markdown()`은 원본 마크다운 문자열을 반환하는 헬퍼. `readingTime`은 이 문자열을 `calculateReadingTime`에 넘겨 숫자로 변환한다. (만약 Velite 0.2에서 `s.markdown()`이 body용으로만 쓰인다면, `s.custom().transform((_, { meta }) => calculateReadingTime(meta.content))`로 대체한다 — 플랜 Task에서 실제 확인 후 선택.)
+
+**MDX 파이프라인에 `rehype-slug` 추가** — 현재 `rehype-pretty-code`만 있어 `<h2>`/`<h3>`에 `id`가 없다. `rehype-slug`가 `github-slugger`로 id를 부여하면 Velite `s.toc()`의 `url`(`#slug` 형식)과 정확히 매칭된다.
+
+```typescript
+mdx: {
+  rehypePlugins: [
+    rehypeSlug,  // ← 신규
+    [rehypePrettyCode, { /* 기존 설정 */ }],
+  ],
+}
+```
 
 ---
 
@@ -545,7 +570,7 @@ Phase 1의 순수 함수 중심 테스트 전략을 확장한다. UI 컴포넌�
 |---|---|---|
 | `tests/filters.test.ts` | `lib/filters.ts` | ~14 |
 | `tests/reading-time.test.ts` | `lib/reading-time.ts` | ~5 |
-| `tests/velite-toc.test.ts` | `plugins/velite-toc.ts` | ~6 |
+| `tests/toc.test.ts` | `lib/toc.ts` + Velite 출력 매칭 | ~6 |
 
 **filters.test.ts 케이스**:
 - `filterByTag`: tag 미지정 전체 반환 / 'Database' 필터 / 대소문자 무시 / 없으면 빈 배열
@@ -561,12 +586,9 @@ Phase 1의 순수 함수 중심 테스트 전략을 확장한다. UI 컴포넌�
 - 500자 = 1분
 - 최소 1분 보장
 
-**velite-toc.test.ts 케이스**:
-- h2/h3 추출 / h1/h4 제외
-- slug 생성 (`github-slugger` 호환)
-- 한글 헤딩 slug
-- 중복 헤딩 slug 고유화
-- 빈 문서 / h1만 있는 문서
+**toc.test.ts 케이스**:
+- `flattenToc`: 빈 배열 / h2만 / h2+h3 중첩 / 여러 h2와 h3 섞임 / h3 없는 h2
+- Velite 출력 매칭: 빌드된 `posts[*].toc`의 `url`과 실제 MDX body의 id가 일치 (통합 테스트)
 
 **기존 Phase 1 테스트 17개는 영향받지 않는다**. `lib/posts.ts` 시그니처 불변, Velite 스키마는 `toc`/`readingTime`만 **추가**되므로 기존 테스트 호환.
 
@@ -608,11 +630,11 @@ Phase 2 작업과 같은 커밋 범위에서 CLAUDE.md를 업데이트해 문서
 
 ### 2단계 — Velite 스키마 확장
 
-1. `pnpm add github-slugger rehype-slug mdast-util-to-string unist-util-visit remark remark-parse`
-2. `plugins/velite-toc.ts` + `extractToc`
-3. `lib/reading-time.ts` + `calculateReadingTime`
-4. `velite.config.ts`: `rehype-slug` 추가 + `toc`/`readingTime` computed fields
-5. `tests/velite-toc.test.ts`, `tests/reading-time.test.ts`
+1. `pnpm add rehype-slug`
+2. `lib/reading-time.ts` + `calculateReadingTime` + TDD 테스트
+3. `lib/toc.ts` + `flattenToc` + TDD 테스트
+4. `velite.config.ts`: `rehype-slug` 추가 + `readingTime` computed field (기존 `s.toc()` 유지)
+5. 통합 테스트: 빌드 후 `posts[0].toc`가 실제 body의 id와 일치하는지 확인
 6. `hello-world.mdx`에 h2/h3 여러 개 추가
 
 **검증**: `pnpm velite` → `.velite`에 `toc`/`readingTime` 반영. `pnpm test` 녹색.
@@ -698,5 +720,5 @@ Phase 2 작업과 같은 커밋 범위에서 CLAUDE.md를 업데이트해 문서
 | shadcn CLI가 CSS 변수를 덮어씀 | 커스텀 토큰 소실 | CLI init 후 `globals.css`를 스펙(§3.1)으로 수동 복구 |
 | `Intl.Collator('ko')` Node 환경 차이 | 정렬 불일치 | Node 공식 바이너리(`full-icu` 기본)만 사용 가정 — 로컬 전용이라 안전 |
 | Pretendard 1.2MB 파일 git 커밋 | 레포 크기 증가 | Git LFS 불필요 수준. 1회 커밋. |
-| Velite `toc` 필드가 `rehype-slug` id와 불일치 | TOC 스크롤 하이라이트 실패 | 동일 `github-slugger` 패키지 사용으로 방어 + `velite-toc.test.ts`에서 명시 검증 |
+| Velite `s.toc()` URL과 `rehype-slug` id 불일치 | TOC 스크롤 하이라이트 실패 | 양쪽 모두 `github-slugger` 사용이라 구조적으로 일치. `toc.test.ts`의 통합 테스트에서 `posts[0].toc` vs body id 매칭을 명시 검증 |
 | Shiki 라인 하이라이트 설치가 기존 코드 블록을 깨뜨림 | Phase 2 후반 빌드 실패 | 6단계를 별도 커밋으로 분리, 실패 시 롤백 용이 |
