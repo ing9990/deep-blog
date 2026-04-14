@@ -9,7 +9,7 @@ type RuntimeModule = typeof runtime
 
 // The module object returned by evaluating the compiled body.
 type MDXModule = {
-  default: ComponentType<{ components?: Record<string, ComponentType> }>
+  default: ComponentType<{ components?: Record<string, ComponentType<Record<string, unknown>>> }>
 }
 
 /**
@@ -24,10 +24,10 @@ type MDXModule = {
  * Security note (spec §7.2): the code string is Velite's deterministic
  * compiler output from version-controlled MDX files, never user input.
  */
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
 const useMDXComponent = (
   code: string,
-): ComponentType<{ components?: Record<string, ComponentType> }> => {
+): ComponentType<{ components?: Record<string, ComponentType<Record<string, unknown>>> }> => {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const fn = new Function(code) as (rt: RuntimeModule) => MDXModule
   return fn(runtime).default
 }
