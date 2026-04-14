@@ -760,7 +760,7 @@ pnpm type-check   # TypeScript 타입 에러 없음
 
 새로운 작업 요청 시 아래 순서를 참고합니다:
 
-1. **Phase 1 — 기반 구축**: Next.js 프로젝트 초기화, Velite 설정, MDX 파이프라인, 샘플 글 1개 `/posts/[slug]` 렌더링
+1. **Phase 1 — 기반 구축** ✅ **완료** (`phase-1-complete` 태그): Next.js 프로젝트 초기화, Velite 설정, MDX 파이프라인, 샘플 글 `/posts/hello-world` 렌더링. 세부 내역은 §13 참고.
 2. **Phase 2 — 핵심 UI**: 인덱스 페이지 (카드 리스트 + 검색 + 필터), 글 상세 페이지 (본문 + TOC)
 3. **Phase 3 — 키워드 시스템**: remark-auto-link 플러그인, KeywordLink 컴포넌트, 키워드 맵
 4. **Phase 4 — 시각화 프레임워크**: VisualContainer, StepController, SpeedSlider 공통 컴포넌트 구축
@@ -769,3 +769,85 @@ pnpm type-check   # TypeScript 타입 에러 없음
 
 > **시각화 컴포넌트 개별 구현**은 Phase 4 이후 각 글을 작성할 때 해당 주제에 맞게 함께 구현합니다.
 > 예: "퀵소트" 글 작성 시 → `QuickSort.tsx` 시각화 컴포넌트도 함께 구현
+
+---
+
+## 13. Phase 1 구현 현황
+
+> 이 섹션은 Phase 1 완료 시점(2026-04-14)의 실제 구현 상태와 향후 에이전트가 반드시 알아야 할 의사결정/제약을 기록합니다. §3 디렉토리 구조는 Phase 6까지의 **목표**이며, 아래는 **현재 실재하는** 파일/설정입니다.
+
+### 13.1 존재하는 파일 (Phase 1)
+
+```
+app/
+├── layout.tsx                 # 루트 레이아웃 (html lang="ko", globals.css 임포트)
+├── page.tsx                   # 임시 dev 인덱스 (Phase 2에서 전면 재작성 예정)
+├── globals.css                # @import "tailwindcss" + @plugin typography + system font
+└── posts/[slug]/page.tsx      # 글 상세 페이지 (generateStaticParams + dynamicParams=false)
+
+components/mdx/
+├── index.ts                   # mdxComponents = {} (Phase 2+에서 채움)
+└── MDXContent.tsx             # Velite 컴파일 본문을 evaluate하는 Server Component
+
+content/posts/
+└── hello-world.mdx            # 파이프라인 검증 샘플
+
+lib/
+└── posts.ts                   # getAllPosts / getPostBySlug / getAllSlugs (draft 필터, 날짜 내림차순)
+
+tests/
+├── smoke.test.ts              # Vitest 동작 검증
+├── velite-schema.test.ts      # postFrontmatterSchema 단위 테스트 (6개)
+├── velite-build.test.ts       # Velite 빌드 결과 통합 테스트 (4개)
+└── posts.test.ts              # lib/posts.ts 단위 테스트 (vi.mock 사용, 6개)
+
+velite.config.ts               # 스키마 + rehype-pretty-code 설정
+next.config.mjs                # VeliteWebpackPlugin으로 velite build 호출
+tsconfig.json                  # strict + paths: @/* → ./, #site/content → ./.velite
+vitest.config.ts               # 별칭 미러링, environment: node, globals: false
+tailwind.config.ts             # content 글롭 + typography 플러그인
+postcss.config.mjs             # @tailwindcss/postcss
+.eslintrc.json                 # next/core-web-vitals (레거시; Next 16에서 ESLint CLI 전환 필요)
+.gitignore                     # .next, .velite, *.tsbuildinfo, .claude/ 포함
+```
+
+**§3에 있지만 아직 없는 디렉토리**: `components/ui/`, `components/blog/`, `components/visualizations/`, `plugins/`, `lib/keyword-map.ts`, `lib/search-index.ts` — 각각 해당 Phase에서 생성.
+
+### 13.2 핵심 의사결정 (변경 금지)
+
+| 결정 | 이유 | 영향 |
+|---|---|---|
+| pnpm 9.15.4 pinned via corepack | Node 23.5의 corepack keyid 버그 회피 | 새 워크스테이션 셋업 시 `COREPACK_ENABLE_STRICT=0 corepack prepare pnpm@9.15.4 --activate` 필요 |
+| `eslint-config-next: ^15` | Next 15와 메이저 버전 일치 | Next 16으로 올릴 때 `^16`으로 동반 승격 |
+| `@vitejs/plugin-react: ^4` | Vitest 2가 번들한 Vite 5와 호환 (v6는 Vite 8 요구) | Vitest 3+로 올릴 때 `^6`으로 동반 승격 |
+| Frontmatter schema 이중화 | Velite `s.slug()`이 빌드 타임 cache를 요구 → 테스트에서 `.parse()` 불가 | `postFrontmatterShape`(regex 기반, 테스트용) + 콜렉션 스키마에서 `.extend({slug: s.slug('post')})` 재적용 |
+| Velite `useMDXComponent` 헬퍼 | Velite 컴파일 본문은 `arguments[0]` 구조분해 형태 — 공식 "Use in React" 패턴 | `components/mdx/MDXContent.tsx`는 Server Component로 유지 (`'use client'` 금지). 본문 문자열은 Velite 컴파일러의 결정적 출력이므로 안전 (§7.2 감사됨) |
+| `dynamicParams = false` | Phase 1은 100% SSG, 알 수 없는 slug는 즉시 404 | **dev HMR 한계**: 새 MDX 파일 추가 시 인덱스 링크는 갱신되지만 `/posts/<새slug>`는 dev 서버 재시작 전까지 404. 프로덕션 `pnpm build`는 정상 반영 |
+| `params: Promise<{ slug: string }>` | Next.js 15 async params API | 페이지 컴포넌트는 반드시 `async` + `await params` |
+| `draft` 필터는 `lib/posts.ts`에서만 | 스키마 단에서 걸러내면 `pnpm build` 자체가 실패 | `draft: true` MDX는 Velite 빌드 통과, `getAllPosts()`에서 제외되어 런타임 404 |
+
+### 13.3 명령어 치트시트
+
+```bash
+pnpm dev            # 개발 서버 (Velite watch 모드 포함)
+pnpm build          # Next 프로덕션 빌드 (Velite 선행)
+pnpm test           # velite build && vitest run (17개 테스트, 4개 파일)
+pnpm test:unit      # vitest run만 (velite build 없이 — 일부 테스트는 실패 가능)
+pnpm type-check     # tsc --noEmit
+pnpm lint           # next lint (Next 16에서 제거 예정)
+pnpm velite         # Velite만 1회 실행
+```
+
+### 13.4 알려진 미결 사항 (후속 Phase에서 처리)
+
+- **`next lint` deprecated**: Next 16 업그레이드 시 `npx @next/codemod@canary next-lint-to-eslint-cli .`로 ESLint CLI + flat config 전환.
+- **Shiki 라인 하이라이트 미구현**: CLAUDE.md §4.4의 ` ```kotlin {3-5} ` 표기는 `@shikijs/transformers`의 `transformerNotationHighlight`가 필요. Phase 2에서 실제 코드 블록 스타일링 시 함께 도입.
+- **`series` / `seriesOrder` 정합성 검증 부재**: 한쪽만 있는 경우 스키마 에러 없음. Phase 2 시리즈 UI 도입 전 `.refine()` 추가 필요.
+- **`@types/node: ^25`**: LTS 아님. 안정성 필요 시 `^22`로 다운그레이드 검토.
+- **임시 `prose` 스타일링**: `@tailwindcss/typography`는 Phase 1 간이 스타일용. Phase 2에서 §7.2 커스텀 컬러 토큰 + §7.3 타이포그래피로 대체.
+
+### 13.5 리포지토리
+
+- **원격**: `https://github.com/ing9990/backend-notes` (private)
+- **브랜치 전략**: 단일 `main` 브랜치에 직접 커밋 (greenfield, Phase 1 기간). Phase 2부터는 feature 브랜치 도입 검토 가능.
+- **Phase 1 태그**: `phase-1-complete` (커밋 `ebd09e9`)
