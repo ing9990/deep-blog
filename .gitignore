@@ -6,6 +6,7 @@ node_modules/
 .next/
 .velite/
 out/
+*.tsbuildinfo
 
 # test artifacts
 coverage/
@@ -21,3 +22,4 @@ coverage/
 .vscode/*
 !.vscode/settings.json
 .idea/
+.claude/
