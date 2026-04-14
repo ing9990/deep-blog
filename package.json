@@ -1,0 +1,17 @@
+{
+  "name": "backend-notes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "velite build && vitest run",
+    "test:unit": "vitest run",
+    "velite": "velite build",
+    "velite:dev": "velite dev"
+  }
+}

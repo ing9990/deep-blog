@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+.next/
+.velite/
+out/
+
+# test artifacts
+coverage/
+
+# environment
+.env
+.env.local
+.env*.local
+
+# editor / OS
+.DS_Store
+*.log
+.vscode/*
+!.vscode/settings.json
+.idea/
