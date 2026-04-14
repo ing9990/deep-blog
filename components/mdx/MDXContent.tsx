@@ -27,7 +27,7 @@ type MDXModule = {
 const useMDXComponent = (
   code: string,
 ): ComponentType<{ components?: Record<string, ComponentType<Record<string, unknown>>> }> => {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  // eslint-disable-next-line no-new-func
   const fn = new Function(code) as (rt: RuntimeModule) => MDXModule
   return fn(runtime).default
 }
