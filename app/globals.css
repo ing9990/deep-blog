@@ -333,10 +333,85 @@ body {
   margin: 2.5em 0;
 }
 
+/* ================================================================
+   Tables — clean modern layout matching the callout/code-block
+   aesthetic. Rounded outer border, subtle header background, zebra
+   body rows via row-hover accent. MDX tables come through as raw
+   <table>/<thead>/<tbody>/<tr>/<th>/<td>.
+
+   The outer <div class="table-wrapper"> (added via mdxComponents)
+   provides horizontal scrolling on narrow viewports without forcing
+   the whole page to scroll.
+   ================================================================ */
+
+.prose-kr .table-wrapper {
+  margin: 1.75em 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--background);
+}
+
+.prose-kr table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.prose-kr table thead {
+  background-color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.prose-kr table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+
+.prose-kr table td {
+  padding: 12px 16px;
+  color: var(--foreground);
+  vertical-align: top;
+}
+
+.prose-kr table tbody tr {
+  border-top: 1px solid var(--border);
+  transition: background-color 150ms ease-out;
+}
+
+.prose-kr table tbody tr:first-child {
+  border-top: 0;
+}
+
+.prose-kr table tbody tr:hover {
+  background-color: color-mix(in oklab, var(--primary) 5%, transparent);
+}
+
+.prose-kr table code:not(pre code) {
+  font-size: 0.88em;
+}
+
+/* Numeric columns: right-align cells whose first inline child is a
+   KaTeX math node or a bare number token. Use a class for explicit
+   opt-in since MDX tables don't carry column metadata. */
+.prose-kr table td.num,
+.prose-kr table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (min-width: 768px) {
   .prose-kr { font-size: 17px; }
   .prose-kr h2 { font-size: 24px; }
   .prose-kr h3 { font-size: 19px; }
+  .prose-kr table { font-size: 15px; }
+  .prose-kr table th,
+  .prose-kr table td { padding: 14px 18px; }
 }
 
 /* Shiki dual-theme syntax highlighting.
@@ -370,6 +445,9 @@ body {
   position: relative;
   margin: 2em 0;
   padding-top: 44px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   background-color: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -460,6 +538,9 @@ body {
 .prose-kr figure[data-rehype-pretty-code-figure] pre {
   margin: 0;
   padding: 16px 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border-radius: 0;
   background-color: transparent;
   overflow-x: auto;
@@ -498,4 +579,26 @@ body {
 .prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line].highlighted {
   background-color: color-mix(in oklab, var(--primary) 12%, transparent);
   box-shadow: inset 3px 0 0 var(--primary);
+}
+
+/* ================================================================
+   KaTeX math — inline $...$ and block $$...$$
+   remark-math + rehype-katex emits <span class="katex"> (inline) and
+   <span class="katex-display"> (block). KaTeX's default stylesheet
+   handles typography; we only adjust spacing so inline math sits on
+   the .prose-kr body baseline without adding extra line-height.
+   ================================================================ */
+
+.prose-kr .katex {
+  font-size: 0.95em;
+}
+
+.prose-kr .katex-display {
+  margin: 1.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.prose-kr .katex-display > .katex {
+  font-size: 1.05em;
 }

@@ -1,6 +1,8 @@
 import { defineConfig, defineCollection, s } from 'velite'
 import rehypePrettyCode from 'rehype-pretty-code'
 import rehypeSlug from 'rehype-slug'
+import rehypeKatex from 'rehype-katex'
+import remarkMath from 'remark-math'
 import { transformerNotationHighlight } from '@shikijs/transformers'
 import { calculateReadingTime } from './lib/reading-time'
 import remarkAutoLink from './plugins/remark-auto-link'
@@ -76,6 +78,7 @@ export default defineConfig({
   mdx: {
     remarkPlugins: [
       [remarkAutoLink, { keywordsByLength: KEYWORDS_BY_LENGTH, keywordToSlug }],
+      remarkMath,
     ],
     rehypePlugins: [
       rehypeSlug,
@@ -88,6 +91,7 @@ export default defineConfig({
           transformers: [transformerNotationHighlight()],
         },
       ],
+      [rehypeKatex, { strict: false, output: 'html' }],
     ],
   },
 })

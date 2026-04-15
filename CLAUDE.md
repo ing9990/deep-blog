@@ -194,6 +194,22 @@ class IndexService {
 }
 ```
 
+{/* 수식 — 인라인 `$...$` / 블록 `$$...$$`. remark-math + rehype-katex 파이프라인.
+     빌드 타임에 KaTeX로 HTML로 변환되며, katex/dist/katex.min.css는
+     app/layout.tsx에서 전역 로드된다. */}
+평균 시간 복잡도는 $O(n \log n)$이며, 최악의 경우 $O(n^2)$까지 증가합니다.
+
+$$T(n) = 2T(n/2) + O(n)$$
+
+{/* 테이블 — 일반 마크다운 문법. 빌드 시 자동으로 <div class="table-wrapper">에
+     감싸져 가로 스크롤 + 둥근 외곽을 가진 카드 스타일로 렌더된다. */}
+
+| 케이스 | 시간 복잡도 | 설명 |
+|---|---|---|
+| 최선 | $O(n \log n)$ | 피벗이 균등 분할 |
+| 평균 | $O(n \log n)$ | 랜덤 피벗 |
+| 최악 | $O(n^2)$ | 이미 정렬된 배열 |
+
 {/* Mermaid 다이어그램 */}
 <Diagram>
 graph TD
@@ -217,6 +233,19 @@ graph TD
   description="Transaction A가 Shared Lock을 잡은 상태에서 Transaction B가 Exclusive Lock을 요청하면?"
 />
 ```
+
+**수식 문법 규칙**:
+- 인라인 수식: `$O(n \log n)$`, `$O(n^2)$`, `$\sum_{i=1}^{n} i$`
+- 블록 수식: `$$T(n) = 2T(n/2) + O(n)$$`
+- 일반 텍스트로 `O(n log n)`을 작성하지 말고 반드시 `$O(n \log n)$`으로 작성
+- LaTeX 주요 명령: `\log`, `\sum`, `\frac{a}{b}`, `x^n`, `x_i`, `\leq`, `\geq`, `\infty`, `\in`, `\mathbb{R}`
+- 코드 블록 내부의 `$`는 영향 받지 않음 (파이프라인 순서상 rehype-pretty-code가 먼저 처리)
+
+**테이블 작성 규칙**:
+- 일반 마크다운 테이블 문법 그대로 사용 — 자동으로 스타일 적용
+- 긴 테이블은 `.table-wrapper`의 `overflow-x: auto`로 카드 내부 스크롤
+- 숫자 칼럼 우측 정렬이 필요하면 셀에 `className="num"` 추가 (선택적)
+- 테이블 셀 내부에 코드/링크/수식 자유롭게 사용 가능
 
 ### 4.5 시각화 삽입 판단 기준
 
@@ -551,41 +580,48 @@ import { vizStateClasses } from './common/colors'
 
 ### 6.2 글 상세 페이지 (`/posts/[slug]`)
 
-**레이아웃 구조:**
+**레이아웃 구조** (≥1528px viewport):
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  [← 목록으로]                      [GitHub] [다크모드]   │
-├────────────────────────────────────┬────────────────────┤
-│                                    │                     │
-│  [Database] [Index]                │  목차               │
-│                                    │  ─────              │
-│  # 데이터베이스 인덱스의 동작 원리  │  1. 인덱스란?       │
-│  2026.04.10 · 읽기 8분             │  2. B-Tree 구조     │
-│  ──────────────────────────        │  3. 인덱스 생성     │
-│                                    │  4. 성능 비교       │
-│  본문 내용...                      │                     │
-│  ...B-Tree(← 자동 링크)를         │                     │
-│  사용합니다...                      │                     │
-│                                    │                     │
-│  ──────────────────────────        │                     │
-│  관련 글                            │                     │
-│  ┌────────┐ ┌────────┐            │                     │
-│  │B-Tree  │ │ Hash   │            │                     │
-│  │구조    │ │ Index  │            │                     │
-│  └────────┘ └────────┘            │                     │
-├────────────────────────────────────┴────────────────────┤
-│  © 2026 Backend Notes                                   │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  [← 목록으로]                          [GitHub] [다크모드]   │
+├────────────────────────────────┐       ┌────────────────────┤
+│                                 │       │                     │
+│  [Database] [Index]             │       │  ON THIS PAGE      │
+│                                 │       │  ─────             │
+│  # 데이터베이스 인덱스의 동작 원리│       │  1. 인덱스란?      │
+│  2026.04.10 · 읽기 8분          │       │  2. B-Tree 구조    │
+│  ──────────────────────────     │       │  3. 인덱스 생성    │
+│                                 │       │  (fixed position)  │
+│  본문 내용(984px wide)...       │       │                     │
+│  ...B-Tree(← 자동 링크)를      │       │                     │
+│  사용합니다...                  │       │                     │
+│                                 │       │                     │
+│  ``` 코드 블록 984px 폭 ```    │       │                     │
+│                                 │       │                     │
+├────────────────────────────────┘       │                     │
+│  © 2026 Backend Notes                  │                     │
+└─────────────────────────────────────────┴────────────────────┘
 ```
 
-**동작 규칙:**
-- 본문 영역 max-width: **720px** (가독성 최적 폭)
-- TOC 사이드바: 스크롤 따라 현재 섹션 하이라이트 (Intersection Observer)
-- TOC는 데스크탑에서만 표시, 모바일에서는 글 상단에 접이식으로 제공
-- 키워드 링크: 점선 밑줄 스타일, 호버 시 프리뷰 Popover
-- 관련 글: 동일 태그를 가진 글 중 최대 4개, 태그 겹침 수 기준 정렬
+**레이아웃 규칙**:
+- **컨테이너**: `max-w-[1080px] mx-auto px-5 md:px-12` — **인덱스 페이지와 완전히 동일**. 아티클 좌/우 여백이 인덱스 카드 목록의 여백과 정렬된다.
+- **아티클 본문**: 컨테이너 inner 폭(≈984px) 그대로 사용. 별도 `max-w` 없음. 코드 블록/테이블/인터랙티브 시각화 모두 984px 사용.
+- **ON THIS PAGE 사이드바**:
+  - `position: fixed` + `top-24`
+  - `left: calc(50% + 540px + 24px)` — viewport 중앙 + 컨테이너 절반(540px) + 24px 간격
+  - 너비 200px
+  - **표시 분기**: `min-[1528px]:block` — viewport ≥ 1528px에서만 렌더 (1080 + 2×(24+200) 최소 요구 폭)
+  - 스크롤해도 항상 고정 위치 유지
+  - 현재 섹션 하이라이트는 IntersectionObserver로 관리
+- **모바일/중간 뷰포트 (< 1528px)**: 상단 `<details>` accordion TOC로 대체. 필요 시 펼쳐서 보는 방식.
+
+**동작 규칙**:
+- 키워드 링크: 점선 밑줄 스타일, 호버 시 프리뷰 Popover (데스크탑만)
+- 관련 글 (`<RelatedPost>`): MDX 내부에서 명시적 배치. 동일 태그 자동 추천은 Phase 5에서 도입 예정
 - 읽기 시간: 한국어 기준 분당 500자로 계산
+- 긴 테이블: `.table-wrapper`의 가로 스크롤 (페이지 전체 스크롤 아님)
+- 수식: KaTeX로 렌더되어 본문 베이스라인에 정렬
 
 ---
 
@@ -650,6 +686,21 @@ shadcn/ui 컨벤션의 CSS 변수(`--background`, `--foreground`, `--primary`, `
 - 전체 너비, `h-11`, `rounded-lg`
 - 좌측 돋보기 아이콘, `placeholder="검색어를 입력하세요..."`
 - 포커스: `ring-2 ring-accent/30`
+
+**Table (MDX 내부)**:
+- 외곽: `.table-wrapper`로 자동 wrapping — `rounded-[10px] border border-border` + `overflow-x: auto`
+- 헤더: `bg-muted` + `font-weight: 600` + `white-space: nowrap`
+- 셀: 패딩 12–14px × 16–18px (모바일→데스크톱)
+- 행 구분: `border-top: 1px solid var(--border)` (첫 행 제외)
+- Hover: `bg-primary` 5% opacity로 행 강조
+- 인라인 코드 폰트 0.88em로 축소 (셀 밀도 유지)
+- 자동 적용 — 모든 MDX `|...|` 테이블이 이 스타일을 받는다
+- 구현: `app/globals.css`의 `.prose-kr .table-wrapper`/`.prose-kr table` + `components/mdx/components.tsx`의 `table` override
+
+**KaTeX 수식 (`$...$` / `$$...$$`)**:
+- 파이프라인: `remark-math` → `rehype-katex` (velite.config.ts)
+- CSS: `katex/dist/katex.min.css`는 `app/layout.tsx`에서 전역 로드
+- `.prose-kr` 내부 추가 스타일은 `app/globals.css`의 `.katex` (font-size 0.95em, 인라인 베이스라인 정렬) + `.katex-display` (블록, 가로 스크롤 허용)
 
 ---
 
@@ -1100,3 +1151,57 @@ pnpm type-check                                   # tsc --noEmit
 
 - **Phase 4.1 태그**: `phase-4-1-complete`
 - **브랜치 전략**: Phase 2/3과 동일, `main` 직접 또는 feature 브랜치 squash merge.
+
+---
+
+## 17. Phase 4.1 이후 스타일/인프라 폴리시
+
+> Phase 4.1 완료 후 Phase 5 이전에 진행된 스타일링·렌더 파이프라인 조정. 이 섹션은 "현재 실재하는" 상태를 기록한다. §13–16처럼 단일 시점에 얼리지 않고, 스타일 조정이 있을 때마다 **이 섹션**을 갱신한다 (§13–16은 frozen phase records).
+
+### 17.1 글 상세 페이지 레이아웃 정렬
+
+- **컨테이너 폭을 인덱스 페이지와 통일**: `max-w-[1080px] mx-auto px-5 md:px-12`. 이전의 2-컬럼 grid (800px article + 280px TOC)를 제거하고, 아티클은 1080 컨테이너의 inner 폭(≈984px)을 그대로 사용.
+- **ON THIS PAGE 사이드바**: `position: fixed`로 flow에서 분리. `left: calc(50% + 540px + 24px)` + `top-24` + `w-[200px]`. 스크롤해도 항상 고정.
+- **반응형 분기**: `min-[1528px]:block` 커스텀 breakpoint. 1528 = 1080 + 2×(24+200), 좌우 대칭으로 TOC가 뷰포트에 들어갈 수 있는 최소 폭. 미만에서는 상단 `<details>` accordion TOC 사용.
+- **효과**: 인덱스 카드 목록과 글 본문의 좌우 여백이 정확히 일치해 페이지 간 이동 시 시각적 점프가 없음. 코드 블록은 984px 폭 확보로 평균 ~95 character/줄까지 가로 스크롤 없이 표시 (이전 800px 기준 84 chars → +11).
+
+### 17.2 수식 렌더 (KaTeX)
+
+- **패키지**: `remark-math@^6` + `rehype-katex@^7` + `katex@^0.16`
+- **파이프라인**: `velite.config.ts`에서 `remarkMath`를 remarkPlugins에, `rehypeKatex`를 rehypePlugins에 추가 (rehype-pretty-code 이후에 실행되어 코드 블록 내부의 `$`는 영향 없음)
+- **CSS**: `app/layout.tsx`에서 `import 'katex/dist/katex.min.css'` 전역 로드
+- **커스텀 스타일**: `app/globals.css`의 `.prose-kr .katex` (인라인 font-size 0.95em, 베이스라인 정렬) / `.prose-kr .katex-display` (블록, margin 1.5em, 가로 스크롤 허용)
+- **MDX 문법**: 인라인 `$O(n \log n)$`, 블록 `$$T(n) = 2T(n/2) + O(n)$$`. 일반 텍스트로 `O(n log n)`을 쓰지 말고 반드시 수식 문법 사용.
+
+### 17.3 테이블 디자인
+
+- **구현**: `app/globals.css` `.prose-kr .table-wrapper` + `.prose-kr table` 규칙 추가. `components/mdx/components.tsx`의 `table` override가 모든 MDX 테이블을 `<div class="table-wrapper">`로 자동 wrap.
+- **외관**: `rounded-[10px]` + `border` 외곽. 헤더 `bg-muted` + 600 weight + nowrap. 행 구분선 + hover `bg-primary/5%`. 인라인 코드 0.88em로 축소.
+- **반응형**: `.table-wrapper`의 `overflow-x: auto` — 칼럼이 많거나 긴 테이블은 카드 내부에서만 가로 스크롤하고 페이지 전체 스크롤은 발생하지 않음.
+- **숫자 칼럼**: 셀에 `className="num"` 추가 시 `text-align: right` + `font-variant-numeric: tabular-nums` 자동 적용.
+
+### 17.4 코드 블록 overflow 하드닝
+
+- `.prose-kr figure[data-rehype-pretty-code-figure]`에 `width: 100%` + `max-width: 100%` + `min-width: 0` 추가
+- `.prose-kr figure[...] pre`에도 동일 3종 세트 추가
+- CSS Grid의 기본 `min-width: auto` 때문에 긴 코드 라인이 grid cell을 intrinsic content width까지 확장시키는 버그를 원천 차단
+- 아티클 grid cell은 `<article className="min-w-0">`로 `min-width: 0` 강제
+
+### 17.5 TOC 컴포넌트 (Phase 2 원본 복구)
+
+- `components/blog/TableOfContents.tsx`는 Phase 2 `70e8e2d` 커밋의 원본 스타일 유지: 좌측 세로 border + "On this page" 라벨 + `text-sm` 리스트
+- 검토 도중 시험했던 Mac 윈도우 chrome/신호등 디자인은 롤백됨 (컴팩트한 사이드바에는 과한 시각 weight)
+- 활성 섹션 하이라이트는 IntersectionObserver 기반 (rootMargin: `-80px 0px -70% 0px`)
+
+### 17.6 의존성 업데이트
+
+Phase 4.1 이후 추가된 devDependencies/dependencies:
+
+| 패키지 | 버전 | 용도 |
+|---|---|---|
+| `remark-math` | ^6 | MDX 수식 파싱 |
+| `rehype-katex` | ^7 | KaTeX HTML 생성 |
+| `katex` | ^0.16 | KaTeX 런타임 (CSS 포함) |
+| `@testing-library/react` | ^16.1.0 | Phase 4.1 `useStepController` 훅 테스트 (이미 포함) |
+| `@testing-library/dom` | ^10.4.0 | 동상 |
+| `jsdom` | ^25.0.1 | 동상 |

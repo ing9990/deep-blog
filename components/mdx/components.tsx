@@ -1,5 +1,10 @@
 import type { MDXComponents } from 'mdx/types'
-import type { AnchorHTMLAttributes, ImgHTMLAttributes } from 'react'
+import type {
+  AnchorHTMLAttributes,
+  HTMLAttributes,
+  ImgHTMLAttributes,
+  TableHTMLAttributes,
+} from 'react'
 import { KeywordLink } from '@/components/blog/KeywordLink'
 import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
@@ -38,6 +43,18 @@ export const mdxComponents: MDXComponents = {
       {...props}
     />
   ),
+  // Wrap every MDX table in a horizontally scrollable container so wide
+  // tables never force the whole page to scroll. Styling lives in
+  // .prose-kr .table-wrapper / .prose-kr table in app/globals.css.
+  table: ({ children, ...props }: TableHTMLAttributes<HTMLTableElement>) => (
+    <div className="table-wrapper">
+      <table {...props}>{children}</table>
+    </div>
+  ),
+  // Forward th/td unchanged so authors can still add className="num" for
+  // numeric-column alignment without losing other attributes.
+  th: (props: HTMLAttributes<HTMLTableCellElement>) => <th {...props} />,
+  td: (props: HTMLAttributes<HTMLTableCellElement>) => <td {...props} />,
   Callout,
   QuickSort,
   RelatedPost,

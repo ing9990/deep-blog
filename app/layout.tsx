@@ -3,6 +3,7 @@ import localFont from 'next/font/local'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { Header } from '@/components/blog/Header'
 import { Footer } from '@/components/blog/Footer'
+import 'katex/dist/katex.min.css'
 import './globals.css'
 
 const pretendard = localFont({
