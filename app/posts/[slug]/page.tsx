@@ -24,7 +24,7 @@ export default async function PostPage({
   const tocItems = flattenToc(post.toc as unknown as VeliteTocEntry[])
 
   return (
-    <div className="mx-auto max-w-[1120px] px-5 py-16 md:px-12">
+    <div className="mx-auto max-w-[1280px] px-5 py-16 md:px-12">
       <Link
         href="/"
         className="mb-10 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -45,8 +45,8 @@ export default async function PostPage({
         </details>
       )}
 
-      <div className="md:grid md:grid-cols-[minmax(0,720px)_minmax(0,280px)] md:gap-16">
-        <article className="max-w-[720px]">
+      <div className="md:grid md:grid-cols-[minmax(0,800px)_minmax(0,280px)] md:gap-20">
+        <article className="max-w-[800px]">
           <PostMeta tags={post.tags} date={post.date} readingTime={post.readingTime} />
           <h1 className="mt-4 text-[28px] font-bold leading-[1.3] tracking-[-0.015em] md:text-[32px]">
             {post.title}

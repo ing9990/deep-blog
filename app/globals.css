@@ -54,6 +54,29 @@
   --destructive: #EF4444;
   --destructive-foreground: #FAFAFA;
   --ring-offset-background: #FFFFFF;
+
+  /* Callout tokens — light mode.
+     Body text inherits --foreground for maximum contrast; only the
+     border, icon, and title use the variant accent color. */
+  --callout-info-bg:        #EFF6FF;
+  --callout-info-border:    #3B82F6;
+  --callout-info-title:     #1E3A8A;
+  --callout-info-icon:      #2563EB;
+
+  --callout-warning-bg:     #FFFBEB;
+  --callout-warning-border: #F59E0B;
+  --callout-warning-title:  #78350F;
+  --callout-warning-icon:   #D97706;
+
+  --callout-error-bg:       #FEF2F2;
+  --callout-error-border:   #EF4444;
+  --callout-error-title:    #7F1D1D;
+  --callout-error-icon:     #DC2626;
+
+  --callout-success-bg:     #ECFDF5;
+  --callout-success-border: #10B981;
+  --callout-success-title:  #064E3B;
+  --callout-success-icon:   #059669;
 }
 
 [data-theme="dark"] {
@@ -78,6 +101,28 @@
   --destructive: #7F1D1D;
   --destructive-foreground: #FAFAFA;
   --ring-offset-background: #09090B;
+
+  /* Callout tokens — dark mode. Muted-but-distinct background,
+     slightly desaturated accent for border/icon, pale title text. */
+  --callout-info-bg:        #0F1E3D;
+  --callout-info-border:    #60A5FA;
+  --callout-info-title:     #BFDBFE;
+  --callout-info-icon:      #93C5FD;
+
+  --callout-warning-bg:     #2E1F03;
+  --callout-warning-border: #FBBF24;
+  --callout-warning-title:  #FDE68A;
+  --callout-warning-icon:   #FCD34D;
+
+  --callout-error-bg:       #2B0A0A;
+  --callout-error-border:   #F87171;
+  --callout-error-title:    #FECACA;
+  --callout-error-icon:     #FCA5A5;
+
+  --callout-success-bg:     #0B2A1F;
+  --callout-success-border: #34D399;
+  --callout-success-title:  #A7F3D0;
+  --callout-success-icon:   #6EE7B7;
 }
 
 html {
