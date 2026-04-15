@@ -1,5 +1,13 @@
 // lib/search-index.ts
-import type { IndexOptionsForDocumentSearch } from 'flexsearch'
+import type { IndexOptionsForDocumentSearch, Document as FlexDocument } from 'flexsearch'
+import FlexSearch from 'flexsearch'
+
+// FlexSearch 0.7 ships as CJS; its named exports live on the default object.
+// Named ESM import (`import { Document }`) fails under tsx/Node ESM interop.
+// We pull Document off the default object and cast to the correct type.
+const { Document } = FlexSearch as unknown as {
+  Document: new <T>(options: unknown) => FlexDocument<T>
+}
 
 /**
  * One document indexed by FlexSearch. `body` is the plain-text extraction
@@ -69,4 +77,67 @@ export function extractPlainText(mdxContent: string): string {
     .replace(/[#*_~>]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+const STORAGE_KEY = 'backend-notes:search-index:v1'
+
+/**
+ * Minimal Storage interface — enough to test with an in-memory object.
+ * sessionStorage satisfies this in the browser.
+ */
+export interface StorageLike {
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
+}
+
+/**
+ * Load the serialized FlexSearch index (from storage cache or fetch),
+ * rebuild a Document instance, and return it. Keeps the dependency on
+ * the global `fetch` and `sessionStorage` injectable so the function is
+ * unit-testable.
+ *
+ * - First call fetches `/search-index.json`, caches the JSON blob in
+ *   storage, and rebuilds the FlexSearch Document.
+ * - Subsequent calls in the same session skip the fetch.
+ *
+ * Throws if fetch fails and no cache is available; callers should
+ * catch and fall back to the substring search in lib/filters.ts.
+ */
+export async function loadAndBuildIndex(
+  options: {
+    fetchFn?: typeof fetch
+    storage?: StorageLike | null
+    url?: string
+  } = {},
+): Promise<FlexDocument<SearchDoc>> {
+  const fetchFn = options.fetchFn ?? fetch
+  const storage =
+    options.storage === undefined
+      ? typeof sessionStorage !== 'undefined'
+        ? sessionStorage
+        : null
+      : options.storage
+  const url = options.url ?? '/search-index.json'
+
+  let serialized: SerializedIndex
+
+  const cached = storage?.getItem(STORAGE_KEY) ?? null
+  if (cached) {
+    serialized = JSON.parse(cached) as SerializedIndex
+  } else {
+    const res = await fetchFn(url)
+    if (!res.ok) {
+      throw new Error(`search-index fetch failed: ${res.status}`)
+    }
+    serialized = (await res.json()) as SerializedIndex
+    storage?.setItem(STORAGE_KEY, JSON.stringify(serialized))
+  }
+
+  const index = new Document<SearchDoc>(SEARCH_INDEX_CONFIG)
+  for (const [key, data] of Object.entries(serialized)) {
+    // FlexSearch 0.7 types declare import(id, document: T) but at runtime
+    // it accepts the serialized string chunk produced by export(). Cast needed.
+    index.import(key, data as unknown as SearchDoc)
+  }
+  return index
 }
