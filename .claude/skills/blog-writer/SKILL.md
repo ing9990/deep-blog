@@ -27,30 +27,42 @@ DEEP(구 Backend Notes) 블로그(`content/posts/`)의 MDX 포스트를 3단계 
 
 **1~4번은 필수**, 5~7번은 권장. 단순 "X 사용법", "Y 설정 방법" 같은 주제는 이 블로그의 정체성과 어긋난다. 사용자가 그런 주제를 요청하면 `references/philosophy.md`의 거절 기준과 전환 제안 예시를 참고해 트레이드오프 각도로 재구성을 제안하라.
 
+## 진입 모드 (Entry Modes)
+
+이 스킬에 들어오는 경로는 두 가지다. 두 모드 모두 **노트가 Stage 1 시작 시점에 생성되어 Q&A 동안 live로 업데이트된다**는 점은 동일하며, §1 주제 검증 이후의 흐름도 동일하다.
+
+- **Mode A — 직접 트리거**: 사용자가 "블로그 써줘", "X 포스트 만들어줘", "X 글 작성" 등으로 명시적 트리거. 즉시 Stage 1 §1로 진입.
+- **Mode B — 프로액티브 Offer**: 사용자가 기술 질문을 이어갈 때 Claude가 "이 주제 블로그로 정리해둘까요?"를 선제 제안하는 경로. 사용자가 수락하면 이미 나눈 대화 맥락을 노트에 append하고 Stage 1으로 합류. Mode B 발동 기준(원리·설계 질문, 주제당 1회, 거절 대상 제외)은 `references/stage-1-learning.md` §0.5 참조.
+
+두 모드 모두 **노트는 Stage 2에서 새로 만드는 것이 아니다** — Stage 1 시작 시점에 `.claude/drafts/<slug>-notes.md`에 생성되고, Q&A 루프 동안 비유 후보, 콜아웃 후보, 시각화 후보, 원본 Q&A가 live로 append된다. Stage 2는 그 노트를 **최종화**하고 MDX 구성 계획을 추가하는 단계다.
+
 ## 3-Stage 워크플로
 
-### Stage 1: 학습 Q&A 루프
+### Stage 1: 인터뷰 & 노트 live 로깅
 
-사용자가 스킬을 트리거하면 다음 순서로 진행한다:
+진입 모드에 따라 시작이 다르지만, §1 이후는 동일한 흐름이다.
 
-1. **주제 적합성 사전 검증** — `references/philosophy.md`의 거절 기준 적용
-2. **학습 목차 제안** — 7-섹션 철학 골격에 맞춘 초안 제시
-3. **사용자 수정/승인** — 1~4번은 필수임을 알리고, 제거 요청 시 재확인
-4. **항목별 Q&A 루프** — Claude가 각 항목을 선제적으로 한 번 설명한 뒤 사용자 질문 받기. 난이도 점수 추적
-5. **Related Posts 감지** — 기존 글에 이미 다뤄진 주제가 등장하면 깊은 설명 생략하고 한 줄 요약 + `<RelatedPost />` 배치 약속
-6. **종료 체크포인트** — 모든 항목 소진 후 사용자 확인
+- **Mode B에서만**: §0.5 프로액티브 offer 판정 → §0.6 노트 즉시 생성 + 기존 대화 append
+- **공통 흐름 (양 모드)**:
+  1. **주제 적합성 사전 검증** — `references/philosophy.md`의 거절 기준 적용
+  2. **주제 타입 분류** (§1.5) — Type A (Fundamentals) vs Type B (Tools & Frameworks)
+  3. **학습 목차 제안** — 확정된 타입에 맞는 섹션 골격 템플릿
+  4. **사용자 수정/승인** — 1~4번 필수 안내
+  5. **항목별 Q&A 루프** — Claude 선제 설명 + 사용자 질문. **매 체크포인트 또는 신호 감지 시 노트를 live 업데이트** (비유·콜아웃·시각화 후보 플래그).
+  6. **Related Posts 감지** — 기존 글과 중복 감지 시 `<RelatedPost />` 배치 약속
+  7. **MDX 전환 체크포인트** — 사용자 명시 트리거 OR Claude 1회 제안 (1~4번 필수 섹션이 충분히 쌓인 시점)
 
 상세: `references/stage-1-learning.md`
 
-### Stage 2: 노트 파일 작성
+### Stage 2: 노트 최종화 + MDX 구성 계획
 
-Stage 1이 끝나면 `.claude/drafts/<slug>-notes.md`에 학습 노트를 저장한다. 7-섹션 철학 구조 + Q&A 로그 + 난이도 점수 + Related Posts 목록 + MDX 구성 계획이 포함된다. 사용자에게 리뷰 체크포인트를 제공한 뒤 Stage 3로 진입한다. `.claude/drafts/`는 `.gitignore` 처리되어 로컬 전용 학습 자산으로 보존된다.
+**노트는 이미 Stage 1에서 live로 쌓여 있다**. Stage 2는 그 노트를 검토·최종화하는 단계로, 빈 섹션을 보완하고 라이브 로깅 필드(비유·콜아웃·시각화 후보)를 Stage 3 MDX의 강조 수단으로 변환한다. Related Posts 매핑, 난이도 점수, frontmatter 초안도 이 시점에 확정된다. 노트는 **사용자에게 보이지 않는 agent 전용 산물**이므로 기본적으로 리뷰 체크포인트 없이 Stage 3로 진입한다. `.claude/drafts/`는 `.gitignore` 처리되어 로컬 전용 학습 자산으로 보존된다.
 
 상세: `references/stage-2-note.md`
 
 ### Stage 3: MDX 생성 + 자산 생성 + 검증
 
-노트를 입력으로 실제 MDX 파일, 필요 시 신규 시각화 컴포넌트, SVG 자산을 생성한다. 자동 콜아웃 3종(학습 목표 / No silver bullet / 핵심 통찰)과 `<RelatedPost />` 교차 참조를 정해진 위치에 배치한다. 마지막으로 검증 루프(`generate-keyword-map` → `velite` → `type-check` → `build`)를 실행해 완성도를 보장한다.
+최종화된 노트를 입력으로 실제 MDX 파일, 필요 시 신규 시각화 컴포넌트, SVG 자산을 생성한다. 자동 콜아웃 3종(학습 목표 / No silver bullet / 핵심 통찰)과 `<RelatedPost />` 교차 참조를 정해진 위치에 배치한다. 마지막으로 검증 루프(`generate-keyword-map` → `velite` → `type-check` → `build`)를 실행해 완성도를 보장한다.
 
 상세: `references/stage-3-mdx.md`, `references/frontmatter-rules.md`, `references/visualization-rules.md`, `references/validation-loop.md`
 
@@ -94,7 +106,7 @@ Stage 1이 끝나면 `.claude/drafts/<slug>-notes.md`에 학습 노트를 저장
 
 ## 사용자에게 진입 시 보이는 첫 메시지 (참고)
 
-스킬이 트리거되면 다음 형태로 시작:
+### Mode A (직접 트리거)
 
 ```
 [blog-writer 스킬 진입]
@@ -105,4 +117,19 @@ Stage 1이 끝나면 `.claude/drafts/<slug>-notes.md`에 학습 노트를 저장
 주제가 이 철학과 맞는지 먼저 확인합니다...
 
 [philosophy.md 로드 후 주제 적합성 검증 진행]
+```
+
+### Mode B (프로액티브 offer 수락 후)
+
+```
+[blog-writer 스킬 진입 — offer 수락 경로]
+
+주제: <offer에서 언급한 주제>
+
+노트를 .claude/drafts/<slug>-notes.md 에 생성하고, 지금까지 나눈 대화를
+노트에 append했습니다. 앞으로 대화 동안 노트가 계속 쌓일 예정입니다.
+
+타입 분류와 간단한 목차 확인을 진행합니다...
+
+[stage-1-learning.md 로드 후 §0.6 즉시 생성 → §1.5 타입 분류 → §2 목차]
 ```
