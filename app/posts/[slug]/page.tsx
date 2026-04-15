@@ -12,8 +12,6 @@ export function generateStaticParams() {
   return getAllSlugs().map((slug) => ({ slug }))
 }
 
-export const dynamicParams = false
-
 export default async function PostPage({
   params,
 }: {
