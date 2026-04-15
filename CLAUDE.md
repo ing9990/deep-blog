@@ -5,6 +5,23 @@
 
 ---
 
+## 0. 작업 시작 시 체크리스트 (매 세션 필수)
+
+**개발 서버는 항상 백그라운드에 떠 있어야 한다.**
+
+- 포트: **3010**
+- 접속 URL: **`http://blog.localhost:3010/`**
+  - `.localhost` 서브도메인은 RFC 6761에 의해 OS resolver가 자동으로 `127.0.0.1`로 해석한다(`/etc/hosts` 수정 불필요).
+  - Safari의 HTTPS Upgrade 기능은 `.localhost`에 대해서는 트리거되지 않는다.
+  - 점 없는 `blog`(단일 라벨)는 Safari가 bare hostname으로 간주해 검색 쿼리로 취급하고 HTTPS 승격을 시도하므로 사용하지 말 것.
+- 실행 명령: `PORT=3010 pnpm dev`를 Claude의 Bash `run_in_background`로 띄움
+  - `pnpm dev -- -p 3010` 형태는 pnpm이 `--`를 파싱하는 과정에서 인자 오염이 발생하므로 금지. 반드시 환경 변수 방식.
+- Next.js dev 서버는 파일 변경 시 자동 HMR. 사용자가 브라우저에서 바로 확인할 수 있어야 함
+- 세션 시작 시 `lsof -nP -iTCP:3010 -sTCP:LISTEN`로 포트 점유 확인 → 이미 떠 있으면 그대로, 비어 있으면 즉시 실행
+- UI 변경 작업 후에는 `BashOutput`으로 dev 서버 로그를 확인해 컴파일/런타임 에러 체크
+
+---
+
 ## 1. 프로젝트 개요
 
 개인 기술 블로그입니다. 백엔드 엔지니어로서 학습한 기술 주제(Spring, Kafka, JVM, DB, 분산 시스템 등)를 MDX로 작성하고, 키워드 간 자동 링크를 통해 위키처럼 연결된 지식 그래프를 구축합니다.
@@ -40,7 +57,7 @@
 | Content Layer | **Velite** | MDX → 타입 안전 데이터 변환 (Zod 스키마 기반, 빌드 타임 검증) |
 | Styling | **Tailwind CSS v4** + **shadcn/ui** | 미니멀 디자인 시스템 |
 | Code Highlighting | **Shiki** | VS Code 테마 기반 신택스 하이라이팅 |
-| Search | 클라이언트 사이드 (FlexSearch) | 빌드 시 인덱스 생성, 런타임 검색 |
+| Search | 클라이언트 사이드 substring match | 인메모리, Velite `plainBody` 필드 활용 |
 | 실행 환경 | **로컬 개발 서버** | `pnpm dev` → localhost:3000 |
 | Package Manager | **pnpm** | lockfile 커밋 필수 |
 
@@ -116,7 +133,7 @@
 ├── lib/
 │   ├── content.ts              # 콘텐츠 조회/필터링 유틸
 │   ├── keyword-map.ts          # 키워드 → slug 맵 생성
-│   ├── search-index.ts         # FlexSearch 인덱스 빌드
+│   ├── plain-text.ts           # MDX → plain text 추출 (검색/readingTime용)
 │   └── utils.ts                # 공통 유틸리티
 ├── plugins/
 │   └── remark-auto-link.ts     # ⭐ 키워드 자동 링크 Remark 플러그인
@@ -571,9 +588,9 @@ import { vizStateClasses } from './common/colors'
 ```
 
 **동작 규칙:**
-- 검색/필터/정렬 상태는 **URL 쿼리 파라미터**로 관리: `/?tag=Database&q=인덱스&sort=latest`
+- 검색/필터/정렬 상태는 클라이언트 React state(`BlogHomeClient`)가 소유. URL은 `history.replaceState`로 공유 가능하도록 사후 동기화만 수행(`?tag=Database&q=인덱스&sort=latest`). 서버 네비게이션은 일어나지 않음
 - 태그 칩은 토글 방식 (활성/비활성), 복수 선택 가능
-- 검색은 제목 + 요약 + 태그 + 키워드를 대상으로 클라이언트 사이드 검색 (FlexSearch)
+- 검색은 제목 + 요약 + 태그 + 키워드 + 본문 plain text를 대상으로 **클라이언트 인메모리 substring match** (`String.includes`, lowercase 비교). 코퍼스가 작아 FlexSearch/debounce 불필요
 - 정렬 옵션: 최신순(기본), 오래된 순, 제목 가나다순
 - 빈 결과 시 친절한 안내 메시지 표시
 - 카드 호버 시 미세한 elevation 변화 (subtle shadow transition)
@@ -798,497 +815,160 @@ pnpm type-check   # TypeScript 타입 에러 없음
 
 ---
 
-## 12. 작업 우선순위
+## 12. 현재 상태
 
-새로운 작업 요청 시 아래 순서를 참고합니다:
+Phase 1–5 완료 (2026-04-15). 코어 렌더링 파이프라인, 디자인 시스템, 키워드 자동 링크, 시각화 프레임워크(Step-by-step 전용), 클라이언트 인메모리 검색, 태그 페이지 모두 가동 중. Git 태그 `phase-1-complete` ~ `phase-5-complete`.
 
-1. **Phase 1 — 기반 구축** ✅ **완료** (`phase-1-complete` 태그): Next.js 프로젝트 초기화, Velite 설정, MDX 파이프라인, 샘플 글 렌더링. 세부 내역은 §13 참고.
-2. **Phase 2 — 핵심 UI** ✅ **완료** (`phase-2-complete` 태그): 디자인 토큰, Pretendard/JetBrains Mono 폰트, 다크모드(토글 포함), 인덱스 페이지(URL 동기화 검색/필터/정렬), 글 상세 페이지(TOC 사이드바), shadcn/ui 도입, Shiki 라인 하이라이트. 세부 내역은 §14 참고.
-3. **Phase 3 — 키워드 시스템** ✅ **완료** (`phase-3-complete` 태그): scripts/generate-keyword-map.ts 빌드 전 맵 생성, plugins/remark-auto-link.ts Remark 플러그인, components/blog/KeywordLink.tsx Popover 래퍼. 세부 내역은 §15 참고.
-4. **Phase 4.1 — 시각화 프레임워크 (Step-by-step)** ✅ **완료** (`phase-4-1-complete` 태그): `VisualContainer`, `StepController`, `SpeedSlider`, `useStepController` 훅, `--viz-*` 색상 토큰 18개, QuickSort 리팩토링. 세부 내역은 §16 참고.
-   - Phase 4.2 (Interactive Playground), Phase 4.3 (Timeline/Concurrent)은 해당 유형의 첫 시각화가 등장할 때 서브 페이즈로 도입.
-5. **Phase 5 — 탐색 기능** ✅ **완료** (`phase-5-complete` 태그): FlexSearch 전문 검색(fetch-on-demand), 최근 글 섹션, `/tags/[tag]` 전용 페이지. 세부 내역은 §18 참고.
-6. **Phase 6 — 마무리**: 반응형 미세 조정, 성능 최적화
+> **2026-04-16 단순화**: 초기 FlexSearch 기반 전문 검색(서버 필터링 + `matched=` URL 파라미터)은 키스트로크마다 RSC 왕복이 발생해 입력 지연/드롭 문제를 일으켰다. 코퍼스가 작다는 사실("우리는 검색엔진이 아니다")을 받아들이고 `BlogHomeClient` + `plainBody` 기반 클라이언트 substring match로 교체. FlexSearch 의존성/스크립트/`public/search-index.json`/`matched=` URL 파라미터 모두 제거.
 
-> **시각화 컴포넌트 개별 구현**은 Phase 4 이후 각 글을 작성할 때 해당 주제에 맞게 함께 구현합니다.
-> 예: "퀵소트" 글 작성 시 → `QuickSort.tsx` 시각화 컴포넌트도 함께 구현
+**남은 작업 (Phase 6)**: 반응형 미세 조정, 성능 최적화(이미지 blur placeholder, 폰트 preload, HMR 시 키워드 맵 자동 재생성 등).
 
----
+**서브 페이즈 도입 시점** (해당 유형의 첫 시각화가 등장할 때):
+- **Phase 4.2** — Interactive Playground 프레임워크 (`ControlPanel`, `SegmentedControl`)
+- **Phase 4.3** — Timeline/Concurrent 프레임워크 (`TimelineTrack`, `ActorSwimlane` + `--viz-actor-*` 토큰)
 
-## 13. Phase 1 구현 현황
+**시각화 컴포넌트 개별 구현**은 각 글을 작성할 때 해당 주제에 맞게 함께 구현한다. 예: "퀵소트" 글 작성 시 `QuickSort.tsx`도 함께.
 
-> 이 섹션은 Phase 1 완료 시점(2026-04-14)의 실제 구현 상태와 향후 에이전트가 반드시 알아야 할 의사결정/제약을 기록합니다. §3 디렉토리 구조는 Phase 6까지의 **목표**이며, 아래는 **현재 실재하는** 파일/설정입니다.
-
-### 13.1 존재하는 파일 (Phase 1)
-
-```
-app/
-├── layout.tsx                 # 루트 레이아웃 (html lang="ko", globals.css 임포트)
-├── page.tsx                   # 임시 dev 인덱스 (Phase 2에서 전면 재작성 예정)
-├── globals.css                # @import "tailwindcss" + @plugin typography + system font
-└── posts/[slug]/page.tsx      # 글 상세 페이지 (generateStaticParams + dynamicParams=false)
-
-components/mdx/
-├── index.ts                   # mdxComponents = {} (Phase 2+에서 채움)
-└── MDXContent.tsx             # Velite 컴파일 본문을 evaluate하는 Server Component
-
-content/posts/
-└── hello-world.mdx            # 파이프라인 검증 샘플
-
-lib/
-└── posts.ts                   # getAllPosts / getPostBySlug / getAllSlugs (draft 필터, 날짜 내림차순)
-
-tests/
-├── smoke.test.ts              # Vitest 동작 검증
-├── velite-schema.test.ts      # postFrontmatterSchema 단위 테스트 (6개)
-├── velite-build.test.ts       # Velite 빌드 결과 통합 테스트 (4개)
-└── posts.test.ts              # lib/posts.ts 단위 테스트 (vi.mock 사용, 6개)
-
-velite.config.ts               # 스키마 + rehype-pretty-code 설정
-next.config.mjs                # VeliteWebpackPlugin으로 velite build 호출
-tsconfig.json                  # strict + paths: @/* → ./, #site/content → ./.velite
-vitest.config.ts               # 별칭 미러링, environment: node, globals: false
-tailwind.config.ts             # content 글롭 + typography 플러그인
-postcss.config.mjs             # @tailwindcss/postcss
-.eslintrc.json                 # next/core-web-vitals (레거시; Next 16에서 ESLint CLI 전환 필요)
-.gitignore                     # .next, .velite, *.tsbuildinfo, .claude/ 포함
-```
-
-**§3에 있지만 아직 없는 디렉토리**: `components/ui/`, `components/blog/`, `components/visualizations/`, `plugins/`, `lib/keyword-map.ts`, `lib/search-index.ts` — 각각 해당 Phase에서 생성.
-
-### 13.2 핵심 의사결정 (변경 금지)
-
-| 결정 | 이유 | 영향 |
-|---|---|---|
-| pnpm 9.15.4 pinned via corepack | Node 23.5의 corepack keyid 버그 회피 | 새 워크스테이션 셋업 시 `COREPACK_ENABLE_STRICT=0 corepack prepare pnpm@9.15.4 --activate` 필요 |
-| `eslint-config-next: ^15` | Next 15와 메이저 버전 일치 | Next 16으로 올릴 때 `^16`으로 동반 승격 |
-| `@vitejs/plugin-react: ^4` | Vitest 2가 번들한 Vite 5와 호환 (v6는 Vite 8 요구) | Vitest 3+로 올릴 때 `^6`으로 동반 승격 |
-| Frontmatter schema 이중화 | Velite `s.slug()`이 빌드 타임 cache를 요구 → 테스트에서 `.parse()` 불가 | `postFrontmatterShape`(regex 기반, 테스트용) + 콜렉션 스키마에서 `.extend({slug: s.slug('post')})` 재적용 |
-| Velite `useMDXComponent` 헬퍼 | Velite 컴파일 본문은 `arguments[0]` 구조분해 형태 — 공식 "Use in React" 패턴 | `components/mdx/MDXContent.tsx`는 Server Component로 유지 (`'use client'` 금지). 본문 문자열은 Velite 컴파일러의 결정적 출력이므로 안전 (§7.2 감사됨) |
-| `dynamicParams = false` | Phase 1은 100% SSG, 알 수 없는 slug는 즉시 404 | **dev HMR 한계**: 새 MDX 파일 추가 시 인덱스 링크는 갱신되지만 `/posts/<새slug>`는 dev 서버 재시작 전까지 404. 프로덕션 `pnpm build`는 정상 반영 |
-| `params: Promise<{ slug: string }>` | Next.js 15 async params API | 페이지 컴포넌트는 반드시 `async` + `await params` |
-| `draft` 필터는 `lib/posts.ts`에서만 | 스키마 단에서 걸러내면 `pnpm build` 자체가 실패 | `draft: true` MDX는 Velite 빌드 통과, `getAllPosts()`에서 제외되어 런타임 404 |
-
-### 13.3 명령어 치트시트
-
-```bash
-pnpm dev            # 개발 서버 (Velite watch 모드 포함)
-pnpm build          # Next 프로덕션 빌드 (Velite 선행)
-pnpm test           # velite build && vitest run (Phase 1 기준 17개 테스트; Phase 2 이후 46개 — §14.3 참고)
-pnpm test:unit      # vitest run만 (velite build 없이 — 일부 테스트는 실패 가능)
-pnpm type-check     # tsc --noEmit
-pnpm lint           # next lint (Next 16에서 제거 예정)
-pnpm velite         # Velite만 1회 실행
-```
-
-### 13.4 알려진 미결 사항 (후속 Phase에서 처리)
-
-- **`next lint` deprecated**: Next 16 업그레이드 시 `npx @next/codemod@canary next-lint-to-eslint-cli .`로 ESLint CLI + flat config 전환.
-- **Shiki 라인 하이라이트 미구현**: CLAUDE.md §4.4의 ` ```kotlin {3-5} ` 표기는 `@shikijs/transformers`의 `transformerNotationHighlight`가 필요. Phase 2에서 실제 코드 블록 스타일링 시 함께 도입. → ✅ **Phase 2에서 완료** (§14 참고)
-- **`series` / `seriesOrder` 정합성 검증 부재**: 한쪽만 있는 경우 스키마 에러 없음. Phase 2 시리즈 UI 도입 전 `.refine()` 추가 필요.
-- **`@types/node: ^25`**: LTS 아님. 안정성 필요 시 `^22`로 다운그레이드 검토.
-- **임시 `prose` 스타일링**: `@tailwindcss/typography`는 Phase 1 간이 스타일용. Phase 2에서 §7.2 커스텀 컬러 토큰 + §7.3 타이포그래피로 대체. → ✅ **Phase 2에서 `.prose-kr`로 교체** (§14 참고)
-
-### 13.5 리포지토리
-
-- **원격**: `https://github.com/ing9990/backend-notes` (private)
-- **브랜치 전략**: 단일 `main` 브랜치에 직접 커밋 (greenfield, Phase 1 기간). Phase 2부터는 feature 브랜치 도입 검토 가능.
-- **Phase 1 태그**: `phase-1-complete` (커밋 `ebd09e9`)
+**리포지토리**: `https://github.com/ing9990/backend-notes` (private). 단일 `main` 브랜치 + 필요 시 feature 브랜치 squash merge.
 
 ---
 
-## 14. Phase 2 구현 현황
+## 13. 주요 기술 결정 (변경 금지)
 
-> 이 섹션은 Phase 2 완료 시점(2026-04-15)의 실제 구현 상태와 향후 에이전트가 반드시 알아야 할 의사결정/제약을 기록합니다. §13과 같은 포맷.
+이 표는 코드 작성 시 반드시 준수해야 할 **비자명 결정**만 모아둔다. 각 결정은 근거와 영향을 함께 기록했으며, 어기면 빌드가 깨지거나 런타임 오동작이 발생한다. §3 디렉토리 구조는 **목표 상태**이며, 현재 실재하는 파일/디렉토리는 `ls` / `Glob`로 직접 확인할 것.
 
-### 14.1 존재하는 파일 (Phase 2에서 추가·변경)
+### 13.1 Next.js / Velite / MDX 파이프라인
 
-```
-app/
-├── layout.tsx                  # [수정] Pretendard + JetBrains Mono + ThemeProvider + Header + Footer
-├── page.tsx                    # [재작성] 인덱스 페이지 (URL 동기화 검색/필터/정렬)
-├── globals.css                 # [재작성] shadcn 토큰 + prose-kr + Shiki highlighted 라인
-└── posts/[slug]/page.tsx       # [수정] 2열 레이아웃 + TOC 사이드바 + 모바일 접이식
-
-components/
-├── ui/                         # shadcn/ui 프리미티브 (4개)
-│   ├── button.tsx
-│   ├── input.tsx
-│   ├── badge.tsx
-│   └── select.tsx
-├── blog/
-│   ├── Header.tsx              # server, sticky, GitHub 링크 + ThemeToggle
-│   ├── Footer.tsx              # server, 중앙 정렬 카피라이트
-│   ├── PostCard.tsx            # server, 인덱스 카드
-│   ├── PostList.tsx            # server, 빈 상태 + 카드 스택
-│   ├── PostMeta.tsx            # server, 태그 + 날짜 + 읽기 시간
-│   ├── ReadingTime.tsx         # server, "읽기 N분"
-│   ├── TableOfContents.tsx     # 'use client', IntersectionObserver
-│   ├── TagChip.tsx             # 'use client', aria-pressed 토글 버튼
-│   ├── TagFilterBar.tsx        # 'use client', useRouter URL 동기화
-│   ├── SearchBar.tsx           # 'use client', 250ms debounce + 한글 IME 처리 + refs로 stale closure 방지
-│   ├── SortSelect.tsx          # 'use client', isSortKey 타입 가드
-│   └── ThemeToggle.tsx         # 'use client', mounted 패턴으로 hydration 안전
-├── mdx/
-│   ├── index.ts                # barrel re-export
-│   ├── components.tsx          # mdxComponents 매핑 (h1, a)
-│   └── MDXContent.tsx          # (Phase 1 파일, Phase 2에서 MDXComponents 타입으로 정리)
-└── providers/
-    └── ThemeProvider.tsx       # 'use client', next-themes with attribute="data-theme"
-
-lib/
-├── posts.ts                    # (Phase 1 유지, 수정 없음)
-├── filters.ts                  # filterByTag / searchPosts / sortPosts / applyFilters / extractAllTags (koCollator 공유)
-├── reading-time.ts             # calculateReadingTime (500자/분, 마크다운 제거)
-├── toc.ts                      # flattenToc (Velite 계층 → flat)
-└── utils.ts                    # cn() + buildPostsUrl() + formatDate() (UTC getters)
-
-public/fonts/
-├── PretendardVariable.woff2    # ~2.0MB
-└── JetBrainsMono-Variable.ttf  # ~293KB
-
-content/posts/
-├── hello-world.mdx             # [확장] 다중 섹션 + Shiki [!code highlight] 예시
-├── database-index-basics.mdx   # Phase 2 더미
-├── jvm-gc-intro.mdx            # Phase 2 더미
-└── kafka-consumer-group.mdx    # Phase 2 더미
-
-tests/                          # Phase 1 17 + Phase 2 29 = 46 테스트
-├── filters.test.ts             # 16 케이스
-├── reading-time.test.ts        # 5 케이스
-├── toc.test.ts                 # 6 케이스
-└── velite-build.test.ts        # Phase 1 4 + Phase 2 추가 2 케이스 = 6
-
-components.json                 # shadcn/ui 설정
-velite.config.ts                # [수정] rehype-slug, readingTime, @shikijs/transformers
-tailwind.config.ts              # [수정] darkMode: ['selector', '[data-theme="dark"]']
-```
-
-**§3에 있지만 아직 없는 디렉토리**: `components/visualizations/`, `plugins/`, `lib/keyword-map.ts`, `lib/search-index.ts` — Phase 3/4/5에서 생성.
-
-### 14.2 핵심 의사결정 (변경 금지)
-
-| 결정 | 이유 | 영향 |
+| 결정 | 근거 | 영향 |
 |---|---|---|
-| shadcn/ui 토큰 네이밍 채택 | Toss/Doodlin/pathsdog 벤치마크가 shadcn neutral 테마 범위와 광학적으로 일치 | CSS 변수는 `--background/--foreground/--primary/...` 등 shadcn 컨벤션. 프로젝트 고유는 `--keyword`, `--keyword-bg`, `--border-strong`로 공존 |
-| `next-themes` with `attribute="data-theme"` | CSS 선택자 `[data-theme="dark"]`와 정합 | `ThemeProvider`의 `attribute` prop을 절대 바꾸지 말 것. 변경 시 CSS 매칭이 깨짐 |
-| Velite `s.toc()` + `rehype-slug` 조합 | 양쪽 모두 `github-slugger` 기반이라 id 일치 구조적 보장 | 자체 TOC 플러그인 미작성. 계층 구조는 `lib/toc.ts`의 `flattenToc()`로 flat 변환 |
-| 서버 사이드 필터링 (`applyFilters` in `app/page.tsx`) | 클라이언트 번들에 필터 로직 미포함 + Phase 5 FlexSearch 교체 시 서버 함수만 변경 | `SearchBar`/`TagFilterBar`/`SortSelect`는 URL 쿼리만 변경. Next.js가 `searchParams` 변경을 감지해 재렌더. `router.push(url, { scroll: false })`로 스크롤 위치 보존 |
-| 검색 debounce 250ms + 한글 IME 체크 | 한글 조합 중에는 debounce 연기 | `SearchBar`의 `onChange`는 `e.nativeEvent.isComposing` 검사, `onCompositionEnd`로 최종 커밋. refs로 stale closure 방지 (`currentTagRef`, `currentSortRef`, `defaultQueryRef`) |
-| 폰트 local 셀프 호스팅 | 로컬 전용 프로젝트 원칙 + Next.js CLS 방어 | 외부 CDN 금지. `public/fonts/` 하위 2개 파일 커밋 (Pretendard woff2 2MB, JetBrains Mono TTF 293KB) |
-| `formatDate`는 UTC getters | Velite `s.isodate()`는 `YYYY-MM-DD` → midnight UTC 파싱 | `lib/utils.ts`의 `formatDate`는 `getUTC*` 사용. 로컬 getter 사용 금지 |
-| `koCollator` 공유 | `sortPosts('title')`과 `extractAllTags` 타이브레이크에 일관된 한글-aware 정렬 | `lib/filters.ts`의 모듈 레벨 `Intl.Collator('ko', { sensitivity: 'base' })` 인스턴스를 두 함수가 공유 |
-| Shiki 라인 하이라이트는 `.highlighted` 클래스 선택자 | `@shikijs/transformers@4`의 `transformerNotationHighlight`는 `data-*` 속성이 아닌 `className`을 생성 | `app/globals.css`의 `.prose-kr .highlighted` 선택자. `[data-highlighted-line]`로 바꾸지 말 것 |
-| 테스트 범위: 순수 함수만 | `@testing-library/react` + jsdom 모킹 비용 대비 효용 낮음 | UI 회귀는 `pnpm build` + dev 서버 수동 확인으로 방어. Phase 6에서 Playwright 검토 |
-| `Intl.Collator('ko')` 정렬 순서 | V8 ICU 기본 빌드: Hangul → Latin 순 | `sortPosts('title')` 테스트 기대값 작성 시 이 순서를 반영. 다른 Node 환경에서는 재검증 필요 |
+| `MDXContent`는 Server Component — `'use client'` 금지 | Velite 컴파일 본문은 `arguments[0]` 구조분해 헬퍼(공식 "Use in React" 패턴). 본문 문자열은 Velite 결정적 출력이라 safe | `components/mdx/MDXContent.tsx` 수정 시 절대 `'use client'` 추가 금지 |
+| `dynamicParams = false` (100% SSG) | 알 수 없는 slug는 즉시 404 | **dev HMR 한계**: 새 MDX 파일 추가 시 `/posts/<slug>` 라우트는 dev 서버 재시작 전까지 404. 인덱스 링크는 갱신됨. 프로덕션 `pnpm build`는 정상 |
+| `params: Promise<{slug: string}>` async unwrap | Next.js 15 API | 페이지 컴포넌트는 반드시 `async` + `await params` |
+| `draft` 필터는 `lib/posts.ts`에서만 | 스키마 단에서 걸러내면 Velite 빌드 자체가 실패 | `draft: true` MDX는 Velite 빌드 통과 후 `getAllPosts()`에서 제외되어 런타임 404 |
+| Frontmatter schema 이중화 | Velite `s.slug()`이 빌드 타임 cache 요구 → 테스트에서 `.parse()` 불가 | `postFrontmatterShape`(regex, 테스트용) + 콜렉션 스키마에서 `.extend({slug: s.slug('post')})` 재적용 패턴 유지 |
+| `series`/`seriesOrder` refine 미구현 | 한쪽만 있는 경우 스키마 에러 없음 | 시리즈 UI 등장 전 `.refine()` 필수 추가 |
+| `pnpm 9.15.4` corepack pinned | Node 23.5의 corepack keyid 버그 회피 | 새 워크스테이션: `COREPACK_ENABLE_STRICT=0 corepack prepare pnpm@9.15.4 --activate` |
+| `eslint-config-next: ^15` / Next 15 종속 | Next 16 승격 시 동반 `^16` 필요 | `next lint`는 Next 16에서 제거 예정 → ESLint CLI + flat config 전환 필요 |
+| `@vitejs/plugin-react: ^4` / Vitest 2 종속 | Vitest 3+ 시 `^6` 승격 필요 | |
 
-### 14.3 명령어 치트시트
+### 13.2 UI / 디자인 시스템
 
-```bash
-pnpm dev              # 개발 서버
-pnpm build            # 프로덕션 빌드 (Velite 선행)
-pnpm test             # velite build && vitest run (46 테스트)
-pnpm test:unit        # vitest run만 (velite 스킵)
-pnpm type-check       # tsc --noEmit
-pnpm lint             # next lint (Next 16에서 ESLint CLI 전환 예정)
-pnpm velite           # Velite만 실행
-```
-
-### 14.4 알려진 미결 사항 (후속 Phase에서 처리)
-
-- **관련 글 추천** — Phase 5 ("탐색 기능")
-- **태그 전용 페이지 `/tags/[tag]`** — Phase 5
-- **키워드 자동 링크** — Phase 3
-- **검색 대상에 본문 포함** — Phase 5 FlexSearch 도입 시
-- **`series`/`seriesOrder` 정합성 `.refine()`** — 한쪽만 있는 경우 스키마 에러 없음. Phase 5 시리즈 UI 도입 전 추가 필요
-- **반응형 미세 조정** — Phase 6
-- **성능 최적화** (이미지 blur placeholder, 폰트 preload 최적화 등) — Phase 6
-- **shadcn Button / Badge 프리미티브**는 도입되었지만 아직 사용 컴포넌트 없음 — Phase 3+에서 KeywordLink Popover, CalloutBox 등이 소비 예정
-
-### 14.5 리포지토리
-
-- **원격**: `https://github.com/ing9990/backend-notes` (private)
-- **Phase 2 태그**: `phase-2-complete`
-- **브랜치 전략**: Phase 1과 동일하게 단일 `main`에 직접 커밋 (`phase-2-core-ui` 브랜치에서 작업 후 fast-forward merge). Phase 3부터 feature 브랜치 유지 검토.
-
----
-
-## 15. Phase 3 구현 현황
-
-> Phase 3 완료 시점(2026-04-15)의 실제 구현 상태. §13/§14와 동일 포맷.
-
-### 15.1 존재하는 파일 (Phase 3에서 추가·변경)
-
-```
-scripts/
-└── generate-keyword-map.ts      # pre-build I/O 스크립트 (tsx)
-
-lib/
-├── generated/
-│   └── keyword-map.ts           # 빌드 타임 생성 TS 상수 (커밋 대상)
-└── keyword-matcher.ts           # findMatches, hasBoundary 순수 함수
-
-plugins/
-└── remark-auto-link.ts          # MDAST text → link 치환, visitParents 기반
-
-components/
-├── blog/
-│   └── KeywordLink.tsx          # 'use client', shadcn Popover 래퍼
-├── mdx/
-│   └── components.tsx           # [수정] a override에 data-keyword-link 분기
-└── ui/
-    └── popover.tsx              # shadcn CLI 생성
-
-velite.config.ts                 # [수정] mdx.remarkPlugins 추가
-package.json                     # [수정] prebuild/predev/pretest + tsx/gray-matter/unist-util-visit-parents/@radix-ui/react-popover
-content/posts/
-├── hello-world.mdx              # [수정] B-Tree 본문 참조 추가
-└── b-tree-structure.mdx         # 신규, B-Tree 키워드 선언
-
-tests/
-├── keyword-matcher.test.ts      # 19 케이스 (hasBoundary 8 + findMatches 11)
-├── generate-keyword-map.test.ts # 10 케이스
-├── remark-auto-link.test.ts     # 10 케이스
-└── velite-build.test.ts         # [수정] +2 통합 테스트 (self-link 방지 + 마커 존재)
-```
-
-### 15.2 핵심 의사결정 (변경 금지)
-
-| 결정 | 이유 | 영향 |
+| 결정 | 근거 | 영향 |
 |---|---|---|
-| Remark (MDAST) 단계에서 치환 | 코드/링크 ancestor 판정이 MDAST 노드 타입으로 선언적 | Rehype 단계(code block이 `<pre>`로 감싸진 후)에서 탐지가 어려움 |
-| `lib/generated/keyword-map.ts` 커밋 대상 | Clean clone에서 즉시 빌드 가능 + 히스토리 추적 | 키워드 변경 시 diff 노이즈 발생 (수용) |
+| shadcn/ui 토큰 네이밍 (`--background`, `--foreground`, `--primary`…) | Toss/Doodlin 벤치마크가 shadcn neutral 테마와 광학적 일치 | 프로젝트 고유 확장 토큰은 `--keyword`, `--keyword-bg`, `--border-strong`, `--viz-*` (§6.4) |
+| `next-themes` `attribute="data-theme"` | CSS 선택자 `[data-theme="dark"]`와 정합 | `ThemeProvider`의 `attribute` prop 변경 금지 (CSS 매칭이 깨짐) |
+| Velite `s.toc()` + `rehype-slug` 조합 | 둘 다 `github-slugger` 기반 → id 일치 구조적 보장 | 자체 TOC 플러그인 미작성. 계층은 `lib/toc.ts` `flattenToc()`로 flat 변환 |
+| 클라이언트 인메모리 필터링 (`BlogHomeClient`) | 코퍼스가 작음(<10KB plain text). 서버 왕복 제거로 keystroke 지연/드롭 해소 | `app/page.tsx`는 초기값만 전달. 필터 상태는 `BlogHomeClient`가 소유. `useMemo(applyFilters)`로 즉시 재계산. URL 동기화는 `history.replaceState`만 사용(네비게이션 아님) |
+| 검색 debounce 없음 + 한글 IME 처리 | 인메모리 필터는 즉시 반영되면 충분. debounce는 서버 호출 억제용이었는데 더 이상 없음 | `SearchBar`는 controlled(`value`/`onChange`) presentational. **`isComposing` 가드/`onCompositionEnd` 플러시 금지** — controlled 입력은 부모 state가 DOM 값과 매 keystroke 동기화돼야 React 19가 IME 조합을 유지한다. 가드를 넣으면 조합 중 부모 state가 비어 있어 React가 DOM에 그려진 한글 글자를 ""로 덮어써, 다음 초성이 들어와 조합이 커밋되기 전까지 글자가 보이지 않는다. 필터가 중간 글자(`ㅋ`, `쿠`)에 대해 잠깐 빈 결과를 보여주는 건 허용 — 한 글자 영어 검색과 구분되지 않고, 코퍼스가 작아 비용도 0이다 |
+| 폰트 local 셀프 호스팅 | 로컬 전용 원칙 + Next.js CLS 방어 | 외부 CDN 금지. `public/fonts/`에 Pretendard Variable(2MB) + JetBrains Mono Variable(293KB) 커밋 |
+| `formatDate`는 UTC getters | Velite `s.isodate()`는 `YYYY-MM-DD` → midnight UTC 파싱 | `lib/utils.ts` `formatDate`는 `getUTC*` 사용. 로컬 getter 금지 |
+| `koCollator` 공유 | `sortPosts('title')`과 `extractAllTags` 타이브레이크 일관성 | `lib/filters.ts` 모듈 레벨 `Intl.Collator('ko', {sensitivity: 'base'})` 인스턴스 재사용 |
+| Shiki 라인 하이라이트 `.highlighted` 클래스 | `@shikijs/transformers@4`는 className 생성 (data-* 아님) | `app/globals.css`의 `.prose-kr .highlighted` 선택자. `[data-highlighted-line]`로 변경 금지 |
+| KaTeX CSS 전역 로드 | `import 'katex/dist/katex.min.css'` in `app/layout.tsx` | 파이프라인은 `remark-math` → `rehype-katex` (rehype-pretty-code 이후 실행되어 코드 블록 내 `$`는 영향 없음) |
+| MDX 테이블 자동 wrap | `components/mdx/components.tsx`의 `table` override가 `.table-wrapper` div로 자동 감쌈 | 모든 MDX 테이블이 카드 스타일 + 내부 가로 스크롤. 숫자 칼럼은 셀에 `className="num"` |
+| 글 상세 페이지 컨테이너 `max-w-[1080px] mx-auto px-5 md:px-12` | 인덱스 페이지와 정확히 동일 → 페이지 간 시각적 점프 없음 | 아티클 본문은 1080 inner 폭(≈984px) 그대로 사용. 별도 `max-w` 없음 |
+| TOC 사이드바 `position: fixed` + `left: calc(50% + 540px + 24px)` + `min-[1528px]:block` | 1528 = 1080 + 2×(24+200), 좌우 대칭 TOC 가능한 최소 폭 | 미만 뷰포트에서는 상단 `<details>` accordion TOC |
+| `<article className="min-w-0">` + figure/pre `width:100% max-width:100% min-width:0` | CSS Grid 기본 `min-width: auto` 때문에 긴 코드 라인이 cell을 intrinsic 폭까지 확장 | 이 3종 세트 제거 금지 (코드 블록 overflow 버그 재발) |
+
+### 13.3 키워드 자동 링크 (§5 구현 상세)
+
+| 결정 | 근거 | 영향 |
+|---|---|---|
+| Remark (MDAST) 단계에서 치환 | 코드/링크 ancestor 판정이 노드 타입으로 선언적 | Rehype 단계(코드가 `<pre>`로 래핑된 후)에서는 탐지 어려움 |
+| `lib/generated/keyword-map.ts` 커밋 대상 | Clean clone 즉시 빌드 가능 + 히스토리 추적 | 키워드 변경 시 diff 노이즈는 수용 |
 | 키워드 맵 키는 lowercase | 대소문자 무시 매칭 (`B-Tree` = `b-tree`) | `generate-keyword-map`이 정규화, `findMatches`가 lowercase 비교, 원본 case는 `text.slice`로 복원 |
-| 한글 뒤 경계 완화 | 한국어 조사(`를/가/의/는/...`) 허용 필수 | 드문 오탐은 긴 복합어를 별도 키워드로 등록해 해결 |
-| `currentSlug`는 파일 basename | Velite API 의존 없음 | Velite `s.slug('post')` 규칙과 일치 (파일명 = slug 전제) |
-| `scanPosts`는 재귀적 | 미래 `content/posts/<category>/` 서브디렉토리 지원 | `readdir` 결과에서 디렉토리면 재귀 호출 |
-| 충돌 시 빌드 실패 | 1:1 매핑 원칙을 즉시 강제 | 작성자가 30초 내 해결 가능한 에러 메시지 |
-| `serializeMap` 출력 정렬 결정적 | git diff 노이즈 최소화 | 키워드를 `localeCompare`로 정렬 후 직렬화 |
-| 데스크톱/모바일 이중 렌더 | `@media (hover: hover)` 기반 분기를 JS 런타임 없이 달성 | 두 벌 렌더 비용은 짧은 키워드 텍스트라 무시 가능 |
-| `KEYWORDS_BY_LENGTH` 사전 정렬 | Greedy matching 시 매 호출마다 재정렬 방지 | 빌드 타임에 한 번만 정렬 |
+| 한글 뒤 경계 완화 | 한국어 조사(를/가/의/는/...) 허용 필수 | 드문 오탐은 긴 복합어를 별도 키워드로 등록해 해결 |
+| `currentSlug` = 파일 basename(확장자 제외) | Velite API 의존 없음 + Velite `s.slug('post')` 규칙과 일치 (파일명 = slug 전제) | 파일명과 slug가 다르면 자기-링크 방지가 깨짐 |
+| 충돌 시 `process.exit(1)` | 1:1 매핑 원칙을 빌드 타임에 강제 | 작성자가 30초 내 해결 가능한 에러 메시지 제공 |
+| `KEYWORDS_BY_LENGTH` 사전 정렬 | Greedy matching 시 매 호출 재정렬 방지 | 빌드 타임에 한 번만 정렬 |
+| 데스크톱/모바일 이중 렌더 (`hidden md:contents` + `md:hidden`) | `@media (hover: hover)` 기반 분기를 JS 런타임 없이 달성 | 짧은 키워드 텍스트라 이중 렌더 비용 무시 가능 |
+| `serializeMap` 출력 결정적 정렬 | git diff 노이즈 최소화 | 키워드를 `localeCompare` 정렬 후 직렬화 |
 
-### 15.3 명령어 치트시트
+### 13.4 시각화 프레임워크 (§6 구현 상세)
 
-```bash
-pnpm dev                    # Velite + Next (prebuild/predev로 키워드 맵 자동 생성)
-pnpm build                  # 프로덕션 빌드 (prebuild 포함)
-pnpm test                   # pretest로 키워드 맵 생성 + velite + vitest (총 ~87 테스트)
-pnpm test:unit              # vitest only (키워드 맵은 기존 상태 유지)
-pnpm generate-keyword-map   # 수동 재생성 (frontmatter 수정 후)
-pnpm type-check             # tsc --noEmit
-pnpm velite                 # Velite만 실행
-```
-
-### 15.4 알려진 미결 사항 (후속 Phase에서 처리)
-
-- **HMR 지원**: dev 모드에서 새 MDX 파일 추가 시 자동 재생성 — Phase 6 polish
-- **키워드 변형/별칭**: `B-Tree` ↔ `B트리` ↔ `비트리` — Phase 5+
-- **Aho-Corasick 매칭 최적화**: Greedy + claimed O(K×T) 성능 문제 발생 시 Phase 6
-- **키워드 역링크 표시** ("이 글을 참조하는 글들"): Phase 5 관련 글 추천에 흡수
-- **Reference-style 링크 ancestor 제외**: 현재 `link`/`inlineCode`/`code`만 제외하고 `linkReference`는 제외하지 않음. 실제 사용 시 문제 발생하면 Phase 6에서 추가
-
-### 15.5 리포지토리
-
-- **원격**: `https://github.com/ing9990/backend-notes` (private)
-- **Phase 3 태그**: `phase-3-complete`
-- **브랜치 전략**: Phase 2와 동일하게 단일 `main` 브랜치에 직접 또는 `phase-3-keyword-system` feature 브랜치 후 squash merge.
-
----
-
-## 16. Phase 4.1 구현 현황
-
-> Phase 4.1 완료 시점(2026-04-15)의 구현 상태. §13–15와 동일 포맷.
-
-### 16.1 존재하는 파일 (Phase 4.1에서 추가·변경)
-
-```
-components/visualizations/
-├── common/                          [신규 디렉토리]
-│   ├── colors.ts                    VIZ_STATES + vizStateClasses()
-│   ├── useStepController.ts         상태 관리 훅 (4 useState + 3 useEffect)
-│   ├── VisualContainer.tsx          figure 래퍼 (server component)
-│   ├── SpeedSlider.tsx              5 세그먼트 배터리 게이지
-│   └── StepController.tsx           컨트롤 행 + 진행 바 + 스텝 설명
-└── QuickSort.tsx                    [수정] 새 프레임워크 사용
-
-app/globals.css                      [수정] --viz-* 18 + @theme inline 매핑 18
-
-tests/
-└── use-step-controller.test.ts      [신규] jsdom 파일 pragma, 16 케이스
-
-package.json                         [수정] @testing-library/react, @testing-library/dom, jsdom
-```
-
-### 16.2 핵심 의사결정 (변경 금지)
-
-| 결정 | 이유 | 영향 |
+| 결정 | 근거 | 영향 |
 |---|---|---|
-| Step-by-step only | 실제 사례 1개(QuickSort)만 존재 → API 추출 근거 유일 | Playground/Timeline은 Phase 4.2/4.3로 이월 |
-| 훅 + dumb 컴포넌트 | 보일러플레이트 제거 + `renderHook` 단위 테스트 가능 | `<StepController {...controller} />` spread 패턴 강제 |
+| Step-by-step만 추상화 | 실제 사례 1개(QuickSort)만 존재 → API 추출 근거 유일 | Playground/Timeline은 Phase 4.2/4.3로 이월 |
+| 훅(`useStepController`) + dumb 컴포넌트(`StepController`) 패턴 | 보일러플레이트 제거 + `renderHook` 단위 테스트 가능 | `<StepController {...controller} />` spread 패턴 강제 |
+| 6 상태 × 3 슬롯 (`--viz-*` 18개 변수) 일괄 정의 | 확장성 우선 | 새 상태 추가 시 4곳 동시 편집: `:root` / dark / `@theme inline` / `VIZ_STATES` |
+| `vizStateClasses()` switch + 리터럴 클래스 | Tailwind content scanner는 리터럴만 감지 | `` `border-viz-${state}` `` 같은 동적 문자열 금지 |
+| `goTo()` 호출 시 auto-play 자동 중지 | 수동 점프 = 사용자 의도적 개입 | auto-play 중 스크러빙 시 명시적 재생 요구 |
+
+### 13.5 검색 / 태그 페이지
+
+**설계 철학**: 우리는 검색엔진이 아니다. 코퍼스는 포스트 몇 개, plain text 수 KB 수준. FlexSearch/토큰화/relevance ranking은 과잉. 가장 단순한 substring match가 가장 넓고 가장 정확하다.
+
+| 결정 | 근거 | 영향 |
+|---|---|---|
+| 클라이언트 인메모리 substring 검색 | 코퍼스 <10KB. `String.includes`로 keystroke당 sub-millisecond. 서버 왕복/FlexSearch 인덱스 둘 다 불필요 | `lib/filters.ts`의 `searchPosts`가 title/summary/tags/keywords/plainBody를 lowercase include 검사. debounce 없음 |
+| 본문 plain text는 Velite 스키마에서 precompute | 단일 파이프라인. `s.custom()` transform이 빌드 타임에 `extractPlainText(meta.content)` 실행 후 `plainBody` 필드로 직렬화. 5개 포스트 기준 RSC 페이로드 ~3KB 추가 | `velite.config.ts`의 posts 콜렉션에 `plainBody` 필드 존재. `scripts/generate-search-index.ts` / `public/search-index.json` 없음 |
+| 필터 상태는 `BlogHomeClient`가 소유 | 키 입력이 `router.push`를 트리거하지 않아 dev 서버 왕복/RSC reconcile 비용 0 | `app/page.tsx`는 `searchParams`로 초기값만 주입. `useMemo(applyFilters)`로 즉시 재계산 |
+| URL 동기화는 `history.replaceState`만 | 공유 가능한 링크 유지 + Next.js 네비게이션 회피 | 입력 중 URL 바가 갱신되지만 라우트 전환은 일어나지 않음. 뒤로가기에 필터 히스토리 쌓지 않음(의도적) |
+| 관련 글 = 최신 N개 (알고리즘 없음) | 사용자 명시 결정, YAGNI | 주제 기반 교차는 수동 `<RelatedPost />`로 명시 배치 |
+| 태그 금지 문자 스키마 레벨 차단 (`/ ? #`) | URL 깨진 라우트 생성 방지 | `velite.config.ts`의 `.refine()` |
+| `/tags/[tag]`와 `/?tag=...` 공존 | 아카이브(SSG) vs 임시 필터(CSR) 의도 구분 | URL 구조 2벌 유지 |
+| 관련 글은 `<article>` 외부 렌더 | TOC IntersectionObserver 오염 방지 | "최근 글"이 TOC에 안 잡힘 |
+| 코드/수식은 `plainBody`에서 제외 | syntax identifier 노이즈 방지 | `lib/plain-text.ts`의 `extractPlainText`가 ```…```, `…`, `$…$`, `$$…$$` 제거 |
+
+### 13.6 테스트 환경
+
+| 결정 | 근거 | 영향 |
+|---|---|---|
+| 테스트 범위 = 순수 함수 중심 | `@testing-library/react` + jsdom 모킹 비용 대비 효용 낮음 | UI 회귀는 `pnpm build` + dev 수동 확인으로 방어. Phase 6에서 Playwright 검토 |
 | `@vitest-environment jsdom` 파일 pragma | 전역 `vitest.config.ts`는 `environment: 'node'` 유지 | 새 훅/DOM 테스트 파일마다 상단 pragma 필수 |
-| 6 상태 × 3 슬롯 일괄 정의 | 확장성 우선 (사용자 명시적 요구) | 현재 blocked/waiting/highlight는 미사용이지만 CSS 변수만 추가되므로 비용 적음 |
-| `vizStateClasses()` switch literal | Tailwind content scanner는 리터럴 클래스만 감지 | `` `border-viz-${state}` `` 같은 동적 문자열 사용 금지 |
-| `goTo()` 호출 시 자동 중지 | 수동 점프 = 사용자 의도적 개입 | auto-play 중 스크러빙 시 명시적 재생 요구 |
-| QuickSort 2-커밋 refactor | Pure refactor 검증 가능 | 커밋 1은 visual-identical, 커밋 2에서 SpeedSlider/progress 노출 |
-
-### 16.3 명령어 치트시트
-
-```bash
-pnpm dev                                          # 개발 서버
-pnpm build                                        # 프로덕션 빌드
-pnpm test                                         # velite build + vitest run (~103 테스트)
-pnpm test:unit tests/use-step-controller.test.ts  # 훅 테스트만
-pnpm type-check                                   # tsc --noEmit
-```
-
-### 16.4 알려진 미결 사항 (후속 서브 페이즈)
-
-- **Phase 4.2 (Interactive Playground)**: `ControlPanel`, `SegmentedControl` 등. Isolation Level/GC 임계값/Cache TTL 시각화 첫 등장 시 도입.
-- **Phase 4.3 (Timeline/Concurrent)**: `TimelineTrack`, `ActorSwimlane` + `--viz-actor-1~4` 토큰. Lock 경합/MVCC/Cache Stampede 시각화 첫 등장 시 도입.
-- **시각화 간 state 공유**: 현재 각 시각화는 독립. 한 글에 여러 시각화 연동 필요 시 Context API 도입 검토.
-
-### 16.5 리포지토리
-
-- **Phase 4.1 태그**: `phase-4-1-complete`
-- **브랜치 전략**: Phase 2/3과 동일, `main` 직접 또는 feature 브랜치 squash merge.
+| `Intl.Collator('ko')` 정렬 순서 | V8 ICU 기본 빌드: Hangul → Latin 순 | `sortPosts('title')` 테스트 기대값 작성 시 이 순서 반영 |
 
 ---
 
-## 17. Phase 4.1 이후 스타일/인프라 폴리시
-
-> Phase 4.1 완료 후 Phase 5 이전에 진행된 스타일링·렌더 파이프라인 조정. 이 섹션은 "현재 실재하는" 상태를 기록한다. §13–16처럼 단일 시점에 얼리지 않고, 스타일 조정이 있을 때마다 **이 섹션**을 갱신한다 (§13–16은 frozen phase records).
-
-### 17.1 글 상세 페이지 레이아웃 정렬
-
-- **컨테이너 폭을 인덱스 페이지와 통일**: `max-w-[1080px] mx-auto px-5 md:px-12`. 이전의 2-컬럼 grid (800px article + 280px TOC)를 제거하고, 아티클은 1080 컨테이너의 inner 폭(≈984px)을 그대로 사용.
-- **ON THIS PAGE 사이드바**: `position: fixed`로 flow에서 분리. `left: calc(50% + 540px + 24px)` + `top-24` + `w-[200px]`. 스크롤해도 항상 고정.
-- **반응형 분기**: `min-[1528px]:block` 커스텀 breakpoint. 1528 = 1080 + 2×(24+200), 좌우 대칭으로 TOC가 뷰포트에 들어갈 수 있는 최소 폭. 미만에서는 상단 `<details>` accordion TOC 사용.
-- **효과**: 인덱스 카드 목록과 글 본문의 좌우 여백이 정확히 일치해 페이지 간 이동 시 시각적 점프가 없음. 코드 블록은 984px 폭 확보로 평균 ~95 character/줄까지 가로 스크롤 없이 표시 (이전 800px 기준 84 chars → +11).
-
-### 17.2 수식 렌더 (KaTeX)
-
-- **패키지**: `remark-math@^6` + `rehype-katex@^7` + `katex@^0.16`
-- **파이프라인**: `velite.config.ts`에서 `remarkMath`를 remarkPlugins에, `rehypeKatex`를 rehypePlugins에 추가 (rehype-pretty-code 이후에 실행되어 코드 블록 내부의 `$`는 영향 없음)
-- **CSS**: `app/layout.tsx`에서 `import 'katex/dist/katex.min.css'` 전역 로드
-- **커스텀 스타일**: `app/globals.css`의 `.prose-kr .katex` (인라인 font-size 0.95em, 베이스라인 정렬) / `.prose-kr .katex-display` (블록, margin 1.5em, 가로 스크롤 허용)
-- **MDX 문법**: 인라인 `$O(n \log n)$`, 블록 `$$T(n) = 2T(n/2) + O(n)$$`. 일반 텍스트로 `O(n log n)`을 쓰지 말고 반드시 수식 문법 사용.
-
-### 17.3 테이블 디자인
-
-- **구현**: `app/globals.css` `.prose-kr .table-wrapper` + `.prose-kr table` 규칙 추가. `components/mdx/components.tsx`의 `table` override가 모든 MDX 테이블을 `<div class="table-wrapper">`로 자동 wrap.
-- **외관**: `rounded-[10px]` + `border` 외곽. 헤더 `bg-muted` + 600 weight + nowrap. 행 구분선 + hover `bg-primary/5%`. 인라인 코드 0.88em로 축소.
-- **반응형**: `.table-wrapper`의 `overflow-x: auto` — 칼럼이 많거나 긴 테이블은 카드 내부에서만 가로 스크롤하고 페이지 전체 스크롤은 발생하지 않음.
-- **숫자 칼럼**: 셀에 `className="num"` 추가 시 `text-align: right` + `font-variant-numeric: tabular-nums` 자동 적용.
-
-### 17.4 코드 블록 overflow 하드닝
-
-- `.prose-kr figure[data-rehype-pretty-code-figure]`에 `width: 100%` + `max-width: 100%` + `min-width: 0` 추가
-- `.prose-kr figure[...] pre`에도 동일 3종 세트 추가
-- CSS Grid의 기본 `min-width: auto` 때문에 긴 코드 라인이 grid cell을 intrinsic content width까지 확장시키는 버그를 원천 차단
-- 아티클 grid cell은 `<article className="min-w-0">`로 `min-width: 0` 강제
-
-### 17.5 TOC 컴포넌트 (Phase 2 원본 복구)
-
-- `components/blog/TableOfContents.tsx`는 Phase 2 `70e8e2d` 커밋의 원본 스타일 유지: 좌측 세로 border + "On this page" 라벨 + `text-sm` 리스트
-- 검토 도중 시험했던 Mac 윈도우 chrome/신호등 디자인은 롤백됨 (컴팩트한 사이드바에는 과한 시각 weight)
-- 활성 섹션 하이라이트는 IntersectionObserver 기반 (rootMargin: `-80px 0px -70% 0px`)
-
-### 17.6 의존성 업데이트
-
-Phase 4.1 이후 추가된 devDependencies/dependencies:
-
-| 패키지 | 버전 | 용도 |
-|---|---|---|
-| `remark-math` | ^6 | MDX 수식 파싱 |
-| `rehype-katex` | ^7 | KaTeX HTML 생성 |
-| `katex` | ^0.16 | KaTeX 런타임 (CSS 포함) |
-| `@testing-library/react` | ^16.1.0 | Phase 4.1 `useStepController` 훅 테스트 (이미 포함) |
-| `@testing-library/dom` | ^10.4.0 | 동상 |
-| `jsdom` | ^25.0.1 | 동상 |
-
----
-
-## 18. Phase 5 구현 현황
-
-> Phase 5 완료 시점(2026-04-15)의 구현 상태. §13–16과 동일 포맷 (frozen phase record).
-
-### 18.1 존재하는 파일 (Phase 5에서 추가·변경)
-
-```
-scripts/
-└── generate-search-index.ts        [신규] pre-build hook으로 실행
-
-lib/
-├── filters.ts                      [수정] matched?: string[] 파이프라인 추가
-├── utils.ts                        [수정] buildPostsUrl이 matched 직렬화
-├── search-index.ts                 [신규] 타입 + 설정 + loadAndBuildIndex + extractPlainText
-└── related-posts.ts                [신규] getRecentPosts(excludeSlug, n)
-
-app/
-├── page.tsx                        [수정] matched 쿼리 파라미터 파싱
-├── posts/[slug]/page.tsx           [수정] <RecentPostsSection> 렌더
-└── tags/
-    └── [tag]/
-        └── page.tsx                [신규] 태그별 SSG 페이지
-
-components/blog/
-├── SearchBar.tsx                   [수정] FlexSearch lazy-load + matched URL push
-├── PostMeta.tsx                    [수정] 태그 칩 → /tags/[tag] 링크
-├── RecentPostsSection.tsx          [신규]
-└── TagPageHeader.tsx               [신규]
-
-public/
-└── search-index.json               [생성물, gitignored] 빌드 타임 FlexSearch 인덱스
-
-velite.config.ts                    [수정] 태그 금지 문자 regex refine
-package.json                        [수정] flexsearch dependency + @types/flexsearch devDep + 훅 스크립트 업데이트
-.gitignore                          [수정] /public/search-index.json
-
-tests/
-├── search-index-text.test.ts       [신규] extractPlainText 11 케이스
-├── search-index-roundtrip.test.ts  [신규] jsdom + mock fetch 5 케이스
-├── filters-matched.test.ts         [신규] matched 6 케이스
-├── related-posts.test.ts           [신규] getRecentPosts 5 케이스
-└── velite-schema.test.ts           [수정] 태그 금지 문자 4 케이스 추가
-```
-
-### 18.2 핵심 의사결정 (변경 금지)
-
-| 결정 | 이유 | 영향 |
-|---|---|---|
-| 본문 포함 전문 검색 | 작성자의 지식 베이스 활용이 검색 가치의 핵심 | 인덱스 크기 증가는 fetch-on-demand로 상쇄 |
-| FlexSearch fetch-on-demand | 검색 안 하는 대부분 방문자가 비용 지불하지 않음 | 첫 검색 ~100ms 지연(localhost 체감 X), 세션 내 캐시 |
-| 관련 글은 최신순 (알고리즘 없음) | 사용자 명시 결정, YAGNI | 주제 기반 교차는 수동 `<RelatedPost />` 유지 |
-| `matched=` URL 파라미터로 FlexSearch 결과 전달 | 기존 서버 필터링 플로우 + 공유 가능한 URL 동시 만족 | 클라이언트 인덱스 실패 시 substring fallback 투명 |
-| 태그 금지 문자 스키마 레벨 차단 | URL 깨진 라우트 생성 방지 | `/ ? #` 포함 태그는 빌드 타임 실패 |
-| `/tags/[tag]`와 `/?tag=...` 공존 | 두 경로는 다른 사용자 의도(아카이브 vs 임시 필터) | URL 구조 2벌 유지 |
-| `flexsearch ^0.7` 메이저 고정 | 0.8+ 호환성 미검증 | 업그레이드는 별도 결정 |
-| 관련 글이 `<article>` 외부 | TOC IntersectionObserver 오염 방지 | "최근 글"이 TOC에 안 잡힘 |
-| 코드/수식은 검색 본문에서 제외 | syntax identifier 노이즈 방지 | `keywords` 필드가 개념 매핑 커버 |
-| FlexSearch 0.7 타입 불완전 | `weight` 속성이 types에 없음 | `resolution` 9→5 차이로 relevance 가중 대체 |
-| `Document.export()`는 async | 빌드 스크립트에서 `await` 필수 | `queueMicrotask` 패턴은 빈 JSON 생성 |
-
-### 18.3 명령어 치트시트
+## 14. 명령어 치트시트
 
 ```bash
-pnpm dev                    # 개발 서버 (prebuild로 자동 인덱스 생성)
+pnpm dev                    # 개발 서버 (predev → 키워드 맵 + 검색 인덱스 자동 생성)
 pnpm build                  # 프로덕션 빌드 (prebuild 포함)
-pnpm test                   # velite + vitest (약 134 테스트)
-pnpm test:unit              # vitest만
-pnpm generate-search-index  # 수동 인덱스 재생성 (새 글 추가 후)
+pnpm test                   # pretest → velite build → vitest run
+pnpm test:unit              # vitest만 (prebuild 없이 — 일부 테스트는 실패 가능)
 pnpm type-check             # tsc --noEmit
+pnpm lint                   # next lint (Next 16에서 ESLint CLI 전환 예정)
+pnpm velite                 # Velite만 실행
+pnpm velite:dev             # Velite watch 모드
+pnpm generate-keyword-map   # frontmatter 수정 후 수동 재생성
 ```
 
-### 18.4 알려진 미결 사항 (Phase 6 이후)
+**주의**: `pnpm dev`/`pnpm build`/`pnpm test`는 모두 pre-hook으로 키워드 맵을 자동 생성한다. 검색 인덱스는 더 이상 별도 생성물이 아니며 Velite `plainBody` 필드가 대신한다.
 
-- 한국어 tokenizer 최적화 (현재 forward prefix 매칭만 동작)
-- 검색 결과 highlight 및 context snippet
-- 코드/수식 별도 검색 인덱스
-- 시리즈 내비게이션 UI (시리즈 글 등장 시)
+---
+
+## 15. 알려진 미결 사항
+
+Phase 6 이후 또는 해당 기능이 실제로 등장할 때 처리.
+
+**개발 편의**
+- HMR: dev 모드에서 새 MDX 파일 추가 시 키워드 맵/검색 인덱스 자동 재생성 (현재 `pnpm dev` 재시작 필요)
+- 신규 태그 HMR 인식 (현재 `pnpm dev` 재시작 필요)
+- `series`/`seriesOrder` 정합성 `.refine()` — 시리즈 UI 도입 전 추가
+
+**검색 고도화** (코퍼스가 커지면 재검토. 현재는 "검색엔진이 아니다" 원칙)
+- 검색 결과 highlight + context snippet (substring으로도 구현 가능)
+- 대소문자 무시를 넘어선 Unicode normalization (NFC/NFD 한글 조합)
+
+**키워드 시스템**
+- 키워드 변형/별칭 (`B-Tree` ↔ `B트리` ↔ `비트리`)
+- Aho-Corasick 최적화 (현재 Greedy 매칭. 성능 문제 발생 시 교체)
+- 키워드 역링크 표시 ("이 글을 참조하는 글들")
+- `linkReference` 노드 ancestor 제외 (현재 `link`/`inlineCode`/`code`만 제외)
+
+**탐색 UI**
+- 시리즈 내비게이션 UI
 - 태그 메타데이터 (설명문, 아이콘)
-- HMR 시 새 태그 자동 등록 (현재는 `pnpm dev` 재시작 필요)
 
-### 18.5 리포지토리
+**성능 / 폴리시**
+- 반응형 미세 조정
+- 이미지 blur placeholder, 폰트 preload 최적화
+- `next lint` → ESLint CLI + flat config (Next 16 승격 시)
+- `@types/node: ^25`는 LTS 아님 — 안정성 필요 시 `^22` 다운그레이드 검토
+- Phase 6에서 Playwright E2E 검토
 
-- **Phase 5 태그**: `phase-5-complete`
-- **브랜치 전략**: 이전 Phase와 동일 (`main` 직접 또는 squash merge)
+**시각화 프레임워크 확장**
+- Phase 4.2 Interactive Playground 컴포넌트 (`ControlPanel`, `SegmentedControl`)
+- Phase 4.3 Timeline/Concurrent 컴포넌트 (`TimelineTrack`, `ActorSwimlane`, `--viz-actor-*` 토큰)
+- 시각화 간 state 공유 (Context API, 한 글에 여러 시각화 연동 시)
