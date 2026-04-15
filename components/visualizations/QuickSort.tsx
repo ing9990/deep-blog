@@ -1,8 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw } from 'lucide-react'
+import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
+import { VisualContainer } from './common/VisualContainer'
+import { StepController } from './common/StepController'
+import { useStepController } from './common/useStepController'
+import { vizStateClasses } from './common/colors'
 
 interface QuickSortProps {
   initial?: number[]
@@ -104,45 +107,32 @@ export function QuickSort({
   description = '피벗을 기준으로 배열이 분할되는 과정을 단계별로 확인하세요.',
 }: QuickSortProps) {
   const snapshots = useMemo(() => quickSortSnapshots(initial), [initial])
-  const [step, setStep] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const current = snapshots[step]
-  const maxStep = snapshots.length - 1
-
-  useEffect(() => {
-    if (!playing) return
-    if (step >= maxStep) {
-      setPlaying(false)
-      return
-    }
-    const handle = setTimeout(() => setStep((s) => Math.min(maxStep, s + 1)), 800)
-    return () => clearTimeout(handle)
-  }, [playing, step, maxStep])
-
+  const controller = useStepController(snapshots.length)
+  const current = snapshots[controller.step]
   const maxValue = Math.max(...initial)
 
   return (
-    <figure className="not-prose my-8 rounded-[14px] border border-border bg-background p-5">
-      <figcaption className="mb-4">
-        <p className="text-sm font-semibold text-foreground">Quick Sort 분할 과정</p>
-        <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>
-      </figcaption>
-
+    <VisualContainer title="Quick Sort 분할 과정" description={description}>
       <div className="flex min-h-[180px] items-end justify-center gap-2 rounded-[10px] bg-muted/40 p-4">
         {current.array.map((value, idx) => {
           const isPivot = idx === current.pivotIndex
           const isComparing = current.comparing.includes(idx)
           const isSorted = current.sorted.has(idx)
+
+          const stateClass = isPivot
+            ? vizStateClasses('pivot')
+            : isComparing
+              ? vizStateClasses('comparing')
+              : isSorted
+                ? vizStateClasses('confirmed')
+                : 'border-border bg-background text-foreground'
+
           return (
             <div key={idx} className="flex flex-col items-center gap-1">
               <div
                 className={cn(
-                  'flex items-end justify-center rounded-[6px] border-2 transition-all duration-300',
-                  'w-10 text-[13px] font-semibold',
-                  isPivot && 'border-amber-500 bg-amber-100 text-amber-950 dark:bg-amber-950/60 dark:text-amber-100',
-                  isComparing && !isPivot && 'border-blue-500 bg-blue-100 text-blue-950 dark:bg-blue-950/60 dark:text-blue-100',
-                  isSorted && !isPivot && !isComparing && 'border-emerald-500 bg-emerald-100 text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100',
-                  !isPivot && !isComparing && !isSorted && 'border-border bg-background text-foreground',
+                  'flex w-10 items-end justify-center rounded-[6px] border-2 text-[13px] font-semibold transition-all duration-300',
+                  stateClass,
                 )}
                 style={{ height: `${(value / maxValue) * 100 + 32}px` }}
               >
@@ -154,63 +144,29 @@ export function QuickSort({
         })}
       </div>
 
-      <div className="mt-4 rounded-[10px] border border-border bg-muted/30 p-3 text-[13px] leading-relaxed text-foreground">
-        <span className="font-semibold">Step {step} / {maxStep}:</span> {current.note}
-      </div>
+      <StepController
+        {...controller}
+        stepDescription={current.note}
+        showSpeedSlider={false}
+        showProgressBar={false}
+      />
 
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setStep(0)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-            disabled={step === 0 && !playing}
-            aria-label="처음으로 리셋"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-            disabled={step === 0}
-            aria-label="이전 단계"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setPlaying((p) => !p)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-            disabled={step >= maxStep}
-            aria-label={playing ? '일시정지' : '자동 재생'}
-          >
-            {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setStep((s) => Math.min(maxStep, s + 1))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-            disabled={step >= maxStep}
-            aria-label="다음 단계"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-          <LegendDot className="border-amber-500 bg-amber-100 dark:bg-amber-950/60" label="피벗" />
-          <LegendDot className="border-blue-500 bg-blue-100 dark:bg-blue-950/60" label="비교 중" />
-          <LegendDot className="border-emerald-500 bg-emerald-100 dark:bg-emerald-950/60" label="확정" />
-        </div>
+      <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+        <LegendDot stateClass="bg-viz-pivot-bg border-viz-pivot" label="피벗" />
+        <LegendDot stateClass="bg-viz-comparing-bg border-viz-comparing" label="비교 중" />
+        <LegendDot stateClass="bg-viz-confirmed-bg border-viz-confirmed" label="확정" />
       </div>
-    </figure>
+    </VisualContainer>
   )
 }
 
-function LegendDot({ className, label }: { className: string; label: string }) {
+function LegendDot({ stateClass, label }: { stateClass: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className={cn('inline-block h-3 w-3 rounded-sm border-2', className)} aria-hidden="true" />
+      <span
+        className={cn('inline-block h-3 w-3 rounded-sm border-2', stateClass)}
+        aria-hidden="true"
+      />
       {label}
     </span>
   )
