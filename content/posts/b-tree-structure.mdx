@@ -1,0 +1,23 @@
+---
+title: "B-Tree 구조"
+slug: "b-tree-structure"
+date: 2026-04-13
+tags:
+  - Database
+  - Algorithm
+keywords:
+  - B-Tree
+summary: "B-Tree가 어떻게 정렬된 데이터를 효율적으로 탐색하는지 구조와 동작 원리를 설명합니다."
+---
+
+## B-Tree란
+
+B-Tree는 각 노드가 여러 자식을 가질 수 있는 자기-균형 탐색 트리입니다.
+
+## 왜 데이터베이스가 B-Tree를 쓰는가
+
+디스크 블록 하나를 노드 하나에 대응시켜 I/O 횟수를 최소화합니다.
+
+## 삽입과 분할
+
+노드가 가득 차면 중간 키를 부모로 올리고 좌우로 분할합니다.

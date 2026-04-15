@@ -1,4 +1,10 @@
 import type { MDXComponents } from 'mdx/types'
+import type { AnchorHTMLAttributes } from 'react'
+import { KeywordLink } from '@/components/blog/KeywordLink'
+
+type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
+  'data-keyword-link'?: string
+}
 
 export const mdxComponents: MDXComponents = {
   h1: ({ children, ...props }) => (
@@ -6,9 +12,18 @@ export const mdxComponents: MDXComponents = {
       {children}
     </h1>
   ),
-  a: ({ children, ...props }) => (
-    <a className="text-primary underline decoration-dotted underline-offset-4" {...props}>
-      {children}
-    </a>
-  ),
+  a: ({ href, children, ...props }: AnchorProps) => {
+    if (props['data-keyword-link'] === 'true' && typeof href === 'string') {
+      return <KeywordLink href={href}>{children}</KeywordLink>
+    }
+    return (
+      <a
+        href={href}
+        className="text-primary underline decoration-dotted underline-offset-4"
+        {...props}
+      >
+        {children}
+      </a>
+    )
+  },
 }

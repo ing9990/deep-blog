@@ -3,6 +3,13 @@ import rehypePrettyCode from 'rehype-pretty-code'
 import rehypeSlug from 'rehype-slug'
 import { transformerNotationHighlight } from '@shikijs/transformers'
 import { calculateReadingTime } from './lib/reading-time'
+import remarkAutoLink from './plugins/remark-auto-link'
+import { KEYWORD_MAP, KEYWORDS_BY_LENGTH } from './lib/generated/keyword-map'
+
+// Build keywordToSlug from the generated map (lowercase keys → slug strings)
+const keywordToSlug = new Map(
+  Array.from(KEYWORD_MAP.entries()).map(([kw, entry]) => [kw, entry.slug]),
+)
 
 // Slug regex: lowercase letters, numbers, hyphens only (no uppercase).
 // Used in the unit-testable frontmatter schema. The collection schema uses
@@ -67,6 +74,9 @@ export default defineConfig({
   },
   collections: { posts },
   mdx: {
+    remarkPlugins: [
+      [remarkAutoLink, { keywordsByLength: KEYWORDS_BY_LENGTH, keywordToSlug }],
+    ],
     rehypePlugins: [
       rehypeSlug,
       [

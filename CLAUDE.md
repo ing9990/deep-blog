@@ -236,57 +236,47 @@ graph TD
 
 ## 5. 키워드 자동 링크 시스템
 
-### 5.1 동작 원리
+이 시스템은 **빌드 타임**에 동작하며, 런타임 비용은 0입니다. Phase 3에서 구현 완료 (`phase-3-complete` 태그).
 
-이 시스템은 **빌드 타임**에 동작하며, 런타임 비용은 0입니다.
+### 5.1 파이프라인 개요
 
 ```
-[빌드 시작]
-    │
-    ▼
-1. 전체 MDX 파일 스캔 → keyword-to-slug 맵 생성
-    │  예: { "B-Tree": "/posts/b-tree-structure",
-    │        "Kafka Consumer": "/posts/kafka-consumer-group" }
-    ▼
-2. 각 MDX 파일 파싱 시 remark-auto-link 플러그인 실행
-    │  - 본문 텍스트 노드에서 키워드 매칭
-    │  - 자기 자신의 키워드는 제외
-    │  - 매칭된 키워드를 <KeywordLink> 컴포넌트로 치환
-    ▼
-3. 결과: 본문의 "B-Tree를 사용합니다" →
-         "<KeywordLink href='/posts/b-tree-structure'>B-Tree</KeywordLink>를 사용합니다"
+prebuild hook → scripts/generate-keyword-map.ts
+  ↓
+lib/generated/keyword-map.ts (KEYWORD_MAP, KEYWORDS_BY_LENGTH, SLUG_TO_ENTRY)
+  ↓
+velite build → remarkAutoLink plugin (plugins/remark-auto-link.ts)
+  ↓
+each MDX body gets <a href="/posts/..." data-keyword-link="true"> inline
+  ↓
+next build → mdxComponents.a detects data-keyword-link → renders <KeywordLink>
 ```
 
-### 5.2 remark-auto-link 플러그인 명세
+### 5.2 충돌 정책
 
-```typescript
-// plugins/remark-auto-link.ts
+`scripts/generate-keyword-map.ts`는 같은 키워드가 두 글 이상에서 선언되면 빌드를 실패시킨다 (`process.exit(1)`). CLAUDE.md §4.3의 "1:1 매핑" 원칙을 빌드 타임에 강제한다. 충돌 감지는 키워드를 lowercase로 정규화한 후 수행하므로 "B-Tree"와 "b-tree"도 충돌로 간주된다.
 
-interface AutoLinkOptions {
-  keywordMap: Map<string, string>;  // keyword → slug
-  currentSlug: string;              // 현재 처리 중인 글의 slug
-}
+### 5.3 경계 규칙
 
-/**
- * 규칙:
- * 1. 자기 자신의 slug로 연결되는 키워드는 링크하지 않음
- * 2. 코드 블록(`code`, `inlineCode`) 내부의 키워드는 링크하지 않음
- * 3. 이미 링크(`link`) 안에 있는 키워드는 이중 링크하지 않음
- * 4. 한 글에서 같은 키워드는 첫 번째 등장만 링크 (반복 링크 방지)
- * 5. 긴 키워드부터 먼저 매칭 (greedy matching)
- *    예: "Kafka Consumer Group"이 "Kafka"보다 먼저 매칭
- * 6. 단어 경계 체크: "B-Tree" 키워드가 "AB-Tree"에 매칭되면 안 됨
- */
-```
+`lib/keyword-matcher.ts`의 `hasBoundary`는 한글/영문 비대칭 경계를 적용한다:
+- **영문 앞/뒤**: `[A-Za-z0-9_]` 기준 엄격
+- **한글 앞**: 엄격 (`재인덱싱`의 `인덱스` 탈락)
+- **한글 뒤**: 완화 — 한국어 조사 허용 (`인덱스를`, `B-Tree가`)
 
-### 5.3 KeywordLink 컴포넌트
+### 5.4 자기 링크 방지
 
-```tsx
-// components/blog/KeywordLink.tsx
-// - 일반 하이퍼링크와 시각적으로 구분: 점선 밑줄 + 살짝 다른 색상
-// - 호버 시 글 제목 + 요약을 보여주는 프리뷰 팝업 (Popover)
-// - 팝업은 키보드 접근 가능 (a11y)
-```
+Remark 플러그인은 현재 파일의 basename(확장자 제거)을 `excludeSlug`로 사용해, 한 글이 자기 자신의 키워드를 링크하는 것을 방지한다. 예: `b-tree-structure.mdx` 본문의 "B-Tree"는 링크되지 않는다.
+
+### 5.5 중첩 방지 규칙
+
+- 코드 블록(`code`, `inlineCode`) 내부 키워드 제외
+- 기존 `link` 노드 안의 키워드 제외 (이중 링크 방지)
+- 한 글에서 같은 키워드(대소문자 무시)는 첫 등장만 링크
+- Greedy matching: 긴 키워드 우선 (예: `"Kafka Consumer Group"` > `"Kafka"`)
+
+### 5.6 KeywordLink 컴포넌트
+
+`components/blog/KeywordLink.tsx`는 `'use client'` 래퍼로, 데스크톱에서는 shadcn Popover로 글 제목/요약 프리뷰를 보여주고 모바일에서는 일반 링크로 degrade한다. `hidden md:contents` + `md:hidden` 이중 렌더 패턴으로 `@media (hover: hover)` 분기를 달성한다. Popover는 `SLUG_TO_ENTRY.get(slug)`로 O(1) 조회해 제목/요약을 표시한다.
 
 ---
 
@@ -756,7 +746,7 @@ pnpm type-check   # TypeScript 타입 에러 없음
 
 1. **Phase 1 — 기반 구축** ✅ **완료** (`phase-1-complete` 태그): Next.js 프로젝트 초기화, Velite 설정, MDX 파이프라인, 샘플 글 렌더링. 세부 내역은 §13 참고.
 2. **Phase 2 — 핵심 UI** ✅ **완료** (`phase-2-complete` 태그): 디자인 토큰, Pretendard/JetBrains Mono 폰트, 다크모드(토글 포함), 인덱스 페이지(URL 동기화 검색/필터/정렬), 글 상세 페이지(TOC 사이드바), shadcn/ui 도입, Shiki 라인 하이라이트. 세부 내역은 §14 참고.
-3. **Phase 3 — 키워드 시스템**: remark-auto-link 플러그인, KeywordLink 컴포넌트, 키워드 맵
+3. **Phase 3 — 키워드 시스템** ✅ **완료** (`phase-3-complete` 태그): scripts/generate-keyword-map.ts 빌드 전 맵 생성, plugins/remark-auto-link.ts Remark 플러그인, components/blog/KeywordLink.tsx Popover 래퍼. 세부 내역은 §15 참고.
 4. **Phase 4 — 시각화 프레임워크**: VisualContainer, StepController, SpeedSlider 공통 컴포넌트 구축
 5. **Phase 5 — 탐색 기능**: FlexSearch 통합, 관련 글 추천, 태그 전용 페이지 `/tags/[tag]`
 6. **Phase 6 — 마무리**: 반응형 미세 조정, 성능 최적화
@@ -961,3 +951,85 @@ pnpm velite           # Velite만 실행
 - **원격**: `https://github.com/ing9990/backend-notes` (private)
 - **Phase 2 태그**: `phase-2-complete`
 - **브랜치 전략**: Phase 1과 동일하게 단일 `main`에 직접 커밋 (`phase-2-core-ui` 브랜치에서 작업 후 fast-forward merge). Phase 3부터 feature 브랜치 유지 검토.
+
+---
+
+## 15. Phase 3 구현 현황
+
+> Phase 3 완료 시점(2026-04-15)의 실제 구현 상태. §13/§14와 동일 포맷.
+
+### 15.1 존재하는 파일 (Phase 3에서 추가·변경)
+
+```
+scripts/
+└── generate-keyword-map.ts      # pre-build I/O 스크립트 (tsx)
+
+lib/
+├── generated/
+│   └── keyword-map.ts           # 빌드 타임 생성 TS 상수 (커밋 대상)
+└── keyword-matcher.ts           # findMatches, hasBoundary 순수 함수
+
+plugins/
+└── remark-auto-link.ts          # MDAST text → link 치환, visitParents 기반
+
+components/
+├── blog/
+│   └── KeywordLink.tsx          # 'use client', shadcn Popover 래퍼
+├── mdx/
+│   └── components.tsx           # [수정] a override에 data-keyword-link 분기
+└── ui/
+    └── popover.tsx              # shadcn CLI 생성
+
+velite.config.ts                 # [수정] mdx.remarkPlugins 추가
+package.json                     # [수정] prebuild/predev/pretest + tsx/gray-matter/unist-util-visit-parents/@radix-ui/react-popover
+content/posts/
+├── hello-world.mdx              # [수정] B-Tree 본문 참조 추가
+└── b-tree-structure.mdx         # 신규, B-Tree 키워드 선언
+
+tests/
+├── keyword-matcher.test.ts      # 19 케이스 (hasBoundary 8 + findMatches 11)
+├── generate-keyword-map.test.ts # 10 케이스
+├── remark-auto-link.test.ts     # 10 케이스
+└── velite-build.test.ts         # [수정] +2 통합 테스트 (self-link 방지 + 마커 존재)
+```
+
+### 15.2 핵심 의사결정 (변경 금지)
+
+| 결정 | 이유 | 영향 |
+|---|---|---|
+| Remark (MDAST) 단계에서 치환 | 코드/링크 ancestor 판정이 MDAST 노드 타입으로 선언적 | Rehype 단계(code block이 `<pre>`로 감싸진 후)에서 탐지가 어려움 |
+| `lib/generated/keyword-map.ts` 커밋 대상 | Clean clone에서 즉시 빌드 가능 + 히스토리 추적 | 키워드 변경 시 diff 노이즈 발생 (수용) |
+| 키워드 맵 키는 lowercase | 대소문자 무시 매칭 (`B-Tree` = `b-tree`) | `generate-keyword-map`이 정규화, `findMatches`가 lowercase 비교, 원본 case는 `text.slice`로 복원 |
+| 한글 뒤 경계 완화 | 한국어 조사(`를/가/의/는/...`) 허용 필수 | 드문 오탐은 긴 복합어를 별도 키워드로 등록해 해결 |
+| `currentSlug`는 파일 basename | Velite API 의존 없음 | Velite `s.slug('post')` 규칙과 일치 (파일명 = slug 전제) |
+| `scanPosts`는 재귀적 | 미래 `content/posts/<category>/` 서브디렉토리 지원 | `readdir` 결과에서 디렉토리면 재귀 호출 |
+| 충돌 시 빌드 실패 | 1:1 매핑 원칙을 즉시 강제 | 작성자가 30초 내 해결 가능한 에러 메시지 |
+| `serializeMap` 출력 정렬 결정적 | git diff 노이즈 최소화 | 키워드를 `localeCompare`로 정렬 후 직렬화 |
+| 데스크톱/모바일 이중 렌더 | `@media (hover: hover)` 기반 분기를 JS 런타임 없이 달성 | 두 벌 렌더 비용은 짧은 키워드 텍스트라 무시 가능 |
+| `KEYWORDS_BY_LENGTH` 사전 정렬 | Greedy matching 시 매 호출마다 재정렬 방지 | 빌드 타임에 한 번만 정렬 |
+
+### 15.3 명령어 치트시트
+
+```bash
+pnpm dev                    # Velite + Next (prebuild/predev로 키워드 맵 자동 생성)
+pnpm build                  # 프로덕션 빌드 (prebuild 포함)
+pnpm test                   # pretest로 키워드 맵 생성 + velite + vitest (총 ~87 테스트)
+pnpm test:unit              # vitest only (키워드 맵은 기존 상태 유지)
+pnpm generate-keyword-map   # 수동 재생성 (frontmatter 수정 후)
+pnpm type-check             # tsc --noEmit
+pnpm velite                 # Velite만 실행
+```
+
+### 15.4 알려진 미결 사항 (후속 Phase에서 처리)
+
+- **HMR 지원**: dev 모드에서 새 MDX 파일 추가 시 자동 재생성 — Phase 6 polish
+- **키워드 변형/별칭**: `B-Tree` ↔ `B트리` ↔ `비트리` — Phase 5+
+- **Aho-Corasick 매칭 최적화**: Greedy + claimed O(K×T) 성능 문제 발생 시 Phase 6
+- **키워드 역링크 표시** ("이 글을 참조하는 글들"): Phase 5 관련 글 추천에 흡수
+- **Reference-style 링크 ancestor 제외**: 현재 `link`/`inlineCode`/`code`만 제외하고 `linkReference`는 제외하지 않음. 실제 사용 시 문제 발생하면 Phase 6에서 추가
+
+### 15.5 리포지토리
+
+- **원격**: `https://github.com/ing9990/backend-notes` (private)
+- **Phase 3 태그**: `phase-3-complete`
+- **브랜치 전략**: Phase 2와 동일하게 단일 `main` 브랜치에 직접 또는 `phase-3-keyword-system` feature 브랜치 후 squash merge.

@@ -41,4 +41,30 @@ describe('velite build output', () => {
       expect(entry.url).toMatch(/^#/)
     }
   })
+
+  it('no post contains an auto-link to itself (self-link prevention)', () => {
+    // Velite compiles MDX to a JS function that emits JSX prop objects,
+    // so an auto-link in `post.body` is serialized as JSX props like
+    // {href:"/posts/<slug>",...,"data-keyword-link":"true"}. Match the
+    // href+marker co-occurrence within the same prop object (bounded by
+    // a closing brace).
+    for (const post of posts) {
+      const selfSlugJson = `"/posts/${post.slug}"`
+      const autoLinkToSelfRegex = new RegExp(
+        `href:${selfSlugJson}[^}]*"data-keyword-link":"true"|"data-keyword-link":"true"[^}]*href:${selfSlugJson}`,
+      )
+      expect(
+        autoLinkToSelfRegex.test(post.body),
+        `post ${post.slug} contains an auto-link to itself`,
+      ).toBe(false)
+    }
+  })
+
+  it('at least one keyword auto-link marker exists in compiled output', () => {
+    const totalLinks = posts.reduce(
+      (n, p) => n + (p.body.match(/"data-keyword-link":"true"/g)?.length ?? 0),
+      0,
+    )
+    expect(totalLinks).toBeGreaterThanOrEqual(1)
+  })
 })
