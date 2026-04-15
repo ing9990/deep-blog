@@ -7,6 +7,7 @@ export interface PostFilters {
   tag?: string
   query?: string
   sort?: SortKey
+  matched?: readonly string[]
 }
 
 export function filterByTag<T extends Pick<Post, 'tags'>>(
@@ -16,6 +17,15 @@ export function filterByTag<T extends Pick<Post, 'tags'>>(
   if (!tag) return posts.slice()
   const needle = tag.toLowerCase()
   return posts.filter((p) => p.tags.some((t) => t.toLowerCase() === needle))
+}
+
+export function filterByMatched<T extends Pick<Post, 'slug'>>(
+  posts: readonly T[],
+  matched?: readonly string[],
+): T[] {
+  if (matched === undefined) return posts.slice()
+  const allow = new Set(matched)
+  return posts.filter((p) => allow.has(p.slug))
 }
 
 export function searchPosts<
@@ -54,12 +64,12 @@ export function sortPosts<T extends Pick<Post, 'date' | 'title'>>(
 }
 
 export function applyFilters<
-  T extends Pick<Post, 'tags' | 'title' | 'summary' | 'keywords' | 'date'>,
+  T extends Pick<Post, 'slug' | 'tags' | 'title' | 'summary' | 'keywords' | 'date'>,
 >(posts: readonly T[], filters: PostFilters): T[] {
-  return sortPosts(
-    searchPosts(filterByTag(posts, filters.tag), filters.query),
-    filters.sort,
-  )
+  const afterMatched = filterByMatched(posts, filters.matched)
+  const afterTag = filterByTag(afterMatched, filters.tag)
+  const afterSearch = searchPosts(afterTag, filters.query)
+  return sortPosts(afterSearch, filters.sort)
 }
 
 export function extractAllTags<T extends Pick<Post, 'tags'>>(
