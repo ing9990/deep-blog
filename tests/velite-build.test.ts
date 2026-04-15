@@ -28,4 +28,17 @@ describe('velite build output', () => {
     expect(typeof posts[0].body).toBe('string')
     expect(posts[0].body.length).toBeGreaterThan(0)
   })
+
+  it('first post has a numeric readingTime >= 1', () => {
+    expect(typeof posts[0].readingTime).toBe('number')
+    expect(posts[0].readingTime).toBeGreaterThanOrEqual(1)
+  })
+
+  it('first post has toc entries with anchor urls (#slug format)', () => {
+    const toc = posts[0].toc as Array<{ title: string; url: string; items: unknown[] }>
+    expect(toc.length).toBeGreaterThan(0)
+    for (const entry of toc) {
+      expect(entry.url).toMatch(/^#/)
+    }
+  })
 })

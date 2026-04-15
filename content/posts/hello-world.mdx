@@ -15,13 +15,25 @@ summary: "Phase 1 파이프라인이 정상 동작하는지 확인하는 샘플 
 
 일반 문단, **강조**, *이탤릭*, [예시 링크](https://example.com), 그리고 `인라인 코드`를 사용합니다.
 
+### 인라인 요소
+
+굵은 글씨, 기울임, 링크가 한 문장에 자연스럽게 섞입니다.
+
+### 문단 흐름
+
+Backend Notes는 한국어 본문의 가독성을 위해 행간을 1.8로 설정합니다. 문단과 문단 사이는 충분한 여백으로 숨 쉬는 공간을 확보합니다.
+
 ## 코드 블록
 
 ```typescript title="example.ts"
-export function greet(name: string): string {
+export function greet(name: string): string { // [!code highlight]
   return `Hello, ${name}!`
 }
 ```
+
+### Shiki 하이라이팅
+
+VS Code 테마 기반의 신택스 하이라이팅이 적용됩니다.
 
 ## 리스트
 
@@ -31,3 +43,13 @@ export function greet(name: string): string {
 
 1. 순서 있는 첫 번째
 2. 순서 있는 두 번째
+
+## TOC 동작 확인
+
+이 섹션은 스크롤 시 우측 목차가 정확히 하이라이트되는지 확인하기 위한 긴 섹션입니다.
+
+본문을 충분히 길게 채워 스크롤이 발생하도록 합니다. 스크롤하면 사이드바의 "TOC 동작 확인" 항목이 활성화됩니다.
+
+계속해서 더 많은 내용을 작성해 스크롤을 유도합니다. Intersection Observer의 `rootMargin` 설정이 의도대로 동작하는지 확인합니다.
+
+한국어 긴 글 읽기에 최적화된 여백과 행간을 체감하면서, 시선이 자연스럽게 다음 섹션으로 흘러가는지 평가합니다.

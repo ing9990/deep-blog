@@ -603,42 +603,36 @@ export const vizColors = {
 
 ### 7.2 컬러 팔레트
 
-```css
-/* globals.css — CSS 변수 */
-:root {
-  --color-bg:         #FFFFFF;
-  --color-bg-subtle:  #F8F9FA;
-  --color-text:       #1A1A2E;
-  --color-text-secondary: #6B7280;
-  --color-border:     #E5E7EB;
-  --color-accent:     #3B82F6;      /* 프라이머리 액센트 */
-  --color-accent-soft: #EFF6FF;     /* 액센트 배경 */
-  --color-keyword:    #6366F1;      /* 키워드 링크 색상 */
-  --color-keyword-bg: #EEF2FF;      /* 키워드 호버 배경 */
-}
+shadcn/ui 컨벤션의 CSS 변수(`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--ring`, `--accent`)를 사용한다. 프로젝트 고유 확장 토큰은 `--keyword`, `--keyword-bg`, `--border-strong`. shadcn 프리미티브(Button, Input, Badge, Select)는 `--popover`, `--input`, `--secondary`, `--destructive` 등의 토큰도 참조하므로 `app/globals.css`의 `:root`와 `[data-theme="dark"]` 블록 모두에 정의되어 있다. 실제 값은 `app/globals.css`를 참고하고, 이 문서에서는 핵심 원칙만 기술한다.
 
-[data-theme="dark"] {
-  --color-bg:         #0F0F1A;
-  --color-bg-subtle:  #1A1A2E;
-  --color-text:       #E5E7EB;
-  --color-text-secondary: #9CA3AF;
-  --color-border:     #2D2D3F;
-  --color-accent:     #60A5FA;
-  --color-accent-soft: #1E293B;
-  --color-keyword:    #818CF8;
-  --color-keyword-bg: #1E1B4B;
-}
-```
+**핵심 원칙**
+- 그림자 대신 **테두리 변화로 상태 표현** (카드 호버: `border-border-strong` + `bg-muted/40`)
+- 단일 블루 액센트 (`--primary: #3B82F6` / dark `#60A5FA`) — 링크, 포커스 링, 활성 필터 칩
+- 완전 검정 회피 — foreground는 `#09090B`(light) / `#FAFAFA`(dark)로 안정감 확보
+- **WCAG 대비 예외**: 라이트 모드 `--primary: #3B82F6`는 백색 배경에서 16px 본문 텍스트 기준 WCAG AA 대비율(4.5:1) 미달(3.68:1). Toss 블루의 시각적 톤 유지를 우선해 의도적으로 수용. 링크 텍스트가 본문에 드물게 등장하고 대부분 큰 제목·카드 호버·활성 필터에 사용되어 실사용 영향은 제한적. 다크 모드 `--primary: #60A5FA`는 AA 통과(7.83:1).
+
+다크 모드 전환: `next-themes`의 `ThemeProvider`를 `attribute="data-theme"`로 설정. Tailwind는 `darkMode: ['selector', '[data-theme="dark"]']`로 variant를 생성.
 
 ### 7.3 타이포그래피
 
-- **본문**: Pretendard (또는 시스템 폰트 스택), 16px, line-height 1.8
-- **제목 h1**: 28px, font-weight 700
-- **제목 h2**: 22px, font-weight 600
-- **제목 h3**: 18px, font-weight 600
-- **코드**: JetBrains Mono (또는 Fira Code), 14px
-- **카드 제목**: 18px, font-weight 600
-- **카드 요약**: 14px, color: text-secondary
+**폰트**
+- 본문/제목: **Pretendard Variable** (`next/font/local`, `public/fonts/PretendardVariable.woff2`, 2.0MB, weight 100-900)
+- 코드: **JetBrains Mono Variable** (`next/font/local`, `public/fonts/JetBrainsMono-Variable.ttf`, ~293KB, weight 100-800) + `ui-monospace` fallback 스택
+
+**스케일** (모바일 기본, 데스크탑 `md:` 확장)
+
+| 용도 | 모바일 | 데스크탑 | weight | line-height | letter-spacing |
+|---|---|---|---|---|---|
+| Display | 32px | 40px | 700 | 1.2 | -0.02em |
+| H1 | 28px | 32px | 700 | 1.3 | -0.015em |
+| H2 | 22px | 24px | 600 | 1.4 | -0.01em |
+| H3 | 18px | 19px | 600 | 1.5 | 0 |
+| Body | 16px | 17px | 400 | 1.8 | 0 |
+| Body Small | 14px | 15px | 400 | 1.7 | 0 |
+| Caption | 13px | 13px | 500 | 1.5 | 0 |
+| Code inline | 14px | 14px | 500 | 1.6 | 0 |
+
+본문 `line-height: 1.8`은 Toss 기술 블로그 기준. 한국어 긴 글 가독성의 공식. H1 이상의 음수 letter-spacing은 Pretendard 큰 굵기의 자간 보정용. 실제 타입 스케일 적용은 `app/globals.css`의 `.prose-kr` 클래스와 페이지별 유틸리티 클래스로 처리된다.
 
 ### 7.4 컴포넌트 스타일 가이드
 
@@ -760,12 +754,12 @@ pnpm type-check   # TypeScript 타입 에러 없음
 
 새로운 작업 요청 시 아래 순서를 참고합니다:
 
-1. **Phase 1 — 기반 구축** ✅ **완료** (`phase-1-complete` 태그): Next.js 프로젝트 초기화, Velite 설정, MDX 파이프라인, 샘플 글 `/posts/hello-world` 렌더링. 세부 내역은 §13 참고.
-2. **Phase 2 — 핵심 UI**: 인덱스 페이지 (카드 리스트 + 검색 + 필터), 글 상세 페이지 (본문 + TOC)
+1. **Phase 1 — 기반 구축** ✅ **완료** (`phase-1-complete` 태그): Next.js 프로젝트 초기화, Velite 설정, MDX 파이프라인, 샘플 글 렌더링. 세부 내역은 §13 참고.
+2. **Phase 2 — 핵심 UI** ✅ **완료** (`phase-2-complete` 태그): 디자인 토큰, Pretendard/JetBrains Mono 폰트, 다크모드(토글 포함), 인덱스 페이지(URL 동기화 검색/필터/정렬), 글 상세 페이지(TOC 사이드바), shadcn/ui 도입, Shiki 라인 하이라이트. 세부 내역은 §14 참고.
 3. **Phase 3 — 키워드 시스템**: remark-auto-link 플러그인, KeywordLink 컴포넌트, 키워드 맵
 4. **Phase 4 — 시각화 프레임워크**: VisualContainer, StepController, SpeedSlider 공통 컴포넌트 구축
-5. **Phase 5 — 탐색 기능**: FlexSearch 통합, 관련 글 추천, 태그 페이지
-6. **Phase 6 — 마무리**: 다크모드, 반응형, 성능 최적화
+5. **Phase 5 — 탐색 기능**: FlexSearch 통합, 관련 글 추천, 태그 전용 페이지 `/tags/[tag]`
+6. **Phase 6 — 마무리**: 반응형 미세 조정, 성능 최적화
 
 > **시각화 컴포넌트 개별 구현**은 Phase 4 이후 각 글을 작성할 때 해당 주제에 맞게 함께 구현합니다.
 > 예: "퀵소트" 글 작성 시 → `QuickSort.tsx` 시각화 컴포넌트도 함께 구현
@@ -831,7 +825,7 @@ postcss.config.mjs             # @tailwindcss/postcss
 ```bash
 pnpm dev            # 개발 서버 (Velite watch 모드 포함)
 pnpm build          # Next 프로덕션 빌드 (Velite 선행)
-pnpm test           # velite build && vitest run (17개 테스트, 4개 파일)
+pnpm test           # velite build && vitest run (Phase 1 기준 17개 테스트; Phase 2 이후 46개 — §14.3 참고)
 pnpm test:unit      # vitest run만 (velite build 없이 — 일부 테스트는 실패 가능)
 pnpm type-check     # tsc --noEmit
 pnpm lint           # next lint (Next 16에서 제거 예정)
@@ -841,13 +835,129 @@ pnpm velite         # Velite만 1회 실행
 ### 13.4 알려진 미결 사항 (후속 Phase에서 처리)
 
 - **`next lint` deprecated**: Next 16 업그레이드 시 `npx @next/codemod@canary next-lint-to-eslint-cli .`로 ESLint CLI + flat config 전환.
-- **Shiki 라인 하이라이트 미구현**: CLAUDE.md §4.4의 ` ```kotlin {3-5} ` 표기는 `@shikijs/transformers`의 `transformerNotationHighlight`가 필요. Phase 2에서 실제 코드 블록 스타일링 시 함께 도입.
+- **Shiki 라인 하이라이트 미구현**: CLAUDE.md §4.4의 ` ```kotlin {3-5} ` 표기는 `@shikijs/transformers`의 `transformerNotationHighlight`가 필요. Phase 2에서 실제 코드 블록 스타일링 시 함께 도입. → ✅ **Phase 2에서 완료** (§14 참고)
 - **`series` / `seriesOrder` 정합성 검증 부재**: 한쪽만 있는 경우 스키마 에러 없음. Phase 2 시리즈 UI 도입 전 `.refine()` 추가 필요.
 - **`@types/node: ^25`**: LTS 아님. 안정성 필요 시 `^22`로 다운그레이드 검토.
-- **임시 `prose` 스타일링**: `@tailwindcss/typography`는 Phase 1 간이 스타일용. Phase 2에서 §7.2 커스텀 컬러 토큰 + §7.3 타이포그래피로 대체.
+- **임시 `prose` 스타일링**: `@tailwindcss/typography`는 Phase 1 간이 스타일용. Phase 2에서 §7.2 커스텀 컬러 토큰 + §7.3 타이포그래피로 대체. → ✅ **Phase 2에서 `.prose-kr`로 교체** (§14 참고)
 
 ### 13.5 리포지토리
 
 - **원격**: `https://github.com/ing9990/backend-notes` (private)
 - **브랜치 전략**: 단일 `main` 브랜치에 직접 커밋 (greenfield, Phase 1 기간). Phase 2부터는 feature 브랜치 도입 검토 가능.
 - **Phase 1 태그**: `phase-1-complete` (커밋 `ebd09e9`)
+
+---
+
+## 14. Phase 2 구현 현황
+
+> 이 섹션은 Phase 2 완료 시점(2026-04-15)의 실제 구현 상태와 향후 에이전트가 반드시 알아야 할 의사결정/제약을 기록합니다. §13과 같은 포맷.
+
+### 14.1 존재하는 파일 (Phase 2에서 추가·변경)
+
+```
+app/
+├── layout.tsx                  # [수정] Pretendard + JetBrains Mono + ThemeProvider + Header + Footer
+├── page.tsx                    # [재작성] 인덱스 페이지 (URL 동기화 검색/필터/정렬)
+├── globals.css                 # [재작성] shadcn 토큰 + prose-kr + Shiki highlighted 라인
+└── posts/[slug]/page.tsx       # [수정] 2열 레이아웃 + TOC 사이드바 + 모바일 접이식
+
+components/
+├── ui/                         # shadcn/ui 프리미티브 (4개)
+│   ├── button.tsx
+│   ├── input.tsx
+│   ├── badge.tsx
+│   └── select.tsx
+├── blog/
+│   ├── Header.tsx              # server, sticky, GitHub 링크 + ThemeToggle
+│   ├── Footer.tsx              # server, 중앙 정렬 카피라이트
+│   ├── PostCard.tsx            # server, 인덱스 카드
+│   ├── PostList.tsx            # server, 빈 상태 + 카드 스택
+│   ├── PostMeta.tsx            # server, 태그 + 날짜 + 읽기 시간
+│   ├── ReadingTime.tsx         # server, "읽기 N분"
+│   ├── TableOfContents.tsx     # 'use client', IntersectionObserver
+│   ├── TagChip.tsx             # 'use client', aria-pressed 토글 버튼
+│   ├── TagFilterBar.tsx        # 'use client', useRouter URL 동기화
+│   ├── SearchBar.tsx           # 'use client', 250ms debounce + 한글 IME 처리 + refs로 stale closure 방지
+│   ├── SortSelect.tsx          # 'use client', isSortKey 타입 가드
+│   └── ThemeToggle.tsx         # 'use client', mounted 패턴으로 hydration 안전
+├── mdx/
+│   ├── index.ts                # barrel re-export
+│   ├── components.tsx          # mdxComponents 매핑 (h1, a)
+│   └── MDXContent.tsx          # (Phase 1 파일, Phase 2에서 MDXComponents 타입으로 정리)
+└── providers/
+    └── ThemeProvider.tsx       # 'use client', next-themes with attribute="data-theme"
+
+lib/
+├── posts.ts                    # (Phase 1 유지, 수정 없음)
+├── filters.ts                  # filterByTag / searchPosts / sortPosts / applyFilters / extractAllTags (koCollator 공유)
+├── reading-time.ts             # calculateReadingTime (500자/분, 마크다운 제거)
+├── toc.ts                      # flattenToc (Velite 계층 → flat)
+└── utils.ts                    # cn() + buildPostsUrl() + formatDate() (UTC getters)
+
+public/fonts/
+├── PretendardVariable.woff2    # ~2.0MB
+└── JetBrainsMono-Variable.ttf  # ~293KB
+
+content/posts/
+├── hello-world.mdx             # [확장] 다중 섹션 + Shiki [!code highlight] 예시
+├── database-index-basics.mdx   # Phase 2 더미
+├── jvm-gc-intro.mdx            # Phase 2 더미
+└── kafka-consumer-group.mdx    # Phase 2 더미
+
+tests/                          # Phase 1 17 + Phase 2 29 = 46 테스트
+├── filters.test.ts             # 16 케이스
+├── reading-time.test.ts        # 5 케이스
+├── toc.test.ts                 # 6 케이스
+└── velite-build.test.ts        # Phase 1 4 + Phase 2 추가 2 케이스 = 6
+
+components.json                 # shadcn/ui 설정
+velite.config.ts                # [수정] rehype-slug, readingTime, @shikijs/transformers
+tailwind.config.ts              # [수정] darkMode: ['selector', '[data-theme="dark"]']
+```
+
+**§3에 있지만 아직 없는 디렉토리**: `components/visualizations/`, `plugins/`, `lib/keyword-map.ts`, `lib/search-index.ts` — Phase 3/4/5에서 생성.
+
+### 14.2 핵심 의사결정 (변경 금지)
+
+| 결정 | 이유 | 영향 |
+|---|---|---|
+| shadcn/ui 토큰 네이밍 채택 | Toss/Doodlin/pathsdog 벤치마크가 shadcn neutral 테마 범위와 광학적으로 일치 | CSS 변수는 `--background/--foreground/--primary/...` 등 shadcn 컨벤션. 프로젝트 고유는 `--keyword`, `--keyword-bg`, `--border-strong`로 공존 |
+| `next-themes` with `attribute="data-theme"` | CSS 선택자 `[data-theme="dark"]`와 정합 | `ThemeProvider`의 `attribute` prop을 절대 바꾸지 말 것. 변경 시 CSS 매칭이 깨짐 |
+| Velite `s.toc()` + `rehype-slug` 조합 | 양쪽 모두 `github-slugger` 기반이라 id 일치 구조적 보장 | 자체 TOC 플러그인 미작성. 계층 구조는 `lib/toc.ts`의 `flattenToc()`로 flat 변환 |
+| 서버 사이드 필터링 (`applyFilters` in `app/page.tsx`) | 클라이언트 번들에 필터 로직 미포함 + Phase 5 FlexSearch 교체 시 서버 함수만 변경 | `SearchBar`/`TagFilterBar`/`SortSelect`는 URL 쿼리만 변경. Next.js가 `searchParams` 변경을 감지해 재렌더. `router.push(url, { scroll: false })`로 스크롤 위치 보존 |
+| 검색 debounce 250ms + 한글 IME 체크 | 한글 조합 중에는 debounce 연기 | `SearchBar`의 `onChange`는 `e.nativeEvent.isComposing` 검사, `onCompositionEnd`로 최종 커밋. refs로 stale closure 방지 (`currentTagRef`, `currentSortRef`, `defaultQueryRef`) |
+| 폰트 local 셀프 호스팅 | 로컬 전용 프로젝트 원칙 + Next.js CLS 방어 | 외부 CDN 금지. `public/fonts/` 하위 2개 파일 커밋 (Pretendard woff2 2MB, JetBrains Mono TTF 293KB) |
+| `formatDate`는 UTC getters | Velite `s.isodate()`는 `YYYY-MM-DD` → midnight UTC 파싱 | `lib/utils.ts`의 `formatDate`는 `getUTC*` 사용. 로컬 getter 사용 금지 |
+| `koCollator` 공유 | `sortPosts('title')`과 `extractAllTags` 타이브레이크에 일관된 한글-aware 정렬 | `lib/filters.ts`의 모듈 레벨 `Intl.Collator('ko', { sensitivity: 'base' })` 인스턴스를 두 함수가 공유 |
+| Shiki 라인 하이라이트는 `.highlighted` 클래스 선택자 | `@shikijs/transformers@4`의 `transformerNotationHighlight`는 `data-*` 속성이 아닌 `className`을 생성 | `app/globals.css`의 `.prose-kr .highlighted` 선택자. `[data-highlighted-line]`로 바꾸지 말 것 |
+| 테스트 범위: 순수 함수만 | `@testing-library/react` + jsdom 모킹 비용 대비 효용 낮음 | UI 회귀는 `pnpm build` + dev 서버 수동 확인으로 방어. Phase 6에서 Playwright 검토 |
+| `Intl.Collator('ko')` 정렬 순서 | V8 ICU 기본 빌드: Hangul → Latin 순 | `sortPosts('title')` 테스트 기대값 작성 시 이 순서를 반영. 다른 Node 환경에서는 재검증 필요 |
+
+### 14.3 명령어 치트시트
+
+```bash
+pnpm dev              # 개발 서버
+pnpm build            # 프로덕션 빌드 (Velite 선행)
+pnpm test             # velite build && vitest run (46 테스트)
+pnpm test:unit        # vitest run만 (velite 스킵)
+pnpm type-check       # tsc --noEmit
+pnpm lint             # next lint (Next 16에서 ESLint CLI 전환 예정)
+pnpm velite           # Velite만 실행
+```
+
+### 14.4 알려진 미결 사항 (후속 Phase에서 처리)
+
+- **관련 글 추천** — Phase 5 ("탐색 기능")
+- **태그 전용 페이지 `/tags/[tag]`** — Phase 5
+- **키워드 자동 링크** — Phase 3
+- **검색 대상에 본문 포함** — Phase 5 FlexSearch 도입 시
+- **`series`/`seriesOrder` 정합성 `.refine()`** — 한쪽만 있는 경우 스키마 에러 없음. Phase 5 시리즈 UI 도입 전 추가 필요
+- **반응형 미세 조정** — Phase 6
+- **성능 최적화** (이미지 blur placeholder, 폰트 preload 최적화 등) — Phase 6
+- **shadcn Button / Badge 프리미티브**는 도입되었지만 아직 사용 컴포넌트 없음 — Phase 3+에서 KeywordLink Popover, CalloutBox 등이 소비 예정
+
+### 14.5 리포지토리
+
+- **원격**: `https://github.com/ing9990/backend-notes` (private)
+- **Phase 2 태그**: `phase-2-complete`
+- **브랜치 전략**: Phase 1과 동일하게 단일 `main`에 직접 커밋 (`phase-2-core-ui` 브랜치에서 작업 후 fast-forward merge). Phase 3부터 feature 브랜치 유지 검토.

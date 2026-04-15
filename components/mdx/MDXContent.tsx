@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import type { MDXComponents } from 'mdx/types'
 import * as runtime from 'react/jsx-runtime'
 import { mdxComponents } from './index'
 
@@ -9,7 +10,7 @@ type RuntimeModule = typeof runtime
 
 // The module object returned by evaluating the compiled body.
 type MDXModule = {
-  default: ComponentType<{ components?: Record<string, ComponentType<Record<string, unknown>>> }>
+  default: ComponentType<{ components?: MDXComponents }>
 }
 
 /**
@@ -24,9 +25,7 @@ type MDXModule = {
  * Security note (spec §7.2): the code string is Velite's deterministic
  * compiler output from version-controlled MDX files, never user input.
  */
-const useMDXComponent = (
-  code: string,
-): ComponentType<{ components?: Record<string, ComponentType<Record<string, unknown>>> }> => {
+const useMDXComponent = (code: string): ComponentType<{ components?: MDXComponents }> => {
   // eslint-disable-next-line no-new-func
   const fn = new Function(code) as (rt: RuntimeModule) => MDXModule
   return fn(runtime).default

@@ -1,5 +1,8 @@
 import { defineConfig, defineCollection, s } from 'velite'
 import rehypePrettyCode from 'rehype-pretty-code'
+import rehypeSlug from 'rehype-slug'
+import { transformerNotationHighlight } from '@shikijs/transformers'
+import { calculateReadingTime } from './lib/reading-time'
 
 // Slug regex: lowercase letters, numbers, hyphens only (no uppercase).
 // Used in the unit-testable frontmatter schema. The collection schema uses
@@ -40,6 +43,9 @@ const posts = defineCollection({
       slug: s.slug('post'),
       body: s.mdx(),
       toc: s.toc(),
+      readingTime: s.custom<number>().transform((_, { meta }) =>
+        calculateReadingTime(typeof meta.content === 'string' ? meta.content : ''),
+      ),
     })
     .refine(
       (data) => data.slug === data.slug.toLowerCase(),
@@ -62,12 +68,14 @@ export default defineConfig({
   collections: { posts },
   mdx: {
     rehypePlugins: [
+      rehypeSlug,
       [
         rehypePrettyCode,
         {
           theme: { light: 'github-light', dark: 'github-dark' },
           keepBackground: false,
           defaultLang: 'plaintext',
+          transformers: [transformerNotationHighlight()],
         },
       ],
     ],

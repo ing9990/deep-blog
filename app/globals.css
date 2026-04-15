@@ -1,6 +1,192 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-keyword: var(--keyword);
+  --color-keyword-bg: var(--keyword-bg);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-input: var(--input);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --font-sans: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+}
+
+:root {
+  --background: #FFFFFF;
+  --foreground: #09090B;
+  --muted: #F4F4F5;
+  --muted-foreground: #71717A;
+  --border: #E4E4E7;
+  --border-strong: #D4D4D8;
+  --primary: #3B82F6;
+  --primary-foreground: #FFFFFF;
+  --accent: #EFF6FF;
+  --accent-foreground: #1D4ED8;
+  --ring: #3B82F6;
+  --keyword: #6366F1;
+  --keyword-bg: #EEF2FF;
+  --popover: #FFFFFF;
+  --popover-foreground: #09090B;
+  --input: #E4E4E7;
+  --secondary: #F4F4F5;
+  --secondary-foreground: #09090B;
+  --destructive: #EF4444;
+  --destructive-foreground: #FAFAFA;
+  --ring-offset-background: #FFFFFF;
+}
+
+[data-theme="dark"] {
+  --background: #09090B;
+  --foreground: #FAFAFA;
+  --muted: #18181B;
+  --muted-foreground: #A1A1AA;
+  --border: #27272A;
+  --border-strong: #3F3F46;
+  --primary: #60A5FA;
+  --primary-foreground: #0A0A0A;
+  --accent: #1E293B;
+  --accent-foreground: #93C5FD;
+  --ring: #60A5FA;
+  --keyword: #818CF8;
+  --keyword-bg: #1E1B4B;
+  --popover: #18181B;
+  --popover-foreground: #FAFAFA;
+  --input: #27272A;
+  --secondary: #27272A;
+  --secondary-foreground: #FAFAFA;
+  --destructive: #7F1D1D;
+  --destructive-foreground: #FAFAFA;
+  --ring-offset-background: #09090B;
+}
+
 html {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.prose-kr {
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--foreground);
+}
+
+.prose-kr h2 {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  margin-top: 2em;
+  margin-bottom: 0.8em;
+}
+
+.prose-kr h3 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
+}
+
+.prose-kr p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+}
+
+.prose-kr a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.prose-kr code:not(pre code) {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  font-weight: 500;
+  background-color: var(--muted);
+  padding: 0.15em 0.35em;
+  border-radius: var(--radius-sm);
+}
+
+.prose-kr pre {
+  margin: 1.5em 0;
+  padding: 1em 1.25em;
+  border-radius: var(--radius);
+  background-color: var(--muted);
+  overflow-x: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.prose-kr ul,
+.prose-kr ol {
+  padding-left: 1.5em;
+  margin-bottom: 1.2em;
+}
+
+.prose-kr li {
+  margin-bottom: 0.4em;
+}
+
+.prose-kr blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1em;
+  color: var(--muted-foreground);
+  margin: 1.5em 0;
+}
+
+.prose-kr hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2.5em 0;
+}
+
+@media (min-width: 768px) {
+  .prose-kr { font-size: 17px; }
+  .prose-kr h2 { font-size: 24px; }
+  .prose-kr h3 { font-size: 19px; }
+}
+
+/* Shiki line highlighting — @shikijs/transformers transformerNotationHighlight */
+/* The transformer emits className="highlighted" on the <span data-line> element */
+.prose-kr .highlighted {
+  background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+  border-left: 2px solid var(--primary);
+  padding-left: calc(0.5em - 2px);
+  display: block;
+  margin-left: -1.25em;
+  padding-right: 1.25em;
+  width: calc(100% + 2.5em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prose-kr .highlighted {
+    transition: none;
+  }
 }

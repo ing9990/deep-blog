@@ -1,3 +1,3 @@
-// Shared MDX component map. Phase 1 renders vanilla HTML only.
-// Phase 2+ populates this with Callout, custom CodeBlock, Diagram, etc.
-export const mdxComponents = {}
+// Re-export the MDX component map from the .tsx implementation file.
+// index.ts is kept as a .ts barrel so imports like './index' resolve here first.
+export { mdxComponents } from './components'
