@@ -26,7 +26,15 @@ const postFrontmatterShape = s.object({
   slug: s.string().min(3).max(200).regex(slugRegex, 'slug must be lowercase (a-z, 0-9, hyphens only)'),
   date: s.isodate(),
   updatedAt: s.isodate().optional(),
-  tags: s.array(s.string().min(1)).min(1).max(5),
+  tags: s
+    .array(
+      s
+        .string()
+        .min(1)
+        .regex(/^[^/?#]+$/, 'tag must not contain / ? # (URL-unsafe for /tags/[tag] route)'),
+    )
+    .min(1)
+    .max(5),
   keywords: s.array(s.string().min(1)).min(1),
   summary: s.string().min(10).max(300),
   series: s.string().optional(),
