@@ -144,12 +144,7 @@ export function QuickSort({
         })}
       </div>
 
-      <StepController
-        {...controller}
-        stepDescription={current.note}
-        showSpeedSlider={false}
-        showProgressBar={false}
-      />
+      <StepController {...controller} stepDescription={current.note} />
 
       <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
         <LegendDot stateClass="bg-viz-pivot-bg border-viz-pivot" label="피벗" />
