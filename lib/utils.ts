@@ -10,11 +10,15 @@ export function buildPostsUrl(params: {
   tag?: string
   query?: string
   sort?: SortKey
+  matched?: readonly string[]
 }): string {
   const sp = new URLSearchParams()
   if (params.tag) sp.set('tag', params.tag)
   if (params.query?.trim()) sp.set('q', params.query.trim())
   if (params.sort && params.sort !== 'latest') sp.set('sort', params.sort)
+  if (params.matched && params.matched.length > 0) {
+    sp.set('matched', params.matched.join(','))
+  }
   const qs = sp.toString()
   return qs ? `/?${qs}` : '/'
 }

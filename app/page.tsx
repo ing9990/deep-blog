@@ -8,19 +8,24 @@ import { SortSelect } from '@/components/blog/SortSelect'
 export default async function IndexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tag?: string; q?: string; sort?: string }>
+  searchParams: Promise<{ tag?: string; q?: string; sort?: string; matched?: string }>
 }) {
-  const { tag, q, sort } = await searchParams
+  const { tag, q, sort, matched } = await searchParams
   const allPosts = getAllPosts()
   const allTags = extractAllTags(allPosts)
 
   const validSort: SortKey =
     sort === 'oldest' || sort === 'title' ? sort : 'latest'
 
+  const matchedList = matched
+    ? matched.split(',').filter((s) => s.length > 0)
+    : undefined
+
   const filtered = applyFilters(allPosts, {
     tag,
     query: q,
     sort: validSort,
+    matched: matchedList,
   })
 
   return (
