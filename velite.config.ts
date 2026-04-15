@@ -82,7 +82,7 @@ export default defineConfig({
       [
         rehypePrettyCode,
         {
-          theme: { light: 'github-light', dark: 'github-dark' },
+          theme: { light: 'one-light', dark: 'one-dark-pro' },
           keepBackground: false,
           defaultLang: 'plaintext',
           transformers: [transformerNotationHighlight()],
