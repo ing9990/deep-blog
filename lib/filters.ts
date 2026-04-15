@@ -68,7 +68,11 @@ export function applyFilters<
 >(posts: readonly T[], filters: PostFilters): T[] {
   const afterMatched = filterByMatched(posts, filters.matched)
   const afterTag = filterByTag(afterMatched, filters.tag)
-  const afterSearch = searchPosts(afterTag, filters.query)
+  // When matched is defined, the client-side FlexSearch has already produced
+  // the authoritative relevance-ranked set — skip the server-side substring
+  // search so body-only matches aren't accidentally eliminated.
+  const afterSearch =
+    filters.matched !== undefined ? afterTag : searchPosts(afterTag, filters.query)
   return sortPosts(afterSearch, filters.sort)
 }
 

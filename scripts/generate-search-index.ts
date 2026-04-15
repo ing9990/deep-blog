@@ -49,7 +49,7 @@ async function scanMdxFiles(dir: string): Promise<string[]> {
   return files
 }
 
-async function toSearchDoc(filePath: string): Promise<SearchDoc | null> {
+export async function toSearchDoc(filePath: string): Promise<SearchDoc | null> {
   const raw = await readFile(filePath, 'utf8')
   const parsed = matter(raw)
   const fm = parsed.data as Frontmatter

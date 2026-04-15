@@ -1,13 +1,8 @@
 // lib/search-index.ts
+// Type-only import — erased at build time, so no runtime flexsearch code
+// enters the initial client bundle. The runtime module is loaded lazily
+// inside loadAndBuildIndex via dynamic import().
 import type { IndexOptionsForDocumentSearch, Document as FlexDocument } from 'flexsearch'
-import FlexSearch from 'flexsearch'
-
-// FlexSearch 0.7 ships as CJS; its named exports live on the default object.
-// Named ESM import (`import { Document }`) fails under tsx/Node ESM interop.
-// We pull Document off the default object and cast to the correct type.
-const { Document } = FlexSearch as unknown as {
-  Document: new <T>(options: unknown) => FlexDocument<T>
-}
 
 /**
  * One document indexed by FlexSearch. `body` is the plain-text extraction
@@ -133,6 +128,13 @@ export async function loadAndBuildIndex(
     storage?.setItem(STORAGE_KEY, JSON.stringify(serialized))
   }
 
+  // Dynamic import keeps flexsearch out of the initial client bundle.
+  // FlexSearch 0.7 ships as CJS; Document lives on the default export.
+  const FlexSearchModule = await import('flexsearch')
+  const FlexSearch = (FlexSearchModule as unknown as { default?: unknown }).default ?? FlexSearchModule
+  const { Document } = FlexSearch as unknown as {
+    Document: new <T>(config: IndexOptionsForDocumentSearch<T>) => FlexDocument<T>
+  }
   const index = new Document<SearchDoc>(SEARCH_INDEX_CONFIG)
   for (const [key, data] of Object.entries(serialized)) {
     // FlexSearch 0.7 types declare import(id, document: T) but at runtime

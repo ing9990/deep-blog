@@ -18,7 +18,10 @@ export default async function IndexPage({
     sort === 'oldest' || sort === 'title' ? sort : 'latest'
 
   const matchedList = matched
-    ? matched.split(',').filter((s) => s.length > 0)
+    ? matched
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
     : undefined
 
   const filtered = applyFilters(allPosts, {
