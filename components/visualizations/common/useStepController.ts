@@ -1,5 +1,5 @@
 // components/visualizations/common/useStepController.ts
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface UseStepControllerOptions {
   /** Initial playback speed level, 1 (slowest) to 5 (fastest). Default 3. */
@@ -94,6 +94,11 @@ export function useStepController(
     return () => clearTimeout(handle)
   }, [isPlaying, step, speed, totalSteps, reducedMotion])
 
+  const stepRef = useRef(step)
+  useEffect(() => {
+    stepRef.current = step
+  }, [step])
+
   const prev = useCallback((): void => {
     setStep((s) => (s > 0 ? s - 1 : s))
   }, [])
@@ -104,11 +109,8 @@ export function useStepController(
 
   const play = useCallback((): void => {
     if (reducedMotion) return
-    setStep((s) => {
-      if (s >= totalSteps - 1) return s
-      setIsPlaying(true)
-      return s
-    })
+    if (stepRef.current >= totalSteps - 1) return
+    setIsPlaying(true)
   }, [reducedMotion, totalSteps])
 
   const pause = useCallback((): void => {
@@ -116,12 +118,12 @@ export function useStepController(
   }, [])
 
   const toggle = useCallback((): void => {
-    setIsPlaying((p) => {
-      if (p) return false
-      if (reducedMotion) return false
-      return true
-    })
-  }, [reducedMotion])
+    if (isPlaying) {
+      setIsPlaying(false)
+    } else {
+      play()
+    }
+  }, [isPlaying, play])
 
   const reset = useCallback((): void => {
     setStep(0)

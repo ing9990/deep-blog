@@ -141,7 +141,7 @@ function ProgressBar({ progress, step, totalSteps, onJump }: ProgressBarProps) {
       aria-label="진행 상황 — 클릭해서 점프"
     >
       <span
-        className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-300"
+        className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-300 motion-reduce:transition-none"
         style={{ width: `${progress * 100}%` }}
         aria-hidden="true"
       />

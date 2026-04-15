@@ -131,7 +131,7 @@ export function QuickSort({
             <div key={idx} className="flex flex-col items-center gap-1">
               <div
                 className={cn(
-                  'flex w-10 items-end justify-center rounded-[6px] border-2 text-[13px] font-semibold transition-all duration-300',
+                  'flex w-10 items-end justify-center rounded-[6px] border-2 text-[13px] font-semibold transition-all duration-300 motion-reduce:transition-none',
                   stateClass,
                 )}
                 style={{ height: `${(value / maxValue) * 100 + 32}px` }}

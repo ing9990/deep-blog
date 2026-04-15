@@ -25,7 +25,8 @@ export type VizState = (typeof VIZ_STATES)[number]
 
 /**
  * Returns the Tailwind utility class triple (border + bg + fg) for a state.
- * Uses literal template strings so Tailwind's content scanner picks them up.
+ * Each case returns a static string literal (not a template string) so
+ * Tailwind's content scanner picks up every class name.
  */
 export function vizStateClasses(state: VizState): string {
   switch (state) {
