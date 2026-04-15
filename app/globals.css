@@ -178,6 +178,22 @@ body {
   .prose-kr h3 { font-size: 19px; }
 }
 
+/* Shiki dual-theme syntax highlighting.
+   rehype-pretty-code with theme: { light: 'github-light', dark: 'github-dark' }
+   emits <pre>/<code>/<span> with inline --shiki-light and --shiki-dark CSS
+   variables. Apply the right variable based on the active theme. We scope to
+   `.prose-kr pre code[data-theme]` so the rule only touches syntax-highlighted
+   code blocks, not the html root's data-theme attribute. */
+.prose-kr pre code[data-theme],
+.prose-kr pre code[data-theme] span {
+  color: var(--shiki-light);
+}
+
+[data-theme="dark"] .prose-kr pre code[data-theme],
+[data-theme="dark"] .prose-kr pre code[data-theme] span {
+  color: var(--shiki-dark);
+}
+
 /* Shiki line highlighting — @shikijs/transformers transformerNotationHighlight */
 /* The transformer emits className="highlighted" on the <span data-line> element */
 .prose-kr .highlighted {
