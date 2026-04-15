@@ -91,25 +91,20 @@ Stage 2 노트가 완성된 뒤 Stage 3 진입 직전에 시각화 후보가 있
 
 ### 구현 패턴
 
-`QuickSort.tsx` 패턴을 재사용한다:
-- `useState`로 현재 스텝 인덱스 관리
+Phase 4.1부터 `components/visualizations/common/` 프레임워크를 사용한다. 아래 표준 패턴을 기반으로 새 컴포넌트를 작성한다 (상세 템플릿은 이 파일 하단 §Step-by-step 시각화 작성 템플릿 참고):
+
+- `useStepController(totalSteps)` 훅으로 상태 관리
 - `useMemo`로 전체 스냅샷 배열 사전 계산
-- Prev / Next / Play / Reset 컨트롤 제공
-- 색상 시맨틱 준수 (CLAUDE.md §6.4):
-  - `amber` — 피벗/기준 요소
-  - `blue` — 비교 중/대기 중
-  - `emerald` — 확정/완료
-  - `red` — 충돌/오류
+- `<VisualContainer>` + `<StepController {...controller}>` 조합으로 UI 조립
+- `vizStateClasses(state)` 헬퍼로 색상 시맨틱 적용 (CLAUDE.md §6.4):
+  - `pivot` — 피벗/기준 요소 (amber)
+  - `comparing` — 비교 중 요소 (blue)
+  - `confirmed` — 확정/완료 요소 (emerald)
+  - `blocked` — 차단/충돌 요소 (red)
+  - `waiting` — 대기 중 요소 (gray)
+  - `highlight` — 특별 강조 요소 (purple)
 
-### 상단 주석 필수
-
-모든 신규 시각화 컴포넌트 파일 최상단에 아래 주석을 붙인다:
-
-```tsx
-// Phase 4 preview — will be refactored with VisualContainer/StepController when Phase 4 ships
-```
-
-이 주석이 Phase 4 리팩토링 대상을 grep으로 찾을 수 있게 해준다.
+**참고**: Phase 4.1 이전에 작성된 파일에는 `// Phase 4 preview — will be refactored...` 주석이 있다. 이 파일들은 Phase 4.1 프레임워크로 이미 리팩토링 완료됐거나 대상이다.
 
 ### MDX 등록
 
@@ -168,10 +163,93 @@ Stage 2 노트가 완성된 뒤 Stage 3 진입 직전에 시각화 후보가 있
 
 ---
 
-## Phase 4 프레임워크 준비
+## Phase 4.1 프레임워크 현황
 
-v1에서 생성된 시각화는 모두 **일회성 자립형 컴포넌트**다. `VisualContainer`, `StepController`, `SpeedSlider` 같은 공통 프레임워크가 아직 없으므로, 각 컴포넌트가 컨트롤 UI와 레이아웃을 직접 구현한다.
+Phase 4.1(2026-04-15 완료)에서 Step-by-step 시각화 공통 프레임워크가 구현되었다. 신규 Step-by-step 시각화는 반드시 아래 프레임워크를 사용한다.
 
-Phase 4에서 공통 프레임워크가 도입되면 v1 컴포넌트들이 리팩토링된다. 상단 주석(`// Phase 4 preview — will be refactored...`)이 대상을 명시하므로, Phase 4 진행 시 grep으로 전체 목록을 찾을 수 있다.
+**사용 가능한 공통 컴포넌트** (`components/visualizations/common/`):
+- `useStepController` — 훅, 전체 상태 관리
+- `VisualContainer` — 외곽 래퍼 (figure + figcaption)
+- `StepController` — 컨트롤 행 (리셋/이전/재생/다음 + 진행 바 + 속도 슬라이더)
+- `SpeedSlider` — 속도 조절 (5 세그먼트 배터리 게이지)
+- `vizStateClasses(state)` — 색상 시맨틱 헬퍼
 
-**중요**: v1에서는 공통 프레임워크가 없다는 이유로 시각화 생성을 미루지 않는다. 지금 독자에게 가치 있는 시각화를 지금 만든다. 리팩토링은 Phase 4에서 일괄 처리한다.
+**중요**: 프레임워크가 이미 존재하므로, 시각화 구현을 미루는 이유가 없다. 지금 독자에게 가치 있는 시각화를 지금 만든다.
+
+---
+
+## Step-by-step 시각화 작성 템플릿 (Phase 4.1 프레임워크)
+
+Phase 4.1부터 모든 Step-by-step 시각화는 `components/visualizations/common/` 프레임워크를 사용합니다. 새 시각화 작성 시 아래 템플릿을 복사해 시작합니다.
+
+### 1. 알고리즘 로직 — 스냅샷 배열 사전 계산
+
+```tsx
+interface Snapshot {
+  // 현재 시점의 시각적 상태 (배열, 인덱스, 포인터, 메모 등)
+  note: string  // 이 단계의 한 줄 설명
+}
+
+function computeSnapshots(input: MyInput): Snapshot[] {
+  const snapshots: Snapshot[] = []
+  // 알고리즘 실행, 중요 시점마다 snapshots.push(...)
+  return snapshots
+}
+```
+
+### 2. 컴포넌트 — 프레임워크 조립
+
+```tsx
+'use client'
+
+import { useMemo } from 'react'
+import { VisualContainer } from './common/VisualContainer'
+import { StepController } from './common/StepController'
+import { useStepController } from './common/useStepController'
+import { vizStateClasses } from './common/colors'
+import { cn } from '@/lib/utils'
+
+interface MyVizProps {
+  input: MyInput
+  description?: string
+}
+
+export function MyViz({ input, description }: MyVizProps) {
+  const snapshots = useMemo(() => computeSnapshots(input), [input])
+  const controller = useStepController(snapshots.length)
+  const current = snapshots[controller.step]
+
+  return (
+    <VisualContainer title="..." description={description}>
+      {/* 현재 스냅샷 렌더.
+         상태에 따라 vizStateClasses('pivot' | 'comparing' | 'confirmed' |
+         'blocked' | 'waiting' | 'highlight')로 시맨틱 색상 적용 */}
+      <div className={cn('...', vizStateClasses('confirmed'))}>
+        ...
+      </div>
+
+      <StepController {...controller} stepDescription={current.note} />
+    </VisualContainer>
+  )
+}
+```
+
+### 3. 색상 선택 가이드
+
+- **pivot** (amber): 피벗/기준이 되는 요소
+- **comparing** (blue): 현재 비교 중인 요소
+- **confirmed** (emerald): 확정/완료된 요소
+- **blocked** (red): 차단/충돌이 발생한 요소
+- **waiting** (gray): 대기 중인 요소
+- **highlight** (purple): 특별 강조가 필요한 요소
+
+기존 6 상태로 표현 안 되는 의미는 **함부로 새 상태 만들지 말고**, 먼저 기존 상태 재사용을 시도합니다. 정말 의미가 다를 때만 CLAUDE.md §16 및 스펙 §6.6의 절차(4곳 동시 편집)를 따라 추가합니다.
+
+### 4. 반드시 동작해야 하는 것
+
+- Prev/Next 버튼으로 단계 이동
+- Play 버튼 클릭 시 자동 재생, 마지막 단계에서 정지
+- 속도 슬라이더 (기본 속도 3 = 800ms/step)
+- 진행 바 클릭 시 해당 단계로 점프
+- `prefers-reduced-motion: reduce` 환경에서 auto-play 및 속도 슬라이더 자동 비활성화
+- 라이트/다크 모드 모두에서 상태 색상 구분 가능

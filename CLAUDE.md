@@ -320,32 +320,37 @@ Remark 플러그인은 현재 파일의 basename(확장자 제거)을 `excludeSl
 └─────────────────────────────────────────────────────┘
 ```
 
-**공통 컴포넌트:**
+**공통 컴포넌트** (Phase 4.1에서 구현, `components/visualizations/common/`):
 
-```typescript
-// components/visualizations/common/VisualContainer.tsx
-interface VisualContainerProps {
-  title: string;           // 시각화 제목
-  description?: string;    // 한 줄 설명
-  children: React.ReactNode;
-  onReset?: () => void;    // 초기 상태로 리셋
-}
+- **`useStepController(totalSteps, options?)`** — 상태 관리 훅. `step / isPlaying / speed / canPrev / canNext / progress / reducedMotion` 상태와 `prev / next / play / pause / toggle / reset / setSpeed / goTo` 액션을 반환. `prefers-reduced-motion: reduce` 자동 감지.
+- **`<VisualContainer title description onReset?>`** — 시각화 외곽 래퍼(`figure` + `figcaption`). 선택적 리셋 버튼.
+- **`<StepController {...controller} stepDescription? showSpeedSlider? showProgressBar?>`** — 컨트롤 UI(리셋/이전/재생/다음 + 진행 바 + 속도 슬라이더). 훅 반환값을 spread로 전달.
+- **`<SpeedSlider speed onChange>`** — 5 세그먼트 배터리 게이지 스타일 속도 조절.
 
-// components/visualizations/common/StepController.tsx
-interface StepControllerProps {
-  currentStep: number;
-  totalSteps: number;
-  onPrev: () => void;
-  onNext: () => void;
-  onPlay: () => void;      // 자동 재생 토글
-  isPlaying: boolean;
-  stepDescription?: string; // 현재 단계 설명 텍스트
-}
+**표준 패턴** (새 Step-by-step 시각화 작성 시):
 
-// components/visualizations/common/SpeedSlider.tsx
-interface SpeedSliderProps {
-  speed: number;           // 1~5 (1=느림, 5=빠름)
-  onChange: (speed: number) => void;
+```tsx
+'use client'
+
+import { useMemo } from 'react'
+import { VisualContainer } from './common/VisualContainer'
+import { StepController } from './common/StepController'
+import { useStepController } from './common/useStepController'
+import { vizStateClasses } from './common/colors'
+
+function computeSnapshots(input: Input): Snapshot[] { /* 알고리즘 */ }
+
+export function MyViz({ input }: { input: Input }) {
+  const snapshots = useMemo(() => computeSnapshots(input), [input])
+  const controller = useStepController(snapshots.length)
+  const current = snapshots[controller.step]
+
+  return (
+    <VisualContainer title="..." description="...">
+      {/* 현재 스냅샷 렌더 — 상태에 따라 vizStateClasses(state) 적용 */}
+      <StepController {...controller} stepDescription={current.note} />
+    </VisualContainer>
+  )
 }
 ```
 
@@ -431,27 +436,29 @@ interface TimelineEvent {
 
 ### 6.4 시각화 디자인 규칙
 
-**색상 — 시각화 전용 시맨틱 토큰:**
+**색상 — CSS 변수 + Tailwind 유틸리티:**
 
-```typescript
-// components/visualizations/common/colors.ts
-export const vizColors = {
-  // 상태 색상
-  active:    'var(--color-accent)',        // 현재 처리 중
-  comparing: 'var(--color-keyword)',       // 비교 중
-  confirmed: '#22C55E',                    // 확정/완료 (green)
-  pivot:     '#F59E0B',                    // 피벗/기준 (amber)
-  waiting:   '#9CA3AF',                    // 대기 중 (gray)
-  blocked:   '#EF4444',                    // 차단/충돌 (red)
-  highlight: '#8B5CF6',                    // 특별 강조 (purple)
+시각화 전용 색상은 `app/globals.css`의 `:root` / `[data-theme="dark"]` 에 정의된 `--viz-<state>-{border,bg,fg}` 18개 변수가 단일 진실 소스입니다. `@theme inline` 블록에서 `--color-viz-*` 매핑으로 Tailwind 유틸리티를 자동 생성:
 
-  // 주체 구분 (최대 4개 주체)
-  actor1:    '#3B82F6',                    // blue
-  actor2:    '#F97316',                    // orange
-  actor3:    '#8B5CF6',                    // purple
-  actor4:    '#06B6D4',                    // cyan
-} as const;
+| State | Tailwind 유틸리티 | 용도 |
+|---|---|---|
+| pivot | `border-viz-pivot` / `bg-viz-pivot-bg` / `text-viz-pivot-fg` | 피벗/기준 요소 (amber) |
+| comparing | `border-viz-comparing` / … | 비교 중 요소 (blue) |
+| confirmed | `border-viz-confirmed` / … | 확정/완료 요소 (emerald) |
+| blocked | `border-viz-blocked` / … | 차단/충돌 요소 (red) |
+| waiting | `border-viz-waiting` / … | 대기 중 요소 (gray) |
+| highlight | `border-viz-highlight` / … | 특별 강조 요소 (purple) |
+
+`components/visualizations/common/colors.ts`의 `vizStateClasses(state)` 헬퍼는 세 유틸리티를 한 번에 반환합니다:
+
+```tsx
+import { vizStateClasses } from './common/colors'
+
+<div className={vizStateClasses('pivot')}>pivot element</div>
+// → "border-viz-pivot bg-viz-pivot-bg text-viz-pivot-fg"
 ```
+
+새 상태 추가 절차는 Phase 4.1 스펙 §6.6 참고 (4곳 동시 편집: `:root` / dark / `@theme inline` / `VIZ_STATES`).
 
 **애니메이션 규칙:**
 - 모든 상태 전환에 `transition: all 300ms ease-out`
@@ -747,7 +754,8 @@ pnpm type-check   # TypeScript 타입 에러 없음
 1. **Phase 1 — 기반 구축** ✅ **완료** (`phase-1-complete` 태그): Next.js 프로젝트 초기화, Velite 설정, MDX 파이프라인, 샘플 글 렌더링. 세부 내역은 §13 참고.
 2. **Phase 2 — 핵심 UI** ✅ **완료** (`phase-2-complete` 태그): 디자인 토큰, Pretendard/JetBrains Mono 폰트, 다크모드(토글 포함), 인덱스 페이지(URL 동기화 검색/필터/정렬), 글 상세 페이지(TOC 사이드바), shadcn/ui 도입, Shiki 라인 하이라이트. 세부 내역은 §14 참고.
 3. **Phase 3 — 키워드 시스템** ✅ **완료** (`phase-3-complete` 태그): scripts/generate-keyword-map.ts 빌드 전 맵 생성, plugins/remark-auto-link.ts Remark 플러그인, components/blog/KeywordLink.tsx Popover 래퍼. 세부 내역은 §15 참고.
-4. **Phase 4 — 시각화 프레임워크**: VisualContainer, StepController, SpeedSlider 공통 컴포넌트 구축
+4. **Phase 4.1 — 시각화 프레임워크 (Step-by-step)** ✅ **완료** (`phase-4-1-complete` 태그): `VisualContainer`, `StepController`, `SpeedSlider`, `useStepController` 훅, `--viz-*` 색상 토큰 18개, QuickSort 리팩토링. 세부 내역은 §16 참고.
+   - Phase 4.2 (Interactive Playground), Phase 4.3 (Timeline/Concurrent)은 해당 유형의 첫 시각화가 등장할 때 서브 페이즈로 도입.
 5. **Phase 5 — 탐색 기능**: FlexSearch 통합, 관련 글 추천, 태그 전용 페이지 `/tags/[tag]`
 6. **Phase 6 — 마무리**: 반응형 미세 조정, 성능 최적화
 
@@ -1033,3 +1041,62 @@ pnpm velite                 # Velite만 실행
 - **원격**: `https://github.com/ing9990/backend-notes` (private)
 - **Phase 3 태그**: `phase-3-complete`
 - **브랜치 전략**: Phase 2와 동일하게 단일 `main` 브랜치에 직접 또는 `phase-3-keyword-system` feature 브랜치 후 squash merge.
+
+---
+
+## 16. Phase 4.1 구현 현황
+
+> Phase 4.1 완료 시점(2026-04-15)의 구현 상태. §13–15와 동일 포맷.
+
+### 16.1 존재하는 파일 (Phase 4.1에서 추가·변경)
+
+```
+components/visualizations/
+├── common/                          [신규 디렉토리]
+│   ├── colors.ts                    VIZ_STATES + vizStateClasses()
+│   ├── useStepController.ts         상태 관리 훅 (4 useState + 3 useEffect)
+│   ├── VisualContainer.tsx          figure 래퍼 (server component)
+│   ├── SpeedSlider.tsx              5 세그먼트 배터리 게이지
+│   └── StepController.tsx           컨트롤 행 + 진행 바 + 스텝 설명
+└── QuickSort.tsx                    [수정] 새 프레임워크 사용
+
+app/globals.css                      [수정] --viz-* 18 + @theme inline 매핑 18
+
+tests/
+└── use-step-controller.test.ts      [신규] jsdom 파일 pragma, 16 케이스
+
+package.json                         [수정] @testing-library/react, @testing-library/dom, jsdom
+```
+
+### 16.2 핵심 의사결정 (변경 금지)
+
+| 결정 | 이유 | 영향 |
+|---|---|---|
+| Step-by-step only | 실제 사례 1개(QuickSort)만 존재 → API 추출 근거 유일 | Playground/Timeline은 Phase 4.2/4.3로 이월 |
+| 훅 + dumb 컴포넌트 | 보일러플레이트 제거 + `renderHook` 단위 테스트 가능 | `<StepController {...controller} />` spread 패턴 강제 |
+| `@vitest-environment jsdom` 파일 pragma | 전역 `vitest.config.ts`는 `environment: 'node'` 유지 | 새 훅/DOM 테스트 파일마다 상단 pragma 필수 |
+| 6 상태 × 3 슬롯 일괄 정의 | 확장성 우선 (사용자 명시적 요구) | 현재 blocked/waiting/highlight는 미사용이지만 CSS 변수만 추가되므로 비용 적음 |
+| `vizStateClasses()` switch literal | Tailwind content scanner는 리터럴 클래스만 감지 | `` `border-viz-${state}` `` 같은 동적 문자열 사용 금지 |
+| `goTo()` 호출 시 자동 중지 | 수동 점프 = 사용자 의도적 개입 | auto-play 중 스크러빙 시 명시적 재생 요구 |
+| QuickSort 2-커밋 refactor | Pure refactor 검증 가능 | 커밋 1은 visual-identical, 커밋 2에서 SpeedSlider/progress 노출 |
+
+### 16.3 명령어 치트시트
+
+```bash
+pnpm dev                                          # 개발 서버
+pnpm build                                        # 프로덕션 빌드
+pnpm test                                         # velite build + vitest run (~103 테스트)
+pnpm test:unit tests/use-step-controller.test.ts  # 훅 테스트만
+pnpm type-check                                   # tsc --noEmit
+```
+
+### 16.4 알려진 미결 사항 (후속 서브 페이즈)
+
+- **Phase 4.2 (Interactive Playground)**: `ControlPanel`, `SegmentedControl` 등. Isolation Level/GC 임계값/Cache TTL 시각화 첫 등장 시 도입.
+- **Phase 4.3 (Timeline/Concurrent)**: `TimelineTrack`, `ActorSwimlane` + `--viz-actor-1~4` 토큰. Lock 경합/MVCC/Cache Stampede 시각화 첫 등장 시 도입.
+- **시각화 간 state 공유**: 현재 각 시각화는 독립. 한 글에 여러 시각화 연동 필요 시 Context API 도입 검토.
+
+### 16.5 리포지토리
+
+- **Phase 4.1 태그**: `phase-4-1-complete`
+- **브랜치 전략**: Phase 2/3과 동일, `main` 직접 또는 feature 브랜치 squash merge.
