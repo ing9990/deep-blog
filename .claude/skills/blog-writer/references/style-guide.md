@@ -249,3 +249,59 @@ Section 5 (How) 내에 `<ComponentName initial={...} />` 형태로 삽입. 제�
 
 **참고 자료 마무리**:
 모든 글이 `## 참고 자료` 섹션으로 끝남. 논문 → 공식 문서 → 잘 쓰인 블로그 포스트 순으로 열거.
+
+---
+
+## KaTeX 수식 (`$...$`, `$$...$$`)
+
+빌드 파이프라인: `remark-math` → `rehype-katex` (`velite.config.ts`). `katex/dist/katex.min.css`는 `app/layout.tsx`에서 전역 로드된다.
+
+- **인라인**: `$O(n \log n)$`, `$x_i$`, `$\sum_{i=1}^{n} i$` — 문장 안에 자연스럽게 삽입.
+- **블록**: `$$T(n) = 2T(n/2) + O(n)$$` — 독립 라인으로 중앙 정렬.
+- 일반 텍스트로 `O(n log n)` 작성 금지. 반드시 `$O(n \log n)$`.
+- 자주 쓰는 LaTeX: `\log`, `\sum`, `\frac{a}{b}`, `x^n`, `x_i`, `\leq`, `\geq`, `\infty`, `\in`, `\mathbb{R}`.
+- **코드 블록 내부의 `$`는 영향받지 않음** — rehype-pretty-code가 rehype-katex 이전에 실행됨.
+
+예:
+```mdx
+평균 시간 복잡도는 $O(n \log n)$, 최악은 $O(n^2)$이다.
+
+점화식은 다음과 같다.
+
+$$T(n) = 2T(n/2) + O(n)$$
+```
+
+---
+
+## 테이블
+
+일반 마크다운 테이블 문법을 그대로 쓴다. `components/mdx/components.tsx`의 `table` override가 빌드 시 자동으로 `<div class="table-wrapper">`로 감싸 카드 스타일 + 내부 가로 스크롤을 적용한다.
+
+- 긴 테이블은 `.table-wrapper`의 `overflow-x: auto`로 페이지 전체가 아닌 테이블 내부만 스크롤.
+- 숫자 칼럼 우측 정렬이 필요하면 셀에 `className="num"` 추가 (선택).
+- 셀 내부에 인라인 코드, 링크, KaTeX 수식 모두 허용.
+
+예:
+
+```mdx
+| 케이스 | 시간 복잡도 | 설명 |
+|---|---|---|
+| 최선 | $O(n \log n)$ | 피벗이 균등 분할 |
+| 평균 | $O(n \log n)$ | 랜덤 피벗 |
+| 최악 | $O(n^2)$ | 이미 정렬된 배열 |
+```
+
+---
+
+## Mermaid `<Diagram>`
+
+정적 다이어그램(플로우, 시퀀스, 상태 머신)은 `<Diagram>` 래퍼 안에 Mermaid 문법을 넣는다. 인터랙티브가 필요한 주제는 Diagram이 아니라 별도 React 시각화 컴포넌트를 쓴다 (`visualization-rules.md` 참고).
+
+```mdx
+<Diagram>
+graph TD
+    A[Query] --> B{Index Exists?}
+    B -->|Yes| C[Index Scan]
+    B -->|No| D[Full Table Scan]
+</Diagram>
+```

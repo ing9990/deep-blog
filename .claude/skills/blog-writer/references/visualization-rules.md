@@ -253,3 +253,19 @@ export function MyViz({ input, description }: MyVizProps) {
 - 진행 바 클릭 시 해당 단계로 점프
 - `prefers-reduced-motion: reduce` 환경에서 auto-play 및 속도 슬라이더 자동 비활성화
 - 라이트/다크 모드 모두에서 상태 색상 구분 가능
+
+---
+
+## 판단 체크리스트 (5가지 질문)
+
+감지 휴리스틱 외에도 글 작성 중 아래 질문에 하나라도 "예"라면 해당 섹션은 시각화 후보로 등록한다:
+
+| 질문 | 해당 예시 |
+|---|---|
+| 상태가 시간에 따라 변화하는가? | 퀵소트 분할 과정, GC 마킹/스위핑, Kafka 리밸런싱 |
+| 여러 주체가 동시에 상호작용하는가? | DB Lock 경합, Thread 컨텍스트 스위칭, 2PC |
+| 조건에 따라 결과가 달라지는가? | Transaction Isolation Level, Cache Hit/Miss |
+| 공간적 구조가 핵심인가? | B-Tree 노드 분할, HashMap 버킷 충돌, Kafka 파티션 배치 |
+| "만약 ~하면 어떻게 되는가?"라는 질문이 자연스러운가? | Deadlock 조건, 낙관적 락 충돌, Consumer 장애 시 리밸런싱 |
+
+**시각화가 필요 없는 경우**: 단순 개념 정의, 설정 방법 나열, API 사용법, 코드 예제만으로 충분한 내용.
