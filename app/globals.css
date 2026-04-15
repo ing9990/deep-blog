@@ -120,26 +120,33 @@
      Consumed by components in components/visualizations/common/. New states
      must be added here AND in the [data-theme="dark"] block AND in
      @theme inline mapping AND in VIZ_STATES in common/colors.ts. */
+
+  /* Pivot — 피벗/기준 요소 (amber) */
   --viz-pivot-border:     #F59E0B;
   --viz-pivot-bg:         #FEF3C7;
   --viz-pivot-fg:         #78350F;
 
+  /* Comparing — 비교 중 요소 (blue) */
   --viz-comparing-border: #3B82F6;
   --viz-comparing-bg:     #DBEAFE;
   --viz-comparing-fg:     #1E3A8A;
 
+  /* Confirmed — 확정/완료 요소 (emerald) */
   --viz-confirmed-border: #10B981;
   --viz-confirmed-bg:     #D1FAE5;
   --viz-confirmed-fg:     #064E3B;
 
+  /* Blocked — 차단/충돌 요소 (red) */
   --viz-blocked-border:   #EF4444;
   --viz-blocked-bg:       #FEE2E2;
   --viz-blocked-fg:       #7F1D1D;
 
+  /* Waiting — 대기 중 요소 (gray) */
   --viz-waiting-border:   #9CA3AF;
   --viz-waiting-bg:       #F3F4F6;
   --viz-waiting-fg:       #374151;
 
+  /* Highlight — 특별 강조 요소 (purple) */
   --viz-highlight-border: #8B5CF6;
   --viz-highlight-bg:     #EDE9FE;
   --viz-highlight-fg:     #4C1D95;
@@ -220,6 +227,9 @@
   --viz-blocked-bg:       #2B0A0A;
   --viz-blocked-fg:       #FECACA;
 
+  /* Waiting — intentional low contrast (de-emphasized inactive state).
+     Similar to the CLAUDE.md §7.2 primary blue exception — visual weight
+     is the signal, so WCAG 1.4.11 is waived here. */
   --viz-waiting-border:   #4B5563;
   --viz-waiting-bg:       #18181B;
   --viz-waiting-fg:       #D1D5DB;
