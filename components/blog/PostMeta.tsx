@@ -16,7 +16,7 @@ export function PostMeta({ tags, date, readingTime }: PostMetaProps) {
         {tags.map((tag) => (
           <Link
             key={tag}
-            href={`/?tag=${encodeURIComponent(tag)}`}
+            href={`/tags/${encodeURIComponent(tag)}`}
             className="text-xs font-medium text-primary hover:underline"
           >
             #{tag}
