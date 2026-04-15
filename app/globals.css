@@ -134,6 +134,11 @@ body {
   border-radius: var(--radius-sm);
 }
 
+.prose-kr pre,
+.prose-kr pre code {
+  font-family: var(--font-mono);
+}
+
 .prose-kr pre {
   margin: 1.5em 0;
   padding: 1em 1.25em;
