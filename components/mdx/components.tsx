@@ -1,6 +1,7 @@
 import type { MDXComponents } from 'mdx/types'
 import type { AnchorHTMLAttributes, ImgHTMLAttributes } from 'react'
 import { KeywordLink } from '@/components/blog/KeywordLink'
+import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 
@@ -39,4 +40,5 @@ export const mdxComponents: MDXComponents = {
   ),
   Callout,
   QuickSort,
+  RelatedPost,
 }
