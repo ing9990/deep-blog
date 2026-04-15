@@ -842,7 +842,7 @@ Phase 1–5 완료 (2026-04-15). 코어 렌더링 파이프라인, 디자인 시
 | 결정 | 근거 | 영향 |
 |---|---|---|
 | `MDXContent`는 Server Component — `'use client'` 금지 | Velite 컴파일 본문은 `arguments[0]` 구조분해 헬퍼(공식 "Use in React" 패턴). 본문 문자열은 Velite 결정적 출력이라 safe | `components/mdx/MDXContent.tsx` 수정 시 절대 `'use client'` 추가 금지 |
-| `dynamicParams = false` (100% SSG) | 알 수 없는 slug는 즉시 404 | **dev HMR 한계**: 새 MDX 파일 추가 시 `/posts/<slug>` 라우트는 dev 서버 재시작 전까지 404. 인덱스 링크는 갱신됨. 프로덕션 `pnpm build`는 정상 |
+| `generateStaticParams` + 기본 `dynamicParams = true` (export 없음) | 기존 포스트는 빌드 타임 SSG prerender(빌드 출력 `● /posts/[slug]`), 알 수 없는 slug는 dynamic 폴백 → `getPostBySlug` → `notFound()` → 404. dev에서는 Velite watch가 `.velite/posts.json`을 즉시 재생성하므로 새 MDX 파일이 재시작 없이 라우트됨 | **Next.js 15 제약**: `dynamicParams` 값은 반드시 **리터럴**이어야 함. `BinaryExpression`/`Identifier` 거부. 조건부 값이 필요하면 export 자체를 생략해 기본값(`true`)로 돌아가는 것이 유일한 해결책. **잔존 한계**: 새 MDX 안에서 선언한 *새 키워드*의 기존 글 자동 링크는 여전히 `pnpm generate-keyword-map` + dev 재시작 필요 (Velite config가 로드 타임에 키워드 맵을 캡처) |
 | `params: Promise<{slug: string}>` async unwrap | Next.js 15 API | 페이지 컴포넌트는 반드시 `async` + `await params` |
 | `draft` 필터는 `lib/posts.ts`에서만 | 스키마 단에서 걸러내면 Velite 빌드 자체가 실패 | `draft: true` MDX는 Velite 빌드 통과 후 `getAllPosts()`에서 제외되어 런타임 404 |
 | Frontmatter schema 이중화 | Velite `s.slug()`이 빌드 타임 cache 요구 → 테스트에서 `.parse()` 불가 | `postFrontmatterShape`(regex, 테스트용) + 콜렉션 스키마에서 `.extend({slug: s.slug('post')})` 재적용 패턴 유지 |
@@ -943,7 +943,7 @@ pnpm generate-keyword-map   # frontmatter 수정 후 수동 재생성
 Phase 6 이후 또는 해당 기능이 실제로 등장할 때 처리.
 
 **개발 편의**
-- HMR: dev 모드에서 새 MDX 파일 추가 시 키워드 맵/검색 인덱스 자동 재생성 (현재 `pnpm dev` 재시작 필요)
+- 새 키워드의 기존 글 자동 링크 HMR: `content/posts/**/*.mdx` 변경 시 `lib/generated/keyword-map.ts` 자동 재생성 + Velite config 리로드 (현재 수동 재생성 + `pnpm dev` 재시작 필요). Velite config가 로드 타임에 맵을 캡처하는 구조라 config hot-reload 메커니즘 필요 → 작성자가 실제로 통증을 체감하면 재평가
 - 신규 태그 HMR 인식 (현재 `pnpm dev` 재시작 필요)
 - `series`/`seriesOrder` 정합성 `.refine()` — 시리즈 UI 도입 전 추가
 
