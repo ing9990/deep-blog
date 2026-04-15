@@ -618,7 +618,7 @@ import { vizStateClasses } from './common/colors'
 
 **동작 규칙**:
 - 키워드 링크: 점선 밑줄 스타일, 호버 시 프리뷰 Popover (데스크탑만)
-- 관련 글 (`<RelatedPost>`): MDX 내부에서 명시적 배치. 동일 태그 자동 추천은 Phase 5에서 도입 예정
+- 최근 글 섹션: 글 하단에 현재 글을 제외한 최신 4개를 자동 렌더 (알고리즘 기반 추천 없음). 주제 기반 교차 링크는 MDX 본문 내 수동 `<RelatedPost />`로 명시 배치.
 - 읽기 시간: 한국어 기준 분당 500자로 계산
 - 긴 테이블: `.table-wrapper`의 가로 스크롤 (페이지 전체 스크롤 아님)
 - 수식: KaTeX로 렌더되어 본문 베이스라인에 정렬
@@ -807,7 +807,7 @@ pnpm type-check   # TypeScript 타입 에러 없음
 3. **Phase 3 — 키워드 시스템** ✅ **완료** (`phase-3-complete` 태그): scripts/generate-keyword-map.ts 빌드 전 맵 생성, plugins/remark-auto-link.ts Remark 플러그인, components/blog/KeywordLink.tsx Popover 래퍼. 세부 내역은 §15 참고.
 4. **Phase 4.1 — 시각화 프레임워크 (Step-by-step)** ✅ **완료** (`phase-4-1-complete` 태그): `VisualContainer`, `StepController`, `SpeedSlider`, `useStepController` 훅, `--viz-*` 색상 토큰 18개, QuickSort 리팩토링. 세부 내역은 §16 참고.
    - Phase 4.2 (Interactive Playground), Phase 4.3 (Timeline/Concurrent)은 해당 유형의 첫 시각화가 등장할 때 서브 페이즈로 도입.
-5. **Phase 5 — 탐색 기능**: FlexSearch 통합, 관련 글 추천, 태그 전용 페이지 `/tags/[tag]`
+5. **Phase 5 — 탐색 기능** ✅ **완료** (`phase-5-complete` 태그): FlexSearch 전문 검색(fetch-on-demand), 최근 글 섹션, `/tags/[tag]` 전용 페이지. 세부 내역은 §18 참고.
 6. **Phase 6 — 마무리**: 반응형 미세 조정, 성능 최적화
 
 > **시각화 컴포넌트 개별 구현**은 Phase 4 이후 각 글을 작성할 때 해당 주제에 맞게 함께 구현합니다.
@@ -1205,3 +1205,90 @@ Phase 4.1 이후 추가된 devDependencies/dependencies:
 | `@testing-library/react` | ^16.1.0 | Phase 4.1 `useStepController` 훅 테스트 (이미 포함) |
 | `@testing-library/dom` | ^10.4.0 | 동상 |
 | `jsdom` | ^25.0.1 | 동상 |
+
+---
+
+## 18. Phase 5 구현 현황
+
+> Phase 5 완료 시점(2026-04-15)의 구현 상태. §13–16과 동일 포맷 (frozen phase record).
+
+### 18.1 존재하는 파일 (Phase 5에서 추가·변경)
+
+```
+scripts/
+└── generate-search-index.ts        [신규] pre-build hook으로 실행
+
+lib/
+├── filters.ts                      [수정] matched?: string[] 파이프라인 추가
+├── utils.ts                        [수정] buildPostsUrl이 matched 직렬화
+├── search-index.ts                 [신규] 타입 + 설정 + loadAndBuildIndex + extractPlainText
+└── related-posts.ts                [신규] getRecentPosts(excludeSlug, n)
+
+app/
+├── page.tsx                        [수정] matched 쿼리 파라미터 파싱
+├── posts/[slug]/page.tsx           [수정] <RecentPostsSection> 렌더
+└── tags/
+    └── [tag]/
+        └── page.tsx                [신규] 태그별 SSG 페이지
+
+components/blog/
+├── SearchBar.tsx                   [수정] FlexSearch lazy-load + matched URL push
+├── PostMeta.tsx                    [수정] 태그 칩 → /tags/[tag] 링크
+├── RecentPostsSection.tsx          [신규]
+└── TagPageHeader.tsx               [신규]
+
+public/
+└── search-index.json               [생성물, gitignored] 빌드 타임 FlexSearch 인덱스
+
+velite.config.ts                    [수정] 태그 금지 문자 regex refine
+package.json                        [수정] flexsearch dependency + @types/flexsearch devDep + 훅 스크립트 업데이트
+.gitignore                          [수정] /public/search-index.json
+
+tests/
+├── search-index-text.test.ts       [신규] extractPlainText 11 케이스
+├── search-index-roundtrip.test.ts  [신규] jsdom + mock fetch 5 케이스
+├── filters-matched.test.ts         [신규] matched 6 케이스
+├── related-posts.test.ts           [신규] getRecentPosts 5 케이스
+└── velite-schema.test.ts           [수정] 태그 금지 문자 4 케이스 추가
+```
+
+### 18.2 핵심 의사결정 (변경 금지)
+
+| 결정 | 이유 | 영향 |
+|---|---|---|
+| 본문 포함 전문 검색 | 작성자의 지식 베이스 활용이 검색 가치의 핵심 | 인덱스 크기 증가는 fetch-on-demand로 상쇄 |
+| FlexSearch fetch-on-demand | 검색 안 하는 대부분 방문자가 비용 지불하지 않음 | 첫 검색 ~100ms 지연(localhost 체감 X), 세션 내 캐시 |
+| 관련 글은 최신순 (알고리즘 없음) | 사용자 명시 결정, YAGNI | 주제 기반 교차는 수동 `<RelatedPost />` 유지 |
+| `matched=` URL 파라미터로 FlexSearch 결과 전달 | 기존 서버 필터링 플로우 + 공유 가능한 URL 동시 만족 | 클라이언트 인덱스 실패 시 substring fallback 투명 |
+| 태그 금지 문자 스키마 레벨 차단 | URL 깨진 라우트 생성 방지 | `/ ? #` 포함 태그는 빌드 타임 실패 |
+| `/tags/[tag]`와 `/?tag=...` 공존 | 두 경로는 다른 사용자 의도(아카이브 vs 임시 필터) | URL 구조 2벌 유지 |
+| `flexsearch ^0.7` 메이저 고정 | 0.8+ 호환성 미검증 | 업그레이드는 별도 결정 |
+| 관련 글이 `<article>` 외부 | TOC IntersectionObserver 오염 방지 | "최근 글"이 TOC에 안 잡힘 |
+| 코드/수식은 검색 본문에서 제외 | syntax identifier 노이즈 방지 | `keywords` 필드가 개념 매핑 커버 |
+| FlexSearch 0.7 타입 불완전 | `weight` 속성이 types에 없음 | `resolution` 9→5 차이로 relevance 가중 대체 |
+| `Document.export()`는 async | 빌드 스크립트에서 `await` 필수 | `queueMicrotask` 패턴은 빈 JSON 생성 |
+
+### 18.3 명령어 치트시트
+
+```bash
+pnpm dev                    # 개발 서버 (prebuild로 자동 인덱스 생성)
+pnpm build                  # 프로덕션 빌드 (prebuild 포함)
+pnpm test                   # velite + vitest (약 134 테스트)
+pnpm test:unit              # vitest만
+pnpm generate-search-index  # 수동 인덱스 재생성 (새 글 추가 후)
+pnpm type-check             # tsc --noEmit
+```
+
+### 18.4 알려진 미결 사항 (Phase 6 이후)
+
+- 한국어 tokenizer 최적화 (현재 forward prefix 매칭만 동작)
+- 검색 결과 highlight 및 context snippet
+- 코드/수식 별도 검색 인덱스
+- 시리즈 내비게이션 UI (시리즈 글 등장 시)
+- 태그 메타데이터 (설명문, 아이콘)
+- HMR 시 새 태그 자동 등록 (현재는 `pnpm dev` 재시작 필요)
+
+### 18.5 리포지토리
+
+- **Phase 5 태그**: `phase-5-complete`
+- **브랜치 전략**: 이전 Phase와 동일 (`main` 직접 또는 squash merge)
