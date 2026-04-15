@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 새 MDX 파일을 dev 서버 재시작 없이 `/posts/<slug>`로 즉시 라우팅되게 만들되, 프로덕션의 엄격한 SSG 404 정책은 유지한다.
+**Goal:** 새 MDX 파일을 dev 서버 재시작 없이 `/posts/<slug>`로 즉시 라우팅되게 만든다. 프로덕션에서는 기존 포스트가 여전히 SSG로 prerender되고 알 수 없는 slug는 `notFound()` 404로 떨어지도록 유지한다.
 
-**Architecture:** `app/posts/[slug]/page.tsx`의 route segment config `dynamicParams`를 `process.env.NODE_ENV !== 'production'`로 전환한다. Next.js/webpack이 이 값을 빌드 상수로 치환하므로 dev에서는 `true`, production에서는 `false`가 된다. 나머지(Velite watch, `getPostBySlug`, `notFound()`)는 기존 구현 그대로 사용한다.
+**Architecture:** `app/posts/[slug]/page.tsx`에서 `export const dynamicParams = false` 한 줄을 **삭제**한다. 이렇게 하면 route segment config가 기본값(`dynamicParams = true`)으로 돌아가 dev에서는 알려지지 않은 slug가 컴포넌트로 fall-through 하고, 프로덕션에서는 `generateStaticParams`가 여전히 모든 slug를 빌드 타임에 prerender한다(`● /posts/[slug]`). Next.js 15의 route config 파서가 리터럴만 허용하므로 조건부 값(`process.env.NODE_ENV` 등)은 불가능 — export 생략이 유일한 해결책이다. 나머지(Velite watch, `getPostBySlug`, `notFound()`)는 기존 구현 그대로 사용한다.
 
 **Tech Stack:** Next.js 15 App Router, Velite 0.2 (webpack plugin watch 모드), TypeScript.
 
@@ -16,7 +16,7 @@
 
 이 변경이 건드리는 파일:
 
-- **Modify**: `app/posts/[slug]/page.tsx` — `dynamicParams` export 한 줄 교체
+- **Modify**: `app/posts/[slug]/page.tsx` — `export const dynamicParams = false` 한 줄 삭제
 - **Modify**: `CLAUDE.md` — §13.1 "dev HMR 한계" 항목 정정, §15 "개발 편의" 항목 정리
 - **임시 생성·삭제**: `content/posts/_hmr-smoke-test.mdx` — dev 런타임 검증용 임시 포스트. 검증 완료 후 삭제.
 
@@ -40,29 +40,41 @@ PORT=3010 pnpm dev
 
 ---
 
-## Task 1: `dynamicParams`를 NODE_ENV에 따라 분기
+## Task 1: `dynamicParams = false` export 삭제
+
+**History note**: 초기 시도는 `export const dynamicParams = process.env.NODE_ENV !== 'production'`로 조건부 값을 주려 했으나 Next.js 15의 route segment config 파서가 `BinaryExpression`을 거부해 `pnpm build`가 실패했다. top-level `const IS_DEV` 참조도 `Identifier` 거부로 동일하게 실패. Next 15에서는 `dynamicParams`가 반드시 **리터럴**이어야 한다. 유일한 해결책은 export를 완전히 제거해 기본값 `true`로 돌리는 것이며, 이 경우에도 `generateStaticParams` 덕에 프로덕션 SSG prerender는 유지된다.
 
 **Files:**
-- Modify: `app/posts/[slug]/page.tsx:15`
+- Modify: `app/posts/[slug]/page.tsx` (delete the `dynamicParams` export line)
 
 - [ ] **Step 1: 현재 상태 확인**
 
-Read the file to see the exact context around line 15:
+Read the file and confirm the `export const dynamicParams = false` line exists (around line 15, between `generateStaticParams` and `PostPage`).
 
-```bash
-# Use Read tool: /Users/ing9990/Document/backend-notes/app/posts/[slug]/page.tsx
-```
-
-Expected line 15: `export const dynamicParams = false`
-
-- [ ] **Step 2: 한 줄 교체**
+- [ ] **Step 2: export 삭제**
 
 Use Edit tool:
 
-- `old_string`: `export const dynamicParams = false`
-- `new_string`: `export const dynamicParams = process.env.NODE_ENV !== 'production'`
+- `old_string`:
+  ```
+  export function generateStaticParams() {
+    return getAllSlugs().map((slug) => ({ slug }))
+  }
 
-이 문자열은 파일 전체에서 유일하므로 `replace_all` 불필요.
+  export const dynamicParams = false
+
+  export default async function PostPage({
+  ```
+- `new_string`:
+  ```
+  export function generateStaticParams() {
+    return getAllSlugs().map((slug) => ({ slug }))
+  }
+
+  export default async function PostPage({
+  ```
+
+이 블록은 파일 내 유일하므로 `replace_all` 불필요. 삭제 후 `generateStaticParams`와 `PostPage` 사이에 빈 줄 1개만 남아 있어야 한다.
 
 - [ ] **Step 3: TypeScript 타입 체크 통과 확인**
 
@@ -72,9 +84,7 @@ Run:
 pnpm type-check
 ```
 
-Expected: 에러 없이 종료 (exit 0). `dynamicParams`의 타입은 `boolean | 'force-static' | ...`로 정의돼 있고 `process.env.NODE_ENV !== 'production'`는 `boolean`이므로 통과해야 한다.
-
-만약 TypeScript가 `dynamicParams`에 literal 값을 요구한다고 에러를 낸다면, `as const` 같은 hack 없이는 해결이 어려우므로 즉시 중단하고 사람에게 보고. (현재 Next.js 15에서는 문제 없음을 확인했지만 minor 버전 업데이트로 변경 가능성은 존재.)
+Expected: exit 0, no errors.
 
 - [ ] **Step 4: ESLint 통과 확인**
 
@@ -84,18 +94,49 @@ Run:
 pnpm lint
 ```
 
-Expected: 새로운 경고/에러 없음.
+Expected: no new warnings or errors. (next lint deprecation 경고는 infrastructural, 이 변경과 무관.)
 
-- [ ] **Step 5: 코드 변경 단독 커밋**
+- [ ] **Step 5: `pnpm build`로 route가 여전히 SSG인지 확인**
+
+이 단계가 초기 접근 실패의 교훈이다. Task 3에서 다시 하지만, 코드 변경 직후 한 번 더 확인한다.
+
+Run:
+
+```bash
+pnpm build
+```
+
+Expected (critical):
+- Exit 0
+- 빌드 로그 "Route (app)" 섹션에서 `● /posts/[slug]` 표기 확인. 그 아래에 `/posts/quick-sort`, `/posts/b-tree-structure` 등 기존 slug 목록이 나열되어야 함
+- `ƒ /posts/[slug]`로 표시되면 설계 실패 — 즉시 중단하고 보고
+
+- [ ] **Step 6: 코드 변경 단독 커밋**
 
 ```bash
 git add app/posts/[slug]/page.tsx
 git commit -m "$(cat <<'EOF'
 feat(dev): allow new MDX files to route without server restart
 
-Switch dynamicParams on NODE_ENV so dev mode accepts arbitrary slugs
-(falling through to getPostBySlug → notFound() for unknown ones) while
-production keeps strict SSG 404 behavior.
+Remove `export const dynamicParams = false` so the route segment
+defaults to `true`. `generateStaticParams` still prerenders every known
+slug as SSG at build time (verified in build output: `● /posts/[slug]`
+with all slugs listed), so production static output is unchanged for
+the known-slug path. The only behavioral change is that unknown slugs
+in production now fall through to dynamic rendering → getPostBySlug
+returns undefined → notFound() → 404, instead of framework-level 404.
+For this local-only blog (never exposed via `next start`) the
+distinction is cosmetic.
+
+In dev, this unblocks the core pain: newly created MDX files are now
+routable at /posts/<slug> without a dev-server restart, because
+Velite's watch mode already keeps .velite/posts.json current.
+
+An earlier attempt used `dynamicParams = process.env.NODE_ENV !==
+'production'`, but Next.js 15's route segment config parser only
+accepts literal values — it rejects BinaryExpression and Identifier
+nodes at `dynamicParams`, so any conditional within a single file is
+impossible. Dropping the export entirely is the correct fix.
 
 Spec: docs/superpowers/specs/2026-04-16-dev-dynamic-params-design.md
 EOF
@@ -225,17 +266,25 @@ Expected: 성공 종료 (exit 0). prebuild hook(`generate-keyword-map`)이 먼�
 
 실패 시 즉시 중단.
 
-- [ ] **Step 2: 빌드 출력에서 `/posts/[slug]` 라우트가 static으로 prerender 되는지 확인**
+- [ ] **Step 2: 빌드 출력에서 `/posts/[slug]` 라우트가 SSG로 prerender 되는지 확인**
 
-빌드 로그 끝부분의 "Route" 테이블을 본다. Next.js는 각 라우트를 다음 기호로 표시:
+빌드 로그 끝부분의 "Route (app)" 테이블을 본다. Next.js는 각 라우트를 다음 기호로 표시:
 
-- `○ (Static)` — 정적으로 prerender됨 ✓ **기대값**
-- `● (SSG)` — `generateStaticParams`로 prerender됨 ✓ **기대값 (이쪽이 더 정확할 수 있음)**
-- `ƒ (Dynamic)` — 서버 런타임 렌더 ✗ **실패 — 변경이 production에 누수됐다는 뜻**
+- `● (SSG)` — `generateStaticParams`로 prerender됨 ✓ **기대값**
+- `○ (Static)` — 파라미터 없는 정적 라우트 (일반 페이지)
+- `ƒ (Dynamic)` — 서버 런타임 렌더 ✗ **실패**
 
-`/posts/[slug]`가 `ƒ (Dynamic)`으로 표시되면 이 플랜의 핵심 전제가 깨진 것이다. 즉시 중단하고 사람에게 보고. (예상 원인: `process.env.NODE_ENV`가 Next 15 build에서 상수 치환되지 않는 환경 문제, 혹은 config parsing 버그.)
+`/posts/[slug]`는 반드시 `● (SSG)`로 표시되어야 하며, 바로 아래에 기존 포스트 slug 목록이 들여쓰기로 나열되어야 한다. 예:
 
-`○` 또는 `●`로 표시되면 계속.
+```
+● /posts/[slug]                         8.1 kB         141 kB
+  ├ /posts/quick-sort
+  ├ /posts/b-tree-structure
+  ├ /posts/database-index-basics
+  └ [+2 more paths]
+```
+
+`ƒ (Dynamic)`로 표시되거나 기존 slug 목록이 보이지 않으면 이 플랜의 핵심 전제가 깨진 것이다. 즉시 중단하고 보고.
 
 - [ ] **Step 3: 기존 포스트 페이지 수가 build 전과 동일한지 확인**
 
@@ -259,7 +308,7 @@ Use Edit tool on `/Users/ing9990/Document/backend-notes/CLAUDE.md`:
 ```
 - `new_string`:
 ```
-| `dynamicParams = process.env.NODE_ENV !== 'production'` | production에서는 알 수 없는 slug 즉시 404 (100% SSG 유지), dev에서는 새 MDX 파일이 재시작 없이 라우트됨 | **잔존 한계**: 새 MDX 안에서 선언한 *새 키워드*의 기존 글 자동 링크는 여전히 `pnpm generate-keyword-map` + dev 재시작 필요. Velite config가 로드 타임에 키워드 맵을 캡처하기 때문 |
+| `generateStaticParams` + 기본 `dynamicParams = true` (export 없음) | 기존 포스트는 빌드 타임 SSG prerender(빌드 출력 `● /posts/[slug]`), 알 수 없는 slug는 dynamic 폴백 → `getPostBySlug` → `notFound()` → 404. dev에서는 Velite watch가 `.velite/posts.json`을 즉시 재생성하므로 새 MDX 파일이 재시작 없이 라우트됨 | **Next.js 15 제약**: `dynamicParams` 값은 반드시 **리터럴**이어야 함. `BinaryExpression`/`Identifier` 거부. 조건부 값이 필요하면 export 자체를 생략해 기본값(`true`)로 돌아가는 것이 유일한 해결책. **잔존 한계**: 새 MDX 안에서 선언한 *새 키워드*의 기존 글 자동 링크는 여전히 `pnpm generate-keyword-map` + dev 재시작 필요 (Velite config가 로드 타임에 키워드 맵을 캡처) |
 ```
 
 - [ ] **Step 2: §15 "개발 편의" 항목 정리**
@@ -285,7 +334,7 @@ Use Edit tool on `/Users/ing9990/Document/backend-notes/CLAUDE.md`:
 
 ```bash
 # Use Grep tool:
-# pattern: dynamicParams = process.env.NODE_ENV
+# pattern: generateStaticParams` + 기본 `dynamicParams = true
 # path: /Users/ing9990/Document/backend-notes/CLAUDE.md
 ```
 
@@ -350,7 +399,7 @@ Expected: 모두 성공.
 
 사용자에게 간결히 보고:
 
-> "Phase 6 필수 기능 완료. `app/posts/[slug]/page.tsx`의 `dynamicParams`가 dev에서는 `true`, production에서는 `false`가 되도록 변경했고, 임시 MDX 파일로 dev 라우팅을 실제로 검증했습니다. 프로덕션 빌드도 기존과 동일한 SSG 출력. CLAUDE.md §13.1/§15도 동기화. 커밋 2건 추가."
+> "Phase 6 필수 기능 완료. `app/posts/[slug]/page.tsx`에서 `export const dynamicParams = false` 한 줄을 삭제해 기본값(`true`)으로 돌렸고, 임시 MDX 파일로 dev 라우팅을 실제로 검증했습니다. 프로덕션 빌드도 여전히 `● /posts/[slug]` SSG 출력 유지. CLAUDE.md §13.1/§15 동기화. 커밋 2건 추가 (+ spec/plan 정정 커밋 1건)."
 
 ---
 
@@ -368,4 +417,20 @@ Expected: 모두 성공.
 
 **Placeholder scan:** 모든 스텝에 구체 명령·파일 경로·기대 출력이 있음. TBD/TODO 없음.
 
-**Type consistency:** 단일 파일 1줄 변경이라 타입 교차 의존 없음. `dynamicParams` 값은 spec/plan 전체에서 `process.env.NODE_ENV !== 'production'`로 일관.
+**Type consistency:** 단일 파일 1줄 삭제라 타입 교차 의존 없음. 접근은 spec/plan 전체에서 "`export const dynamicParams = false` 삭제 → 기본값 `true`로 복귀"로 일관.
+
+---
+
+## Addendum: Plan Correction (post-initial-attempt)
+
+최초 버전은 `export const dynamicParams = process.env.NODE_ENV !== 'production'` 접근을 명시했다. 구현 후 `pnpm build`에서 즉시 실패:
+
+```
+⨯ Unsupported node type "BinaryExpression" at "dynamicParams"
+```
+
+Next.js 15의 route segment config 파서는 **literal 값만** 허용한다. top-level `const` 참조도 `Identifier` 거부로 실패. 단일 파일 내 조건부 `dynamicParams`는 불가능.
+
+교정: export를 완전히 제거. `generateStaticParams`가 여전히 모든 slug를 prerender(빌드 출력 `● /posts/[slug]` 확인)하므로 프로덕션 SSG는 유지된다. 로컬 전용 블로그에서 "알 수 없는 slug → dynamic 폴백 → `notFound()`" 경로는 프레임워크 레벨 strict-404와 사용자 관점 동일.
+
+Task 1의 Step들, Task 3의 기대 출력, Task 4의 CLAUDE.md 정정 내용 모두 이 접근에 맞춰 업데이트됨.
