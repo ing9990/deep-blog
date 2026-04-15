@@ -24,6 +24,11 @@ const STAGE_TOTAL = 4
 const ADVANCE_IDLE_GAP_MS = 120
 const ADVANCE_COMMIT_DELTA = 220
 const ADVANCE_COOLDOWN_MS = 420
+// Touch needs its own tuning: trackpad inertia isn't a concern (touchend stops
+// events cleanly), and mobile swipes are shorter in pixel distance than
+// trackpad scrolls. A 220px threshold frequently misses legitimate swipes.
+const ADVANCE_TOUCH_IDLE_GAP_MS = 140
+const ADVANCE_TOUCH_COMMIT_DELTA = 80
 
 type Stage = 0 | 1 | 2 | 3 | 4 | 5
 type Dir = 'up' | 'down'
@@ -106,9 +111,14 @@ export function HeroIntro() {
   useEffect(() => {
     if (!show || dismissing) return
 
-    const detector = createBurstDetector({
+    const wheelDetector = createBurstDetector({
       idleGapMs: ADVANCE_IDLE_GAP_MS,
       commitDelta: ADVANCE_COMMIT_DELTA,
+      intentCooldownMs: ADVANCE_COOLDOWN_MS,
+    })
+    const touchDetector = createBurstDetector({
+      idleGapMs: ADVANCE_TOUCH_IDLE_GAP_MS,
+      commitDelta: ADVANCE_TOUCH_COMMIT_DELTA,
       intentCooldownMs: ADVANCE_COOLDOWN_MS,
     })
     let touchStart = 0
@@ -121,7 +131,7 @@ export function HeroIntro() {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      const dir = detector.feed(e.deltaY, Date.now())
+      const dir = wheelDetector.feed(e.deltaY, Date.now())
       if (dir === 'down') advance()
     }
 
@@ -133,7 +143,7 @@ export function HeroIntro() {
         e.key === 'Enter'
       ) {
         e.preventDefault()
-        if (detector.emit('down', Date.now()) === 'down') advance()
+        if (wheelDetector.emit('down', Date.now()) === 'down') advance()
       } else if (e.key === 'Escape') {
         e.preventDefault()
         setStage((STAGE_TOTAL + 1) as Stage)
@@ -144,18 +154,21 @@ export function HeroIntro() {
       touchStart = e.touches[0]?.clientY ?? 0
     }
 
+    // Non-passive so preventDefault() can stop iOS rubber-band and
+    // native scroll from fighting with our own gesture detection.
     const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault()
       const y = e.touches[0]?.clientY ?? 0
       const delta = touchStart - y // finger up = content down = positive
       touchStart = y
-      const dir = detector.feed(delta, Date.now())
+      const dir = touchDetector.feed(delta, Date.now())
       if (dir === 'down') advance()
     }
 
     window.addEventListener('wheel', onWheel, { passive: false })
     window.addEventListener('keydown', onKey)
     window.addEventListener('touchstart', onTouchStart, { passive: true })
-    window.addEventListener('touchmove', onTouchMove, { passive: true })
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
 
     return () => {
       window.removeEventListener('wheel', onWheel)
@@ -188,7 +201,7 @@ export function HeroIntro() {
       aria-modal="true"
       aria-label="DEEP 소개"
       className={cn(
-        'fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden bg-black px-6 text-white',
+        'fixed inset-0 z-[100] flex touch-none flex-col items-center justify-center overflow-hidden overscroll-contain bg-black px-6 text-white',
         'transition-opacity duration-500',
         dismissing ? 'pointer-events-none opacity-0' : 'opacity-100',
       )}

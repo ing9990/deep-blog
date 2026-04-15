@@ -415,6 +415,17 @@ body {
   line-height: 1.6;
 }
 
+/* Mobile: let the table grow to its intrinsic content width so the outer
+   .table-wrapper's overflow-x: auto can actually trigger. Without this,
+   width: 100% would cram cell content into a too-narrow column and hide
+   information instead of scrolling. Desktop keeps the 100% fill. */
+@media (max-width: 767px) {
+  .prose-kr table {
+    width: max-content;
+    min-width: 100%;
+  }
+}
+
 .prose-kr table thead {
   background-color: var(--muted);
   border-bottom: 1px solid var(--border);
