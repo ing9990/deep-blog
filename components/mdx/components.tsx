@@ -1,6 +1,8 @@
 import type { MDXComponents } from 'mdx/types'
-import type { AnchorHTMLAttributes } from 'react'
+import type { AnchorHTMLAttributes, ImgHTMLAttributes } from 'react'
 import { KeywordLink } from '@/components/blog/KeywordLink'
+import { Callout } from '@/components/mdx/Callout'
+import { QuickSort } from '@/components/visualizations/QuickSort'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   'data-keyword-link'?: string
@@ -26,4 +28,15 @@ export const mdxComponents: MDXComponents = {
       </a>
     )
   },
+  img: ({ src, alt, ...props }: ImgHTMLAttributes<HTMLImageElement>) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt ?? ''}
+      className="my-6 rounded-[14px] border border-border"
+      {...props}
+    />
+  ),
+  Callout,
+  QuickSort,
 }

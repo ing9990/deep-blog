@@ -9,26 +9,28 @@ export interface KeywordEntry {
 
 export const KEYWORD_MAP: ReadonlyMap<string, KeywordEntry> = new Map([
   ["데이터베이스 인덱스", { slug: "database-index-basics", title: "데이터베이스 인덱스 기초", summary: "DB 인덱스가 쿼리 성능에 미치는 영향을 기본부터 살펴봅니다." }],
+  ["퀵 정렬", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
   ["b-tree", { slug: "b-tree-structure", title: "B-Tree 구조", summary: "B-Tree가 어떻게 정렬된 데이터를 효율적으로 탐색하는지 구조와 동작 원리를 설명합니다." }],
   ["consumer group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group 이해하기", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
   ["garbage collection", { slug: "jvm-gc-intro", title: "JVM GC 입문", summary: "JVM의 가비지 컬렉터가 메모리를 관리하는 기본 원리를 살펴봅니다." }],
-  ["hello world", { slug: "hello-world", title: "Hello, World", summary: "Phase 1 파이프라인이 정상 동작하는지 확인하는 샘플 글입니다." }],
+  ["quick sort", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
 ])
 
 
 export const KEYWORDS_BY_LENGTH: readonly string[] = [
   "garbage collection",
   "consumer group",
-  "hello world",
   "데이터베이스 인덱스",
+  "quick sort",
   "b-tree",
+  "퀵 정렬",
 ]
 
 
 export const SLUG_TO_ENTRY: ReadonlyMap<string, KeywordEntry> = new Map([
   ["database-index-basics", { slug: "database-index-basics", title: "데이터베이스 인덱스 기초", summary: "DB 인덱스가 쿼리 성능에 미치는 영향을 기본부터 살펴봅니다." }],
+  ["quick-sort", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
   ["b-tree-structure", { slug: "b-tree-structure", title: "B-Tree 구조", summary: "B-Tree가 어떻게 정렬된 데이터를 효율적으로 탐색하는지 구조와 동작 원리를 설명합니다." }],
   ["kafka-consumer-group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group 이해하기", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
   ["jvm-gc-intro", { slug: "jvm-gc-intro", title: "JVM GC 입문", summary: "JVM의 가비지 컬렉터가 메모리를 관리하는 기본 원리를 살펴봅니다." }],
-  ["hello-world", { slug: "hello-world", title: "Hello, World", summary: "Phase 1 파이프라인이 정상 동작하는지 확인하는 샘플 글입니다." }],
 ])
