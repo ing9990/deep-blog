@@ -23,6 +23,32 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
 
+  /* Visualization state tokens — maps --viz-* variables to Tailwind utilities.
+     Generates bg-viz-pivot, border-viz-pivot, text-viz-pivot-fg, etc. */
+  --color-viz-pivot:         var(--viz-pivot-border);
+  --color-viz-pivot-bg:      var(--viz-pivot-bg);
+  --color-viz-pivot-fg:      var(--viz-pivot-fg);
+
+  --color-viz-comparing:     var(--viz-comparing-border);
+  --color-viz-comparing-bg:  var(--viz-comparing-bg);
+  --color-viz-comparing-fg:  var(--viz-comparing-fg);
+
+  --color-viz-confirmed:     var(--viz-confirmed-border);
+  --color-viz-confirmed-bg:  var(--viz-confirmed-bg);
+  --color-viz-confirmed-fg:  var(--viz-confirmed-fg);
+
+  --color-viz-blocked:       var(--viz-blocked-border);
+  --color-viz-blocked-bg:    var(--viz-blocked-bg);
+  --color-viz-blocked-fg:    var(--viz-blocked-fg);
+
+  --color-viz-waiting:       var(--viz-waiting-border);
+  --color-viz-waiting-bg:    var(--viz-waiting-bg);
+  --color-viz-waiting-fg:    var(--viz-waiting-fg);
+
+  --color-viz-highlight:     var(--viz-highlight-border);
+  --color-viz-highlight-bg:  var(--viz-highlight-bg);
+  --color-viz-highlight-fg:  var(--viz-highlight-fg);
+
   --font-sans: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
@@ -89,6 +115,34 @@
   --code-traffic-red:    #FF5F57;
   --code-traffic-yellow: #FEBC2E;
   --code-traffic-green:  #28C840;
+
+  /* Visualization state tokens — 6 states × 3 slots = 18 variables.
+     Consumed by components in components/visualizations/common/. New states
+     must be added here AND in the [data-theme="dark"] block AND in
+     @theme inline mapping AND in VIZ_STATES in common/colors.ts. */
+  --viz-pivot-border:     #F59E0B;
+  --viz-pivot-bg:         #FEF3C7;
+  --viz-pivot-fg:         #78350F;
+
+  --viz-comparing-border: #3B82F6;
+  --viz-comparing-bg:     #DBEAFE;
+  --viz-comparing-fg:     #1E3A8A;
+
+  --viz-confirmed-border: #10B981;
+  --viz-confirmed-bg:     #D1FAE5;
+  --viz-confirmed-fg:     #064E3B;
+
+  --viz-blocked-border:   #EF4444;
+  --viz-blocked-bg:       #FEE2E2;
+  --viz-blocked-fg:       #7F1D1D;
+
+  --viz-waiting-border:   #9CA3AF;
+  --viz-waiting-bg:       #F3F4F6;
+  --viz-waiting-fg:       #374151;
+
+  --viz-highlight-border: #8B5CF6;
+  --viz-highlight-bg:     #EDE9FE;
+  --viz-highlight-fg:     #4C1D95;
 }
 
 [data-theme="dark"] {
@@ -147,6 +201,32 @@
   --code-traffic-red:    #FF5F57;
   --code-traffic-yellow: #FEBC2E;
   --code-traffic-green:  #28C840;
+
+  /* Visualization state tokens — dark mode. Muted backgrounds with pale
+     foregrounds for contrast on #09090B. See :root for the light variant. */
+  --viz-pivot-border:     #FBBF24;
+  --viz-pivot-bg:         #3B2D05;
+  --viz-pivot-fg:         #FEF3C7;
+
+  --viz-comparing-border: #60A5FA;
+  --viz-comparing-bg:     #0F1E3D;
+  --viz-comparing-fg:     #DBEAFE;
+
+  --viz-confirmed-border: #34D399;
+  --viz-confirmed-bg:     #042F1F;
+  --viz-confirmed-fg:     #D1FAE5;
+
+  --viz-blocked-border:   #F87171;
+  --viz-blocked-bg:       #2B0A0A;
+  --viz-blocked-fg:       #FECACA;
+
+  --viz-waiting-border:   #4B5563;
+  --viz-waiting-bg:       #18181B;
+  --viz-waiting-fg:       #D1D5DB;
+
+  --viz-highlight-border: #A78BFA;
+  --viz-highlight-bg:     #1E1147;
+  --viz-highlight-fg:     #E9D5FF;
 }
 
 html {
