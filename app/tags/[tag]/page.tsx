@@ -3,6 +3,7 @@ import { getAllPosts } from '@/lib/posts'
 import { extractAllTags, filterByTag, sortPosts } from '@/lib/filters'
 import { PostList } from '@/components/blog/PostList'
 import { TagPageHeader } from '@/components/blog/TagPageHeader'
+import { DocShell } from '@/components/layout/DocShell'
 
 export function generateStaticParams(): Array<{ tag: string }> {
   const allTags = extractAllTags(getAllPosts())
@@ -22,11 +23,11 @@ export default async function TagPage({
   if (posts.length === 0) notFound()
 
   return (
-    <div className="mx-auto max-w-[1080px] px-5 py-20 md:px-12">
+    <DocShell>
       <TagPageHeader tag={tag} count={posts.length} />
       <div className="mt-8">
         <PostList posts={posts} />
       </div>
-    </div>
+    </DocShell>
   )
 }

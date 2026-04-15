@@ -49,7 +49,7 @@
   --color-viz-highlight-bg:  var(--viz-highlight-bg);
   --color-viz-highlight-fg:  var(--viz-highlight-fg);
 
-  --font-sans: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-paperlogy), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --radius-sm: 6px;
@@ -250,9 +250,25 @@ body {
   color: var(--foreground);
 }
 
+::selection {
+  background-color: #FDE68A;
+  color: #18181B;
+  text-shadow: none;
+}
+
+[data-theme="dark"] ::selection {
+  background-color: #FDE047;
+  color: #0A0A0A;
+  text-shadow: none;
+}
+
 .prose-kr {
+  /* Blog post body uses Pretendard Variable — better hinting for long-form
+     Korean reading. Global default (Paperlogy) stays on everything else. */
+  font-family: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
   font-size: 16px;
-  line-height: 1.8;
+  line-height: 1.65;
   color: var(--foreground);
 }
 
@@ -329,8 +345,48 @@ body {
 
 .prose-kr hr {
   border: 0;
-  border-top: 1px solid var(--border);
-  margin: 2.5em 0;
+  background: transparent;
+  height: 14px;
+  width: 100%;
+  max-width: 18rem;
+  margin: 3.5em auto;
+  position: relative;
+  overflow: visible;
+}
+
+.prose-kr hr::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    var(--border-strong) 18%,
+    var(--border-strong) 82%,
+    transparent 100%
+  );
+  transform: translateY(-50%);
+}
+
+.prose-kr hr::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  background: var(--background);
+  border: 1.5px solid color-mix(in oklab, var(--primary) 75%, transparent);
+  transform: translate(-50%, -50%) rotate(45deg);
+  box-shadow: 0 0 0 5px var(--background);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+[data-theme="dark"] .prose-kr hr::after {
+  border-color: color-mix(in oklab, var(--primary) 85%, transparent);
 }
 
 /* ================================================================
@@ -601,4 +657,77 @@ body {
 
 .prose-kr .katex-display > .katex {
   font-size: 1.05em;
+}
+
+/* ================================================================
+   Hero intro overlay animations (components/blog/HeroIntro.tsx)
+   Shown once per session on the index page. Keep animations calm
+   and short so they don't block the user from reaching the feed.
+   ================================================================ */
+
+@keyframes hero-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes hero-fade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes hero-underline {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+
+@keyframes hero-scroll-hint {
+  0% { transform: translateY(0); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(12px); opacity: 0; }
+}
+
+@keyframes hero-chevron {
+  0%, 100% { transform: translateY(0); opacity: 0.45; }
+  50% { transform: translateY(4px); opacity: 0.9; }
+}
+
+.hero-rise-1 { animation: hero-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both; }
+.hero-rise-2 { animation: hero-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both; }
+.hero-rise-3 { animation: hero-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both; }
+.hero-fade-1 { animation: hero-fade 0.9s ease-out 0.05s both; }
+.hero-fade-2 { animation: hero-fade 1s ease-out 1s both; }
+.hero-underline {
+  transform-origin: left;
+  animation: hero-underline 1s cubic-bezier(0.22, 1, 0.36, 1) 0.9s both;
+}
+.hero-scroll-hint { animation: hero-scroll-hint 1.8s ease-in-out infinite; }
+.hero-chevron { animation: hero-chevron 1.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise-1,
+  .hero-rise-2,
+  .hero-rise-3,
+  .hero-fade-1,
+  .hero-fade-2 {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  .hero-underline {
+    animation: none;
+    transform: scaleX(1);
+  }
+  .hero-scroll-hint,
+  .hero-chevron {
+    animation: none;
+  }
 }

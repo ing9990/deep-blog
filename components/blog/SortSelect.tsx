@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import {
   Select,
   SelectContent,
@@ -8,13 +7,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { buildPostsUrl } from '@/lib/utils'
 import type { SortKey } from '@/lib/filters'
 
 interface SortSelectProps {
   value: SortKey
-  currentTag?: string
-  currentQuery?: string
+  onChange: (next: SortKey) => void
 }
 
 const LABELS: Record<SortKey, string> = {
@@ -25,22 +22,12 @@ const LABELS: Record<SortKey, string> = {
 
 const isSortKey = (s: string): s is SortKey => s in LABELS
 
-export function SortSelect({ value, currentTag, currentQuery }: SortSelectProps) {
-  const router = useRouter()
-
+export function SortSelect({ value, onChange }: SortSelectProps) {
   return (
     <Select
       value={value}
       onValueChange={(next) => {
-        if (!isSortKey(next)) return
-        router.push(
-          buildPostsUrl({
-            tag: currentTag,
-            query: currentQuery,
-            sort: next,
-          }),
-          { scroll: false },
-        )
+        if (isSortKey(next)) onChange(next)
       }}
     >
       <SelectTrigger className="h-9 w-[120px] text-sm">

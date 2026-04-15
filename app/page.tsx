@@ -1,62 +1,43 @@
 import { getAllPosts } from '@/lib/posts'
-import { applyFilters, extractAllTags, type SortKey } from '@/lib/filters'
-import { PostList } from '@/components/blog/PostList'
-import { SearchBar } from '@/components/blog/SearchBar'
-import { TagFilterBar } from '@/components/blog/TagFilterBar'
-import { SortSelect } from '@/components/blog/SortSelect'
+import type { SortKey } from '@/lib/filters'
+import { CATEGORY_IDS, type CategoryId } from '@/lib/categories'
+import { BlogHomeClient } from '@/components/blog/BlogHomeClient'
+import { HeroIntro } from '@/components/blog/HeroIntro'
+import { DocShell } from '@/components/layout/DocShell'
 
 export default async function IndexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tag?: string; q?: string; sort?: string; matched?: string }>
+  searchParams: Promise<{ tag?: string; cat?: string; sort?: string }>
 }) {
-  const { tag, q, sort, matched } = await searchParams
+  const { tag, cat, sort } = await searchParams
   const allPosts = getAllPosts()
-  const allTags = extractAllTags(allPosts)
 
   const validSort: SortKey =
     sort === 'oldest' || sort === 'title' ? sort : 'latest'
 
-  const matchedList = matched
-    ? matched
-        .split(',')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
-    : undefined
-
-  const filtered = applyFilters(allPosts, {
-    tag,
-    query: q,
-    sort: validSort,
-    matched: matchedList,
-  })
+  const validCategory: CategoryId | undefined =
+    cat && (CATEGORY_IDS as readonly string[]).includes(cat)
+      ? (cat as CategoryId)
+      : undefined
 
   return (
-    <div className="mx-auto max-w-[1080px] px-5 py-20 md:px-12">
-      <section className="mb-4">
-        <h1 className="text-[32px] font-bold tracking-[-0.02em] md:text-[40px]">
-          Backend Notes
-        </h1>
-        <p className="mt-3 text-[17px] text-muted-foreground">
-          백엔드 엔지니어의 학습 기록
-        </p>
-      </section>
+    <>
+      <HeroIntro />
+      <DocShell showCategoryNav={false}>
+        <section className="mb-4">
+          <h1 className="text-[32px] font-bold tracking-[-0.02em] md:text-[40px]">
+            DEEP
+          </h1>
+        </section>
 
-      <SearchBar defaultQuery={q} currentTag={tag} currentSort={validSort} />
-
-      <TagFilterBar
-        allTags={allTags}
-        selected={tag}
-        currentQuery={q}
-        currentSort={validSort}
-      />
-
-      <div className="mt-8 flex items-center justify-between text-sm text-muted-foreground">
-        <span>전체 {filtered.length}개 글</span>
-        <SortSelect value={validSort} currentTag={tag} currentQuery={q} />
-      </div>
-
-      <PostList posts={filtered} />
-    </div>
+        <BlogHomeClient
+          allPosts={allPosts}
+          initialTag={tag}
+          initialCategory={validCategory}
+          initialSort={validSort}
+        />
+      </DocShell>
+    </>
   )
 }

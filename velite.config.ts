@@ -5,8 +5,10 @@ import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
 import { transformerNotationHighlight } from '@shikijs/transformers'
 import { calculateReadingTime } from './lib/reading-time'
+import { extractPlainText } from './lib/plain-text'
 import remarkAutoLink from './plugins/remark-auto-link'
 import { KEYWORD_MAP, KEYWORDS_BY_LENGTH } from './lib/generated/keyword-map'
+import { CATEGORY_IDS } from './lib/categories'
 
 // Build keywordToSlug from the generated map (lowercase keys → slug strings)
 const keywordToSlug = new Map(
@@ -37,6 +39,7 @@ const postFrontmatterShape = s.object({
     .max(5),
   keywords: s.array(s.string().min(1)).min(1),
   summary: s.string().min(10).max(300),
+  category: s.enum(CATEGORY_IDS),
   series: s.string().optional(),
   seriesOrder: s.number().int().positive().optional(),
   draft: s.boolean().default(false),
@@ -62,6 +65,9 @@ const posts = defineCollection({
       toc: s.toc(),
       readingTime: s.custom<number>().transform((_, { meta }) =>
         calculateReadingTime(typeof meta.content === 'string' ? meta.content : ''),
+      ),
+      plainBody: s.custom<string>().transform((_, { meta }) =>
+        extractPlainText(typeof meta.content === 'string' ? meta.content : ''),
       ),
     })
     .refine(

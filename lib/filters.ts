@@ -7,7 +7,6 @@ export interface PostFilters {
   tag?: string
   query?: string
   sort?: SortKey
-  matched?: readonly string[]
 }
 
 export function filterByTag<T extends Pick<Post, 'tags'>>(
@@ -19,18 +18,17 @@ export function filterByTag<T extends Pick<Post, 'tags'>>(
   return posts.filter((p) => p.tags.some((t) => t.toLowerCase() === needle))
 }
 
-export function filterByMatched<T extends Pick<Post, 'slug'>>(
-  posts: readonly T[],
-  matched?: readonly string[],
-): T[] {
-  if (matched === undefined) return posts.slice()
-  const allow = new Set(matched)
-  return posts.filter((p) => allow.has(p.slug))
+// Post-like shape for search. plainBody is optional so callers outside the
+// index page (e.g. unit tests on small fixtures) can omit it — the function
+// falls back to searching only the frontmatter-derived fields.
+type Searchable = Pick<Post, 'title' | 'summary' | 'tags' | 'keywords'> & {
+  plainBody?: string
 }
 
-export function searchPosts<
-  T extends Pick<Post, 'title' | 'summary' | 'tags' | 'keywords'>,
->(posts: readonly T[], query?: string): T[] {
+export function searchPosts<T extends Searchable>(
+  posts: readonly T[],
+  query?: string,
+): T[] {
   const q = query?.trim().toLowerCase()
   if (!q) return posts.slice()
   return posts.filter((p) => {
@@ -38,6 +36,7 @@ export function searchPosts<
     if (p.summary.toLowerCase().includes(q)) return true
     if (p.tags.some((t) => t.toLowerCase().includes(q))) return true
     if (p.keywords.some((k) => k.toLowerCase().includes(q))) return true
+    if (p.plainBody && p.plainBody.toLowerCase().includes(q)) return true
     return false
   })
 }
@@ -64,15 +63,10 @@ export function sortPosts<T extends Pick<Post, 'date' | 'title'>>(
 }
 
 export function applyFilters<
-  T extends Pick<Post, 'slug' | 'tags' | 'title' | 'summary' | 'keywords' | 'date'>,
+  T extends Searchable & Pick<Post, 'date'>,
 >(posts: readonly T[], filters: PostFilters): T[] {
-  const afterMatched = filterByMatched(posts, filters.matched)
-  const afterTag = filterByTag(afterMatched, filters.tag)
-  // When matched is defined, the client-side FlexSearch has already produced
-  // the authoritative relevance-ranked set — skip the server-side substring
-  // search so body-only matches aren't accidentally eliminated.
-  const afterSearch =
-    filters.matched !== undefined ? afterTag : searchPosts(afterTag, filters.query)
+  const afterTag = filterByTag(posts, filters.tag)
+  const afterSearch = searchPosts(afterTag, filters.query)
   return sortPosts(afterSearch, filters.sort)
 }
 

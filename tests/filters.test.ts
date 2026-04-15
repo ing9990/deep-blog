@@ -15,6 +15,7 @@ type TestPost = {
   tags: string[]
   keywords: string[]
   date: string
+  plainBody?: string
 }
 
 function makePost(partial: Partial<TestPost> & { slug: string }): TestPost {
@@ -25,6 +26,7 @@ function makePost(partial: Partial<TestPost> & { slug: string }): TestPost {
     tags: partial.tags ?? [],
     keywords: partial.keywords ?? [],
     date: partial.date ?? '2026-01-01',
+    plainBody: partial.plainBody,
   }
 }
 
@@ -105,6 +107,26 @@ describe('searchPosts', () => {
   it('is case-insensitive for Latin', () => {
     const result = searchPosts(sample, 'KAFKA')
     expect(result.map((p) => p.slug)).toEqual(['p2'])
+  })
+
+  it('matches plainBody content when the field is present', () => {
+    const withBody: TestPost[] = [
+      makePost({
+        slug: 'bodymatch',
+        title: '아주 다른 제목',
+        summary: '본문에만 있는 단어',
+        plainBody: '실제 본문 어딘가에 쿼리 토큰이 등장합니다.',
+      }),
+      makePost({ slug: 'nomatch', plainBody: '전혀 관련 없는 본문' }),
+    ]
+    const result = searchPosts(withBody, '쿼리 토큰')
+    expect(result.map((p) => p.slug)).toEqual(['bodymatch'])
+  })
+
+  it('ignores plainBody when the field is absent', () => {
+    // Posts without plainBody should still match via frontmatter fields.
+    const result = searchPosts(sample, '인덱스')
+    expect(result.map((p) => p.slug)).toEqual(['p1'])
   })
 })
 

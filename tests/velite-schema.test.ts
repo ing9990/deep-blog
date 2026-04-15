@@ -8,6 +8,7 @@ const validFrontmatter = {
   tags: ['Database'],
   keywords: ['Index'],
   summary: 'A short summary for testing the frontmatter schema.',
+  category: 'database' as const,
 }
 
 describe('postFrontmatterSchema', () => {
@@ -49,49 +50,48 @@ describe('postFrontmatterSchema', () => {
 
   it('rejects tags containing /', () => {
     const result = postFrontmatterSchema.safeParse({
-      title: 'Test',
-      slug: 'test-post',
-      date: '2026-04-15',
+      ...validFrontmatter,
       tags: ['Bad/Tag'],
-      keywords: ['k1'],
-      summary: 'A test post summary here.',
     })
     expect(result.success).toBe(false)
   })
 
   it('rejects tags containing ?', () => {
     const result = postFrontmatterSchema.safeParse({
-      title: 'Test',
-      slug: 'test-post',
-      date: '2026-04-15',
+      ...validFrontmatter,
       tags: ['What?'],
-      keywords: ['k1'],
-      summary: 'A test post summary here.',
     })
     expect(result.success).toBe(false)
   })
 
   it('rejects tags containing #', () => {
     const result = postFrontmatterSchema.safeParse({
-      title: 'Test',
-      slug: 'test-post',
-      date: '2026-04-15',
+      ...validFrontmatter,
       tags: ['C#'],
-      keywords: ['k1'],
-      summary: 'A test post summary here.',
     })
     expect(result.success).toBe(false)
   })
 
   it('accepts tags with dash, space, and Korean characters', () => {
     const result = postFrontmatterSchema.safeParse({
-      title: 'Test',
-      slug: 'test-post',
-      date: '2026-04-15',
+      ...validFrontmatter,
       tags: ['B-Tree', 'Spring Boot', '백엔드'],
-      keywords: ['k1'],
-      summary: 'A test post summary here.',
     })
     expect(result.success).toBe(true)
+  })
+
+  it('rejects an unknown category value', () => {
+    const result = postFrontmatterSchema.safeParse({
+      ...validFrontmatter,
+      category: 'not-a-real-category',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects missing category', () => {
+    const { category: _omit, ...rest } = validFrontmatter
+    void _omit
+    const result = postFrontmatterSchema.safeParse(rest)
+    expect(result.success).toBe(false)
   })
 })

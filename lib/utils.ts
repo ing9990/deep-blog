@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import type { SortKey } from './filters'
+import type { CategoryId } from './categories'
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
@@ -8,17 +9,13 @@ export function cn(...inputs: ClassValue[]): string {
 
 export function buildPostsUrl(params: {
   tag?: string
-  query?: string
+  category?: CategoryId
   sort?: SortKey
-  matched?: readonly string[]
 }): string {
   const sp = new URLSearchParams()
+  if (params.category) sp.set('cat', params.category)
   if (params.tag) sp.set('tag', params.tag)
-  if (params.query?.trim()) sp.set('q', params.query.trim())
   if (params.sort && params.sort !== 'latest') sp.set('sort', params.sort)
-  if (params.matched && params.matched.length > 0) {
-    sp.set('matched', params.matched.join(','))
-  }
   const qs = sp.toString()
   return qs ? `/?${qs}` : '/'
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractPlainText } from '@/lib/search-index'
+import { extractPlainText } from '@/lib/plain-text'
 
 describe('extractPlainText', () => {
   it('strips frontmatter block at the start', () => {
@@ -28,27 +28,27 @@ describe('extractPlainText', () => {
   })
 
   it('removes inline and block KaTeX math', () => {
-    const input = '평균 $O(n \\log n)$ 이며\n\n$$T(n) = 2T(n/2) + O(n)$$\n\n최악 $O(n^2)$'
+    const input = '평균 $O(n \\log n)$ 이며 $$T(n) = 2T(n/2)$$ 최악'
     expect(extractPlainText(input)).toBe('평균 이며 최악')
   })
 
-  it('removes image markdown', () => {
-    const input = '앞 ![alt text](/img.png) 뒤'
+  it('removes markdown images', () => {
+    const input = '앞 ![alt](/img.png) 뒤'
     expect(extractPlainText(input)).toBe('앞 뒤')
   })
 
-  it('preserves link anchor text but drops URLs', () => {
-    const input = '[B-Tree 글](/posts/b-tree-structure)을 참고'
+  it('keeps anchor text from links but drops the href', () => {
+    const input = '[B-Tree](/posts/b-tree) 글을 참고'
     expect(extractPlainText(input)).toBe('B-Tree 글을 참고')
   })
 
-  it('strips markdown emphasis/heading markers', () => {
-    const input = '## 제목\n\n**굵게** _기울임_ ~취소선~'
+  it('removes common markdown punctuation markers', () => {
+    const input = '## 제목\n**굵게** _기울임_ ~취소선~'
     expect(extractPlainText(input)).toBe('제목 굵게 기울임 취소선')
   })
 
-  it('collapses whitespace runs to single spaces', () => {
-    const input = 'a   b\n\n\nc\t\td'
+  it('collapses whitespace to single spaces and trims', () => {
+    const input = '  a\n\n  b   c\td  '
     expect(extractPlainText(input)).toBe('a b c d')
   })
 

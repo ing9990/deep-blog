@@ -1,31 +1,16 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { TagChip } from './TagChip'
-import { buildPostsUrl } from '@/lib/utils'
-import type { SortKey } from '@/lib/filters'
 
 interface TagFilterBarProps {
   allTags: Array<{ tag: string; count: number }>
   selected?: string
-  currentQuery?: string
-  currentSort: SortKey
+  onToggle: (tag: string | undefined) => void
 }
 
-export function TagFilterBar({
-  allTags,
-  selected,
-  currentQuery,
-  currentSort,
-}: TagFilterBarProps) {
-  const router = useRouter()
-
+export function TagFilterBar({ allTags, selected, onToggle }: TagFilterBarProps) {
   function toggle(tag?: string) {
-    const nextTag = selected === tag ? undefined : tag
-    router.push(
-      buildPostsUrl({ tag: nextTag, query: currentQuery, sort: currentSort }),
-      { scroll: false },
-    )
+    onToggle(selected === tag ? undefined : tag)
   }
 
   return (
