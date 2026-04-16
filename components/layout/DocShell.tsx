@@ -11,6 +11,7 @@ interface DocShellProps {
   toc?: FlatTocItem[]
   currentSlug?: string
   showCategoryNav?: boolean
+  leftSlot?: ReactNode
 }
 
 export function DocShell({
@@ -18,6 +19,7 @@ export function DocShell({
   toc,
   currentSlug,
   showCategoryNav = true,
+  leftSlot,
 }: DocShellProps) {
   const hasToc = !!toc && toc.length > 0
 
@@ -31,7 +33,13 @@ export function DocShell({
       />
       <div className="mx-auto max-w-screen-2xl pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] sm:pl-[max(env(safe-area-inset-left),1.5rem)] sm:pr-[max(env(safe-area-inset-right),1.5rem)] md:pl-[max(env(safe-area-inset-left),2rem)] md:pr-[max(env(safe-area-inset-right),2rem)]">
         <div className="grid grid-cols-1 lg:grid-cols-[288px_minmax(0,1fr)_224px] lg:gap-12">
-          {showCategoryNav ? (
+          {leftSlot ? (
+            <div className="hidden lg:block">
+              <div className="sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto py-16 pr-2">
+                {leftSlot}
+              </div>
+            </div>
+          ) : showCategoryNav ? (
             <div className="hidden lg:block">
               <div className="sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto py-16 pr-2">
                 <CategoryNav posts={posts} currentSlug={currentSlug} />
