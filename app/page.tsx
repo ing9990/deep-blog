@@ -3,6 +3,7 @@ import type { SortKey } from '@/lib/filters'
 import { CATEGORY_IDS, type CategoryId } from '@/lib/categories'
 import { BlogHomeClient } from '@/components/blog/BlogHomeClient'
 import { IndexFilterProvider } from '@/components/blog/IndexFilterContext'
+import { IndexCategoryNav } from '@/components/blog/IndexCategoryNav'
 import { HeroIntro } from '@/components/blog/HeroIntro'
 import { DocShell } from '@/components/layout/DocShell'
 
@@ -25,21 +26,15 @@ export default async function IndexPage({
   return (
     <>
       <HeroIntro />
-      <DocShell showCategoryNav={false}>
-        <section className="mb-4">
-          <h1 className="text-[32px] font-bold tracking-[-0.02em] md:text-[40px]">
-            DEEP
-          </h1>
-        </section>
-
-        <IndexFilterProvider
-          initialTag={tag}
-          initialCategory={validCategory}
-          initialSort={validSort}
-        >
+      <IndexFilterProvider
+        initialCategory={validCategory}
+        initialTag={tag}
+        initialSort={validSort}
+      >
+        <DocShell leftSlot={<IndexCategoryNav allPosts={allPosts} />}>
           <BlogHomeClient allPosts={allPosts} />
-        </IndexFilterProvider>
-      </DocShell>
+        </DocShell>
+      </IndexFilterProvider>
     </>
   )
 }
