@@ -279,8 +279,18 @@ body {
   font-weight: 600;
   line-height: 1.35;
   letter-spacing: -0.01em;
-  margin-top: 2em;
-  margin-bottom: 0.8em;
+  margin-top: 3em;
+  margin-bottom: 1em;
+  padding-top: 1.5em;
+  border-top: 1px solid var(--border);
+}
+
+.prose-kr > :first-child {
+  &:is(h2) {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
 }
 
 .prose-kr h3 {

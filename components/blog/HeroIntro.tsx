@@ -220,20 +220,20 @@ export function HeroIntro() {
       <div className="relative mx-auto max-w-4xl text-center">
         <p className="hero-fade-1 mb-7 inline-flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.3em] text-white/55">
           <span className="h-px w-8 bg-white/30" aria-hidden="true" />
-          No Silver Bullet
+          Deep Understanding
           <span className="h-px w-8 bg-white/30" aria-hidden="true" />
         </p>
 
         <h1 className="flex flex-col gap-3 text-balance text-[26px] font-bold leading-[1.25] tracking-[-0.02em] sm:text-[34px] md:text-[44px] lg:text-[52px]">
           <HeroLine stage={stage} index={1} mountClass="hero-rise-1">
-            단순 사용법을 넘어서,
+            기술의 작동 원리부터
           </HeroLine>
           <HeroLine stage={stage} index={2} mountClass="hero-rise-2">
-            깊은 CS 지식을 바탕으로
+            왜 필요한지까지,
           </HeroLine>
           <HeroLine stage={stage} index={3} mountClass="hero-rise-3">
-            <span className="font-extrabold tracking-[0.02em]">TRADE OFF</span>
-            를 비교합니다.
+            <span className="font-extrabold tracking-[0.02em]">쉽게 이해</span>
+            할 수 있도록.
           </HeroLine>
         </h1>
 

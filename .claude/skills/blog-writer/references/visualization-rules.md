@@ -124,17 +124,19 @@ Stage 2 노트가 완성된 뒤 Stage 3 진입 직전에 시각화 후보가 있
 
   1. "<주제 1>" (Section N) — 난이도 X
      기존 컴포넌트: [있음: <컴포넌트명> / 없음]
-     [A] 신규 컴포넌트 생성
-     [B] 정적 SVG로 대체
+     [A-1] 인터랙티브 React 컴포넌트
+     [A-2] 정적 React 컴포넌트 (비교 바 차트 / 센티먼트 매트릭스)
+     [B] 정적 SVG
      [C] 건너뜀
 
   2. "<주제 2>" (Section M) — 난이도 Y
      기존 컴포넌트: [있음: <컴포넌트명> / 없음]
-     [A] 신규 컴포넌트 생성
-     [B] 정적 SVG로 대체
+     [A-1] 인터랙티브 React 컴포넌트
+     [A-2] 정적 React 컴포넌트
+     [B] 정적 SVG
      [C] 건너뜀
 
-선택: "1-A, 2-B" 또는 "기본값으로" 라고 응답해주세요.
+선택: "1-A-1, 2-A-2" 또는 "기본값으로" 라고 응답해주세요.
 ```
 
 "기본값으로" 응답 시 각 후보에 대해 아래 §기본값 판단 기준에 따라 스킬이 자동 결정한다.
@@ -143,9 +145,9 @@ Stage 2 노트가 완성된 뒤 Stage 3 진입 직전에 시각화 후보가 있
 
 ## 기본값 판단 기준 (React vs SVG vs 건너뜀)
 
-### [A] React 컴포넌트
+### [A-1] 인터랙티브 React 컴포넌트
 
-**적용 대상**: 시간 변화, 단계 진행, 동시 실행, 사용자 조작으로 결과가 달라지는 개념.
+**적용 대상**: 시��� 변화, 단계 진행, 동시 실행, 사용자 조작��로 결과가 ��라지는 개념.
 
 예시:
 - 알고리즘 단계별 진행 (퀵소트, 병합정렬, LRU eviction)
@@ -154,6 +156,23 @@ Stage 2 노트가 완성된 뒤 Stage 3 진입 직전에 시각화 후보가 있
 - Transaction Isolation Level playground (사용자가 격리 수준 조절)
 - Thread 상태 전이 (NEW → RUNNABLE → WAITING → TERMINATED)
 - Consumer Group 리밸런싱 (파티션 재할당 단계)
+
+### [A-2] 정적 React 컴포넌트
+
+**적용 대상**: 비교·트레이드오프 시각화에서 **viz state 컬러 시스템**이 필요하지만 단계별 인터랙션은 불필요한 경우. SVG와 달리 `vizStateClasses()` 헬퍼를 직접 사용할 수 있고, 다크/라이트 모드 대응이 자동이다.
+
+예시:
+- 항목별 수치 차이를 색상 코딩된 바 차트로 비교 (CardinalitySpectrum 패턴)
+- 트레이드오프 매트릭스에 긍정/부정/조건부 센티먼트 인디케이터 (CardinalityTradeoff 패��)
+- 스펙트럼/그래디언트 위에 항목을 배치하는 포지셔닝 차트
+
+**판단 기준**: "마크다운 테이블의 숫자/텍스트만으로는 차이의 크기나 유불리가 직관적으로 전달되지 않는가?" → Yes면 정적 React.
+
+**구현 규약**:
+- `'use client'` 불필요 — 상태·이벤트 핸들러 없음, 서버 렌더링 호환
+- `VisualContainer`로 감싸되 `StepController` 미사용
+- `vizStateClasses(state)`로 색상 시맨틱 적용
+- 참고 파일: `CardinalitySpectrum.tsx`, `CardinalityTradeoff.tsx`
 
 ### [B] 정적 SVG
 
@@ -185,7 +204,7 @@ Stage 2 노트가 완성된 뒤 Stage 3 진입 직전에 시각화 후보가 있
 
 - **경로**: `components/visualizations/<PascalCase>.tsx`
   - 예: `LockContention.tsx`, `CacheStampedeTimeline.tsx`, `ConsumerRebalance.tsx`
-- **`'use client'` 필수**: 상호작용이 있으므로 서버 컴포넌트로 작성하지 않는다.
+- **`'use client'`**: 인터랙티브([A-1]) 컴포넌트는 필수. 정적([A-2]) 컴포넌트는 불필요 (상태·이벤트 핸들러 없음).
 
 ### 구현 패턴
 

@@ -8,6 +8,10 @@ import type {
 import { KeywordLink } from '@/components/blog/KeywordLink'
 import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
+import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpectrum'
+import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
+import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
+import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
@@ -55,7 +59,11 @@ export const mdxComponents: MDXComponents = {
   // numeric-column alignment without losing other attributes.
   th: (props: HTMLAttributes<HTMLTableCellElement>) => <th {...props} />,
   td: (props: HTMLAttributes<HTMLTableCellElement>) => <td {...props} />,
+  BTreeInsert,
   Callout,
+  CardinalitySpectrum,
+  CardinalityTradeoff,
+  CompositeIndexLeaf,
   QuickSort,
   RelatedPost,
 }

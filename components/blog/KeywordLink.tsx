@@ -25,7 +25,7 @@ export function KeywordLink({ href, children }: KeywordLinkProps) {
           <PopoverTrigger asChild>
             <Link
               href={href}
-              className="rounded-sm text-keyword underline decoration-dotted underline-offset-4 transition-colors hover:bg-keyword-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="keyword-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {children}
             </Link>
@@ -50,7 +50,7 @@ export function KeywordLink({ href, children }: KeywordLinkProps) {
 
       <Link
         href={href}
-        className="text-keyword underline decoration-dotted underline-offset-4 md:hidden"
+        className="keyword-link md:hidden"
       >
         {children}
       </Link>

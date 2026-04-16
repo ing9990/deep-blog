@@ -8,29 +8,39 @@ export interface KeywordEntry {
 }
 
 export const KEYWORD_MAP: ReadonlyMap<string, KeywordEntry> = new Map([
-  ["데이터베이스 인덱스", { slug: "database-index-basics", title: "데이터베이스 인덱스 기초", summary: "DB 인덱스가 쿼리 성능에 미치는 영향을 기본부터 살펴봅니다." }],
+  ["복합 인덱스", { slug: "database-index-deep-dive", title: "Database Index (데이터베이스 인덱스)", summary: "B+Tree 기반 인덱스의 내부 동작 원리를 이해하고, 복합 인덱스의 리프 노드 배치부터 등호 먼저·정렬 마지막 원칙, 인덱스 개수 결정까지 실전 설계 기준을 얻습니다." }],
+  ["카디널리티", { slug: "cardinality", title: "Cardinality (카디널리티)", summary: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다." }],
   ["퀵 정렬", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
-  ["b-tree", { slug: "b-tree-structure", title: "B-Tree 구조", summary: "B-Tree가 어떻게 정렬된 데이터를 효율적으로 탐색하는지 구조와 동작 원리를 설명합니다." }],
-  ["consumer group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group 이해하기", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
-  ["garbage collection", { slug: "jvm-gc-intro", title: "JVM GC 입문", summary: "JVM의 가비지 컬렉터가 메모리를 관리하는 기본 원리를 살펴봅니다." }],
+  ["풀 테이블 스캔", { slug: "full-table-scan", title: "Full Table Scan", summary: "Full Table Scan이 언제 문제이고 언제 정상인지 구분할 수 있습니다. 옵티마이저가 인덱스 대신 Full Table Scan을 선택하는 이유와 Sequential I/O vs Random I/O 트레이드오프를 이해합니다." }],
+  ["b-tree", { slug: "b-tree-structure", title: "B-Tree", summary: "B-Tree가 왜 디스크 기반 시스템의 표준 자료구조가 되었는지 이해하고, 탐색·삽입·분할의 내부 동작 원리와 B+Tree·해시 인덱스와의 트레이드오프를 구분할 수 있습니다." }],
+  ["cardinality", { slug: "cardinality", title: "Cardinality (카디널리티)", summary: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다." }],
+  ["consumer group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
+  ["full table scan", { slug: "full-table-scan", title: "Full Table Scan", summary: "Full Table Scan이 언제 문제이고 언제 정상인지 구분할 수 있습니다. 옵티마이저가 인덱스 대신 Full Table Scan을 선택하는 이유와 Sequential I/O vs Random I/O 트레이드오프를 이해합니다." }],
+  ["garbage collection", { slug: "jvm-gc-intro", title: "JVM Garbage Collection (GC)", summary: "JVM의 가비지 컬렉터가 메모리를 관리하는 기본 원리를 살펴봅니다." }],
   ["quick sort", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
 ])
 
 
 export const KEYWORDS_BY_LENGTH: readonly string[] = [
   "garbage collection",
+  "full table scan",
   "consumer group",
-  "데이터베이스 인덱스",
+  "cardinality",
   "quick sort",
+  "풀 테이블 스캔",
+  "복합 인덱스",
   "b-tree",
+  "카디널리티",
   "퀵 정렬",
 ]
 
 
 export const SLUG_TO_ENTRY: ReadonlyMap<string, KeywordEntry> = new Map([
-  ["database-index-basics", { slug: "database-index-basics", title: "데이터베이스 인덱스 기초", summary: "DB 인덱스가 쿼리 성능에 미치는 영향을 기본부터 살펴봅니다." }],
+  ["database-index-deep-dive", { slug: "database-index-deep-dive", title: "Database Index (데이터베이스 인덱스)", summary: "B+Tree 기반 인덱스의 내부 동작 원리를 이해하고, 복합 인덱스의 리프 노드 배치부터 등호 먼저·정렬 마지막 원칙, 인덱스 개수 결정까지 실전 설계 기준을 얻습니다." }],
+  ["cardinality", { slug: "cardinality", title: "Cardinality (카디널리티)", summary: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다." }],
   ["quick-sort", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
-  ["b-tree-structure", { slug: "b-tree-structure", title: "B-Tree 구조", summary: "B-Tree가 어떻게 정렬된 데이터를 효율적으로 탐색하는지 구조와 동작 원리를 설명합니다." }],
-  ["kafka-consumer-group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group 이해하기", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
-  ["jvm-gc-intro", { slug: "jvm-gc-intro", title: "JVM GC 입문", summary: "JVM의 가비지 컬렉터가 메모리를 관리하는 기본 원리를 살펴봅니다." }],
+  ["full-table-scan", { slug: "full-table-scan", title: "Full Table Scan", summary: "Full Table Scan이 언제 문제이고 언제 정상인지 구분할 수 있습니다. 옵티마이저가 인덱스 대신 Full Table Scan을 선택하는 이유와 Sequential I/O vs Random I/O 트레이드오프를 이해합니다." }],
+  ["b-tree-structure", { slug: "b-tree-structure", title: "B-Tree", summary: "B-Tree가 왜 디스크 기반 시스템의 표준 자료구조가 되었는지 이해하고, 탐색·삽입·분할의 내부 동작 원리와 B+Tree·해시 인덱스와의 트레이드오프를 구분할 수 있습니다." }],
+  ["kafka-consumer-group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
+  ["jvm-gc-intro", { slug: "jvm-gc-intro", title: "JVM Garbage Collection (GC)", summary: "JVM의 가비지 컬렉터가 메모리를 관리하는 기본 원리를 살펴봅니다." }],
 ])

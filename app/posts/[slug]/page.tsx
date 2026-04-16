@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getAllSlugs, getPostBySlug } from '@/lib/posts'
@@ -10,6 +11,39 @@ import { DocShell } from '@/components/layout/DocShell'
 
 export function generateStaticParams() {
   return getAllSlugs().map((slug) => ({ slug }))
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const post = getPostBySlug(slug)
+  if (!post) return {}
+
+  const url = `https://ing9990.com/posts/${post.slug}`
+
+  return {
+    title: post.title,
+    description: post.summary,
+    keywords: post.tags,
+    openGraph: {
+      type: 'article',
+      title: post.title,
+      description: post.summary,
+      url,
+      publishedTime: post.date,
+    },
+    twitter: {
+      card: 'summary',
+      title: post.title,
+      description: post.summary,
+    },
+    alternates: {
+      canonical: url,
+    },
+  }
 }
 
 export default async function PostPage({

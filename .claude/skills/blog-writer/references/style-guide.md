@@ -10,7 +10,9 @@
 |---|---|---|---|
 | `Callout` | `components/mdx/Callout.tsx` | info/warning/error/success 강조 박스 | `type`, `title?`, `children` |
 | `RelatedPost` | `components/blog/RelatedPost.tsx` | 기존 글로의 교차 참조 카드 | `slug`, `type?`, `label?` |
-| `QuickSort` | `components/visualizations/QuickSort.tsx` | (참고용) 일회성 시각화 패턴 | `initial?`, `description?` |
+| `QuickSort` | `components/visualizations/QuickSort.tsx` | (참고용) 인터랙티브 시각화 패턴 | `initial?`, `description?` |
+| `CardinalitySpectrum` | `components/visualizations/CardinalitySpectrum.tsx` | (참고용) 정적 비교 바 차트 패턴 | — |
+| `CardinalityTradeoff` | `components/visualizations/CardinalityTradeoff.tsx` | (참고용) 센티먼트 인디케이터 매트릭스 패턴 | — |
 
 ---
 
@@ -38,8 +40,8 @@
 **사용 예 — warning (Alternatives 섹션 직전)**:
 
 ````mdx
-<Callout type="warning" title="No Silver Bullet 원칙">
-  아래 N가지 전략 중 "정답"은 없습니다. 각 전략은 **서로 다른 가정**에 기대며...
+<Callout type="warning" title="이 글의 핵심 포인트">
+  아래 N가지 전략은 각각 **서로 다른 상황**에서 유리합니다...
 </Callout>
 ````
 
@@ -96,7 +98,61 @@
 
 ---
 
-## QuickSort (시각화 참고 패턴)
+## 정적 시각화 참고 패턴 (CardinalitySpectrum / CardinalityTradeoff)
+
+인터랙티브가 필요 없지만 **viz state 컬러 시스템**이 필요한 비교·트레이드오프 시각화의 참고 패턴. SVG와 달리 React 컴포넌트이므로 `vizStateClasses()` 헬퍼와 디자인 시스템 토큰을 직접 사용할 수 있다. `'use client'` 불필요 (상태·이벤트 핸들러 없음).
+
+### CardinalitySpectrum — 비교 바 차트
+
+**위치**: `components/visualizations/CardinalitySpectrum.tsx`
+
+**패턴**: 데이터 항목들을 viz state 색상으로 구분하고, 수평 막대의 길이로 상대적 크기 차이를 시각화. 각 행은 `vizStateClasses(state)`로 색상 코딩된 배지 + 바 + 텍스트 라벨 구성.
+
+**사용 시점**:
+- 같은 집합에서 항목별 수치 차이가 극적일 때 (예: 1건 vs 1억건)
+- 마크다운 테이블의 숫자 칼럼만으로는 차이의 크기가 직관적으로 전달되지 않을 때
+- 색상 코딩으로 "좋음 ↔ 나쁨" 같은 의미 축을 부여할 수 있을 때
+
+**핵심 구조**:
+```tsx
+import { vizStateClasses, type VizState } from './common/colors'
+import { VisualContainer } from './common/VisualContainer'
+
+const DATA = [
+  { column: 'id', barPct: 2, state: 'confirmed' as const },
+  // ...barPct는 시각적 비례 (로그 스케일 기반 미적 값)
+]
+// VisualContainer로 감싸고 각 항목을 행으로 렌더
+```
+
+### CardinalityTradeoff — 센티먼트 인디케이터 매트릭스
+
+**위치**: `components/visualizations/CardinalityTradeoff.tsx`
+
+**패턴**: 트레이드오프 비교표의 각 셀에 컬러 도트(`positive`=초록, `negative`=빨강, `neutral`=회색)를 추가해 "이 조합이 유리한가?"를 스캔 가능하게 만듦. 하단에 범례(유리 / 주의 필요 / 조건부) 포함.
+
+**사용 시점**:
+- "높으면 좋은가? 낮으면 좋은가?"처럼 영역별로 유불리가 다른 비교표
+- 마크다운 테이블만으로는 각 셀의 긍정/부정이 즉각 구분되지 않을 때
+- 독자가 표를 빠르게 스캔해서 "내 상황에 해당하는 행"을 찾아야 할 때
+
+**핵심 구조**:
+```tsx
+type Sentiment = 'positive' | 'negative' | 'neutral'
+// 각 셀에 viz 컬러 도트 + 텍스트, VisualContainer로 감싸 범례 포함
+```
+
+**마크다운 테이블 vs 이 패턴 판단 기준**:
+
+| 조건 | 선택 |
+|---|---|
+| 셀에 유불리 판단이 없음 (순수 데이터 비교) | 마크다운 테이블 |
+| 셀마다 "좋다/나쁘다/조건부" 판단이 있음 | 센티먼트 매트릭스 |
+| 영역별로 유불리가 뒤바뀜 (높으면 좋기도, 나쁘기도) | 센티먼트 매트릭스 |
+
+---
+
+## QuickSort (인터랙티브 시각화 참고 패턴)
 
 **위치**: `components/visualizations/QuickSort.tsx`
 
@@ -205,12 +261,20 @@ LIMIT 100;
 
 **Phase 3 시스템**: `frontmatter`의 `keywords` 배열에 등록된 키워드가 본문에 등장하면 자동으로 해당 글로 링크된다.
 
-**시각 효과**: 인디고 점선 밑줄 + 호버 시 Popover 프리뷰 (title/summary).
+**시각 효과**: `.keyword-link` 클래스 — 배경 틴트(`keyword-bg` 50% 투명도) + 호버 시 그라데이션 밑줄(가운데→양쪽 350ms 확장 애니메이션) + Popover 프리뷰 (title/summary). 일반 링크(`text-primary` + 밑줄)와 시각적으로 구분되는 고유 스타일. `decoration-dotted` 점선 밑줄은 폐기됨.
 
 **작성자 주의 사항**:
 - 수동 링크 필요 없음. frontmatter에 키워드만 등록하면 빌드 타임에 자동 처리.
 - 자기 글의 자기 키워드는 링크되지 않음 (self-link 방지).
 - 키워드는 대소문자 무시로 매칭 (`B-Tree` = `b-tree`).
+
+**인라인 요소 3색 구분 체계**: 본문 내 인라인 요소는 색상으로 역할을 즉시 구분한다.
+
+| 요소 | 색상 | CSS 변수 |
+|---|---|---|
+| 일반 링크 | blue | `--primary` |
+| 키워드 자동 링크 | indigo | `--keyword` + `.keyword-link` 클래스 |
+| 인라인 코드 | teal | `--code-inline-fg` (텍스트) + 10% 틴트 배경 |
 
 **RelatedPost와의 차이**:
 
@@ -226,7 +290,7 @@ LIMIT 100;
 **"이 글의 학습 목표" 콜아웃** (글 서두 info):
 모든 글의 첫 콜아웃. 3가지 학습 목표를 열거. Stage 3 자동 삽입 3종 중 첫 번째.
 
-**"No Silver Bullet 원칙" 콜아웃** (Alternatives 섹션 warning):
+**"핵심 포인트" 콜아웃** (Alternatives 섹션 warning):
 대안 비교 표 직전에 배치. Stage 3 자동 삽입 3종 중 두 번째.
 
 **"핵심 통찰" 콜아웃** (Root Cause 섹션 error):
@@ -234,6 +298,15 @@ LIMIT 100;
 
 **"먼저 읽어야 할 글" RelatedPost prerequisite**:
 개념 진입 직전 배치. "분산 락", "인덱스" 같은 사전 지식이 있는 기존 글로 연결.
+
+**"흔한 오해" / 반론 Callout** (warning):
+독자가 가질 수 있는 잘못된 가정이나 흔한 오해를 다루는 단락은 일반 텍스트가 아니라 `warning` Callout으로 래핑한다. 스크롤 중 놓치기 쉬운 반론을 amber 배경으로 시각적으로 부각하는 장치다. 자동 삽입 3종과 달리 **필요한 위치에 추가하는 보조 콜아웃**이며, 한 글에 0~2개 정도가 적절하다.
+
+```mdx
+<Callout type="warning" title="카디널리티가 높으면 무조건 좋다?">
+  그렇지 않습니다. 캐시 키의 카디널리티가 지나치게 높으면...
+</Callout>
+```
 
 **코드 블록 다국어 비교**:
 같은 알고리즘을 Python (의사 코드) + Kotlin (실무 구현) + TypeScript (타입 안전 구현) 등 2~3개 언어로 비교. 차이가 명확한 라인만 `// [!code highlight]`로 강조.
@@ -290,6 +363,114 @@ $$T(n) = 2T(n/2) + O(n)$$
 | 평균 | $O(n \log n)$ | 랜덤 피벗 |
 | 최악 | $O(n^2)$ | 이미 정렬된 배열 |
 ```
+
+---
+
+## MDX 특수 문자 주의
+
+### 물결표(`~`) 범위 표기 금지
+
+MDX(GFM)에서 `~`는 취소선(`~~text~~`) 문법의 일부다. `3~4`처럼 한 문단 안에 `~`가 2개 이상 있으면 파서가 그 사이를 `<del>` 태그로 감싸 취소선이 된다.
+
+**범위를 나타낼 때는 `–`(en dash, U+2013)를 사용한다.**
+
+```
+❌ 높이가 3~4입니다
+❌ 4KB ~ 16KB
+✅ 높이가 3–4입니다
+✅ 4KB – 16KB
+```
+
+`~`를 써도 되는 경우: 단일 `~`가 한 문단에 한 번만 등장할 때 (예: 테이블 셀 안의 `~10ms`). 하지만 안전을 위해 범위 표기에는 항상 en dash를 쓴다.
+
+---
+
+## 글 구조 패턴 — 가독성 · 가시성
+
+### bold + 쌍따옴표 금지
+
+`**"텍스트"**` 패턴은 MDX에서 bold가 적용되지 않는다. 쌍따옴표와 bold를 동시에 쓰지 않는다.
+
+```
+❌ **"이것은 중요한 문장입니다"**
+✅ **이것은 중요한 문장입니다**
+```
+
+강조가 필요하면 bold만 쓰고, 인용이 필요하면 따옴표만 쓴다.
+
+### 번호 + 소제목 구조
+
+여러 원인/사례/단계를 나열할 때 **"첫째, 둘째"** 산문체를 금지한다. 대신 **번호 + 소제목 + 본문** 형태를 쓴다.
+
+```
+❌ 첫째, 인덱스를 쓸 수 없는 경우. 가장 흔한 원인입니다. ...
+   둘째, 옵티마이저가 의도적으로 선택하는 경우. ...
+
+✅ ### 1. 인덱스를 쓸 수 없는 경우
+   가장 큰 원인입니다. ...
+
+   ### 2. 옵티마이저가 의도적으로 선택하는 경우
+   ...
+```
+
+**이유**: 스캔이 쉽고 각 항목이 독립 블록으로 인식돼 시각적 계층이 명확하다.
+
+### 리스트 → 테이블 전환
+
+`- 항목 — 설명` 형태의 불릿 리스트가 3개 이상이고 모든 항목이 동일한 "키 — 값" 구조를 따르면, **2열 테이블**로 전환한다. 테이블이 시각적 계층을 명확히 하고 스캔 속도를 높인다.
+
+```
+❌ - `id` (PK) — 행마다 다름. 카디널리티 = 행 수
+   - `email` — 사용자마다 고유
+   - `UUID` — 설계상 중복 불가
+   - `created_at` (타임스탬프) — 밀리초 단위면 거의 고유
+
+✅ | 컬럼 | 설명 |
+   |---|---|
+   | `id` (PK) | 행마다 다름. 카디널리티 = 행 수 |
+   | `email` | 사용자마다 고유 |
+   | `UUID` | 설계상 중복 불가 |
+   | `created_at` (타임스탬프) | 밀리초 단위면 거의 고유 |
+```
+
+**판단 기준**: 항목이 "이름 — 설명", "기술 — 특징", "조건 — 결과" 같은 이항 구조이면 테이블. 항목이 독립적 문장(나열 순서가 중요하거나 항목 간 구조가 다름)이면 리스트 유지.
+
+### 공유 예시 테이블 (Shared Example)
+
+개념 설명 글(특히 Knowledge 카테고리)은 **글 초반에 예시 테이블/데이터를 도입**하고, 이후 모든 섹션에서 그 예시를 재사용한다.
+
+구성 원칙:
+- 테이블 구조는 간략하게 (4~6 컬럼)
+- **실제 레코드 4~5건**을 보여줘 구조를 직관적으로 이해시킨다
+- "... 총 N건" 형태로 전체 규모를 암시한다
+- 이후 섹션에서 "위 orders 테이블에서..." 형태로 반복 참조한다
+
+```mdx
+| id | user_id | status | amount | created_at |
+|---|---|---|---|---|
+| 1 | 1042 | `PAID` | 32,000 | 2026-01-15 |
+| 2 | 2981 | `PENDING` | 8,500 | 2026-02-03 |
+| 3 | 1042 | `PAID` | 15,200 | 2026-03-22 |
+| 4 | 5520 | `CANCELLED` | 41,000 | 2026-04-01 |
+| 5 | 3301 | `PAID` | 22,800 | 2026-04-10 |
+| ... | ... | ... | ... | ... |
+| **총 2억 건** | | | | |
+```
+
+**이유**: 매 섹션마다 새 예시를 도입하면 독자가 컨텍스트 스위칭해야 한다. 하나의 공유 예시를 반복 참조하면 인지 부하가 줄어든다.
+
+### 전제 지식 콜아웃
+
+본문에서 독자가 모를 수 있는 용어(옵티마이저, 버퍼 풀, WAL 등)를 처음 언급할 때, **Callout으로 한 줄 정의**를 제공한다.
+
+```mdx
+<Callout type="info" title="옵티마이저란?">
+  옵티마이저(Optimizer)는 SQL 쿼리를 실행하기 전에 여러 실행 계획을 비교하고
+  가장 비용이 낮은 계획을 선택하는 데이터베이스 내부 모듈입니다.
+</Callout>
+```
+
+**적용 기준**: 해당 용어가 글의 핵심 흐름에 필수이고, Knowledge 카테고리 독자(기초 지식 습득 목적)가 모를 가능성이 있을 때. 이미 같은 글에서 설명한 용어는 중복 콜아웃 금지.
 
 ---
 

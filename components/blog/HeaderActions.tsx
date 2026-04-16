@@ -73,7 +73,7 @@ export function HeaderActions() {
             </button>
           )}
           <a
-            href="https://github.com/ing9990/backend-notes"
+            href="https://github.com/ing9990"
             target="_blank"
             rel="noreferrer"
             aria-label="GitHub 저장소 열기"

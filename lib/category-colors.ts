@@ -9,6 +9,7 @@ export interface CategoryColor {
 
 export const CATEGORY_COLORS: Record<CategoryId, CategoryColor> = {
   'computer-science': { accent: '#7C3AED', tint: '#F5F3FF', darkTint: '#1E1147' },
+  'data-structure':   { accent: '#0D9488', tint: '#F0FDFA', darkTint: '#0A2E2B' },
   language:           { accent: '#2563EB', tint: '#EFF6FF', darkTint: '#0F1E3D' },
   database:           { accent: '#059669', tint: '#ECFDF5', darkTint: '#042F1F' },
   frameworks:         { accent: '#0891B2', tint: '#ECFEFF', darkTint: '#0C2D3D' },

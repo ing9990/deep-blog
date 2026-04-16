@@ -9,6 +9,8 @@ import { MobileOverlays } from '@/components/blog/MobileOverlays'
 import { SettingsFab } from '@/components/layout/SettingsFab'
 import { getAllPosts } from '@/lib/posts'
 import { toClientPost } from '@/lib/client-post'
+import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import 'katex/dist/katex.min.css'
 import './globals.css'
 
@@ -42,8 +44,31 @@ const jetbrainsMono = localFont({
   weight: '100 800',
 })
 
+const SITE_URL = 'https://ing9990.com'
+
 export const metadata: Metadata = {
-  title: 'DEEP',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'DEEP',
+    template: '%s | DEEP',
+  },
+  description: '기술 주제를 최대한 이해하기 쉽게 정리하는 블로그',
+  openGraph: {
+    type: 'website',
+    locale: 'ko_KR',
+    siteName: 'DEEP',
+    title: 'DEEP',
+    description: '기술 주제를 최대한 이해하기 쉽게 정리하는 블로그',
+    url: SITE_URL,
+  },
+  twitter: {
+    card: 'summary',
+    title: 'DEEP',
+    description: '기술 주제를 최대한 이해하기 쉽게 정리하는 블로그',
+  },
+  alternates: {
+    canonical: SITE_URL,
+  },
 }
 
 export default function RootLayout({
@@ -69,6 +94,8 @@ export default function RootLayout({
             </SettingsProvider>
           </MobileUIProvider>
         </ThemeProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )

@@ -11,8 +11,8 @@
 ## 1. 정체성 · 모토
 
 - **DEEP** (구 "Backend Notes") — 개인 기술 블로그. `package.json` name과 디렉토리 경로는 구명 유지.
-- **모토**: *"No silver bullet + 트레이드오프 우선"*. 단순 "사용법/튜토리얼" 주제는 거절 또는 트레이드오프 각도로 재구성 제안.
-- **로컬 전용**: `pnpm dev`로만 동작. SEO/RSS/sitemap/robots.txt/Open Graph 전부 금지.
+- **모토**: *"기술 주제를 최대한 이해하기 쉽게 정리"*. 이해를 위해 내부적 작동, 기술이 필요한 이유, 트레이드오프 비교를 다룬다.
+- **배포 도메인**: `https://ing9990.com` (Vercel). SEO 메타데이터·sitemap·robots.txt·Open Graph 활성화됨.
 - **신규 글 작성은 `blog-writer` 스킬로만**. 사용자가 "블로그 써줘" / "포스트 만들어줘" 계열 요청을 하면 즉시 스킬로 전환. `content/posts/*.mdx` 직접 `Write` 금지.
 - 블로그 작성 상세 규칙(철학·frontmatter·태그·키워드·시각화 판단·MDX 컴포넌트 레퍼런스)은 `.claude/skills/blog-writer/references/*.md` 참고.
 
@@ -53,7 +53,7 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 1. 존재하지 않는 API/라이브러리를 꾸며내지 마라. 불확실하면 `context7`으로 공식 문서 확인.
 2. `any` 금지 — `unknown` + 타입 가드.
 3. 인라인 `style` 금지 — Tailwind 유틸리티.
-4. 외부 배포 관련 코드(SEO/RSS/sitemap/robots.txt/Open Graph) 추가 금지.
+4. (해제됨) SEO/sitemap/robots/Open Graph는 `ing9990.com` 배포 후 활성화.
 5. 키워드 맵 런타임 생성 금지. 빌드 타임 `scripts/generate-keyword-map.ts`만.
 6. `content/posts/*.mdx` 직접 `Write` 금지 — blog-writer 스킬로.
 7. 동작/상태 변화가 핵심인 개념을 텍스트만으로 설명 금지 (시각화 필수).
@@ -77,10 +77,14 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 - **Hero Intro (`components/blog/HeroIntro.tsx`)**: 세션 1회(`sessionStorage['deep-hero-seen']`), 4단계 progressive highlight, **재진입 경로 없음(단방향)**. 트랙패드 내성 `createBurstDetector` (`IDLE_GAP=120 / COMMIT_DELTA=220 / COOLDOWN=420`). **Dismiss 타이머는 `dismissScheduledRef` 가드 + 이펙트 deps `[stage, show]`만**. `dismissing`을 deps에 넣으면 cleanup이 `clearTimeout`으로 `setShow(false)`를 영구 취소 → **body scroll 영구 잠금 회귀**.
 - **폰트 3-way split**: `--font-sans` = Paperlogy(9 weights TTF) / `.prose-kr`만 `--font-pretendard` 오버라이드 / `--font-mono` = JetBrains Mono. `app/layout.tsx`가 세 `next/font/local` 선언 동시 보유. 통합/제거 금지.
 - **Category 아이콘은 `lib/category-icons.ts`에 분리**. `lib/categories.ts`에 `lucide-react` import 금지 (velite가 로드하는 서버 번들 오염).
-- shadcn 토큰(`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--ring`, `--accent`) + 확장(`--keyword`, `--keyword-bg`, `--border-strong`, `--viz-*`). 다크모드는 `next-themes` `attribute="data-theme"` 고정 + Tailwind `darkMode: ['selector', '[data-theme="dark"]']`.
+- shadcn 토큰(`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--ring`, `--accent`) + 확장(`--keyword`, `--keyword-bg`, `--code-inline-fg`, `--border-strong`, `--viz-*`). 다크모드는 `next-themes` `attribute="data-theme"` 고정 + Tailwind `darkMode: ['selector', '[data-theme="dark"]']`.
+- **인라인 요소 3색 체계**: 일반 링크=blue(`--primary`) / 키워드 링크=indigo(`--keyword` + `.keyword-link` 클래스) / 인라인 코드=teal(`--code-inline-fg` 텍스트 + 10% 틴트 배경). 세 색상 영역 혼용 금지.
+- **키워드 링크 `.keyword-link`**: 배경 틴트 + 호버 시 그라데이션 밑줄 애니메이션(`background-size` 0→100%). `.prose-kr .keyword-link`가 `.prose-kr a`를 override. `decoration-dotted` 점선 밑줄은 **폐기** — 복원 금지.
+- **인라인 코드 `--code-inline-fg`**: teal-600(라이트) / teal-300(다크). 배경은 `color-mix(in oklab, var(--code-inline-fg) 10%, var(--background))`로 텍스트 색에서 자동 파생. `--muted` 회색 배경 + border + box-shadow 방식은 **폐기** — 복원 금지.
 - `<article className="min-w-0">` + figure/pre `width:100% max-width:100% min-width:0` **3종 세트 제거 금지** (CSS Grid `min-width: auto`로 긴 코드 라인이 cell을 확장해 overflow 회귀).
 - Shiki 라인 하이라이트는 `.prose-kr .highlighted` 클래스 (`@shikijs/transformers@4`는 className 생성, data-* 아님).
 - MDX 테이블은 `components/mdx/components.tsx`의 `table` override가 자동 `.table-wrapper` div로 래핑.
+- **`.prose-kr h2` 구분선**: 모든 H2 상단에 `border-top: 1px solid var(--border)` + `margin-top: 3em` + `padding-top: 1.5em` 자동 적용. 섹션 전환마다 시각적 호흡을 제공한다. MDX 본문에 수동 `---`(thematic break) 삽입 금지 — 이중 구분선 회귀.
 
 ### 검색 / 필터
 

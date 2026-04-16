@@ -1,9 +1,11 @@
 export const CATEGORY_IDS = [
   'computer-science',
+  'data-structure',
   'language',
   'database',
   'frameworks',
   'library',
+  'knowledge',
   'etc',
 ] as const
 
@@ -19,7 +21,12 @@ export const CATEGORIES: readonly CategoryMeta[] = [
   {
     id: 'computer-science',
     label: 'Computer Science',
-    description: 'OS, 자료구조, 알고리즘',
+    description: 'OS, 알고리즘',
+  },
+  {
+    id: 'data-structure',
+    label: 'Data Structure',
+    description: 'B-Tree, 해시맵, 배열, 연결 리스트',
   },
   {
     id: 'language',
@@ -40,6 +47,11 @@ export const CATEGORIES: readonly CategoryMeta[] = [
     id: 'library',
     label: 'Library',
     description: 'Querydsl, JPA',
+  },
+  {
+    id: 'knowledge',
+    label: 'Knowledge',
+    description: '용어, 개념, 기초 지식',
   },
   {
     id: 'etc',
