@@ -6,6 +6,7 @@ import { SettingsProvider } from '@/components/providers/SettingsProvider'
 import { Header } from '@/components/blog/Header'
 import { Footer } from '@/components/blog/Footer'
 import { MobileOverlays } from '@/components/blog/MobileOverlays'
+import { SettingsFab } from '@/components/layout/SettingsFab'
 import { getAllPosts } from '@/lib/posts'
 import { toClientPost } from '@/lib/client-post'
 import 'katex/dist/katex.min.css'
@@ -64,6 +65,7 @@ export default function RootLayout({
                 <Footer />
               </div>
               <MobileOverlays />
+              <SettingsFab />
             </SettingsProvider>
           </MobileUIProvider>
         </ThemeProvider>
