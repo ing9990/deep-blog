@@ -2,6 +2,7 @@ import { getAllPosts } from '@/lib/posts'
 import type { SortKey } from '@/lib/filters'
 import { CATEGORY_IDS, type CategoryId } from '@/lib/categories'
 import { BlogHomeClient } from '@/components/blog/BlogHomeClient'
+import { IndexFilterProvider } from '@/components/blog/IndexFilterContext'
 import { HeroIntro } from '@/components/blog/HeroIntro'
 import { DocShell } from '@/components/layout/DocShell'
 
@@ -31,12 +32,13 @@ export default async function IndexPage({
           </h1>
         </section>
 
-        <BlogHomeClient
-          allPosts={allPosts}
+        <IndexFilterProvider
           initialTag={tag}
           initialCategory={validCategory}
           initialSort={validSort}
-        />
+        >
+          <BlogHomeClient allPosts={allPosts} />
+        </IndexFilterProvider>
       </DocShell>
     </>
   )
