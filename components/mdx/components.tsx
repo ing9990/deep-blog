@@ -12,6 +12,7 @@ import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpec
 import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
 import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
+import { GCCycle } from '@/components/visualizations/GCCycle'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
@@ -61,6 +62,7 @@ export const mdxComponents: MDXComponents = {
   td: (props: HTMLAttributes<HTMLTableCellElement>) => <td {...props} />,
   BTreeInsert,
   Callout,
+  GCCycle,
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,

@@ -49,7 +49,7 @@ export function HeaderActions() {
           type="button"
           onClick={openSearch}
           aria-label="검색 열기"
-          className="mx-auto inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-auto md:w-[180px] md:justify-start md:px-3 md:py-2 lg:w-[220px] xl:w-[280px]"
+          className="mx-auto inline-flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-auto md:w-[180px] md:justify-start md:px-3 md:py-2 lg:w-[220px] xl:w-[280px]"
         >
           <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="hidden md:inline">검색...</span>

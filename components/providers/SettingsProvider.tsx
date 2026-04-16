@@ -16,7 +16,7 @@ export interface Settings {
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  cardLayout: 'floating',
+  cardLayout: 'timeline',
 }
 
 const STORAGE_KEY = 'deep-settings'

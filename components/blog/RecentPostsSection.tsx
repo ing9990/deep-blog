@@ -11,6 +11,11 @@ interface RecentPostsSectionProps {
   posts: Post[]
 }
 
+function toDateKey(date: string): string {
+  const d = new Date(date)
+  return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`
+}
+
 export function RecentPostsSection({ posts }: RecentPostsSectionProps) {
   const { settings } = useSettings()
 
@@ -23,9 +28,19 @@ export function RecentPostsSection({ posts }: RecentPostsSectionProps) {
       </h2>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {settings.cardLayout === 'timeline'
-          ? posts.map((post, i) => (
-              <PostCardTimeline key={post.slug} post={post} isLast={i === posts.length - 1} />
-            ))
+          ? posts.map((post, i) => {
+              const dateKey = toDateKey(post.date)
+              const prevKey = i > 0 ? toDateKey(posts[i - 1].date) : null
+              return (
+                <PostCardTimeline
+                  key={post.slug}
+                  post={post}
+                  isFirst={i === 0}
+                  isLast={i === posts.length - 1}
+                  showDate={dateKey !== prevKey}
+                />
+              )
+            })
           : settings.cardLayout === 'floating'
             ? posts.map((post) => <PostCardFloating key={post.slug} post={post} />)
             : posts.map((post) => <PostCardEditorial key={post.slug} post={post} />)

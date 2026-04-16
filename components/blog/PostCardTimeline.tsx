@@ -8,7 +8,9 @@ import { categoryStyle } from '@/lib/category-colors'
 
 interface PostCardTimelineProps {
   post: Post
+  isFirst?: boolean
   isLast?: boolean
+  showDate?: boolean
 }
 
 const MONTH_LABELS = [
@@ -16,7 +18,7 @@ const MONTH_LABELS = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
-export function PostCardTimeline({ post, isLast = false }: PostCardTimelineProps) {
+export function PostCardTimeline({ post, isFirst = false, isLast = false, showDate = true }: PostCardTimelineProps) {
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
   const d = new Date(post.date)
@@ -25,19 +27,29 @@ export function PostCardTimeline({ post, isLast = false }: PostCardTimelineProps
 
   return (
     <div className="group flex gap-0" style={categoryStyle(post.category)} data-cat-tinted="">
-      {/* Timeline column */}
+      {/* Timeline column — node center is always at 42px from top */}
       <div className="relative flex w-[72px] shrink-0 flex-col items-center pt-[22px]">
-        {/* Vertical line */}
+        {/* Line from previous card → node */}
+        {!isFirst && (
+          <div className="absolute left-1/2 top-0 h-[42px] w-[1.5px] -translate-x-1/2 bg-border" aria-hidden />
+        )}
+        {/* Line from node → next card */}
         {!isLast && (
           <div className="absolute bottom-[-12px] left-1/2 top-[42px] w-[1.5px] -translate-x-1/2 bg-border" aria-hidden />
         )}
-        {/* Date circle */}
-        <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-border bg-background text-[13px] font-bold text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
-          {day}
-        </div>
-        <span className="mt-1 text-[10.5px] font-medium uppercase tracking-widest text-muted-foreground">
-          {month}
-        </span>
+
+        {showDate ? (
+          <>
+            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-border bg-background text-[13px] font-bold text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
+              {day}
+            </div>
+            <span className="mt-1 text-[10.5px] font-medium uppercase tracking-widest text-muted-foreground">
+              {month}
+            </span>
+          </>
+        ) : (
+          <div className="relative z-10 mt-[15px] h-2.5 w-2.5 rounded-full border-[1.5px] border-border bg-background transition-colors group-hover:border-primary" />
+        )}
       </div>
 
       {/* Card */}

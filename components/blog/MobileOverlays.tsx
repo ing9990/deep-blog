@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Search, X } from 'lucide-react'
 import { useMobileUI } from '@/components/providers/MobileUIProvider'
@@ -90,11 +90,39 @@ function SearchDialog() {
   const inputRef = useRef<HTMLInputElement>(null)
   const ref = useDialogEffect(searchOpen, closeSearch)
 
+  /* rAF focus — 10ms setTimeout was unreliable on iOS Safari */
   useEffect(() => {
     if (searchOpen) {
       setQuery('')
-      const id = window.setTimeout(() => inputRef.current?.focus(), 10)
-      return () => window.clearTimeout(id)
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }, [searchOpen])
+
+  /* Shrink dialog when virtual keyboard appears */
+  useEffect(() => {
+    if (!searchOpen) return
+    const vv = window.visualViewport
+    const dialog = ref.current
+    if (!vv || !dialog) return
+
+    const update = () => {
+      dialog.style.maxHeight = `${vv.height - 24}px`
+    }
+
+    update()
+    vv.addEventListener('resize', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      dialog.style.maxHeight = ''
+    }
+  }, [searchOpen, ref])
+
+  /* iOS Safari body scroll lock */
+  useEffect(() => {
+    if (!searchOpen) return
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = ''
     }
   }, [searchOpen])
 
@@ -104,6 +132,11 @@ function SearchDialog() {
     return searchPosts(posts, trimmed).slice(0, 12)
   }, [posts, query])
 
+  const handleSelect = useCallback(() => {
+    inputRef.current?.blur()
+    closeSearch()
+  }, [closeSearch])
+
   return (
     <dialog
       ref={ref}
@@ -111,7 +144,7 @@ function SearchDialog() {
       onClick={(e) => {
         if (e.target === ref.current) closeSearch()
       }}
-      className="fixed inset-0 m-auto h-[min(85vh,540px)] w-[min(calc(100vw-2rem),640px)] rounded-xl border border-border bg-background p-0 text-foreground shadow-xl open:flex backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+      className="fixed inset-x-0 top-3 mx-auto mb-auto h-[min(85dvh,540px)] w-[min(calc(100vw-1.5rem),640px)] rounded-xl border border-border bg-background p-0 text-foreground shadow-xl open:flex sm:inset-0 sm:m-auto backdrop:bg-black/50 backdrop:backdrop-blur-sm"
     >
       <div className="flex h-full min-h-0 w-full flex-col">
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
@@ -125,18 +158,22 @@ function SearchDialog() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="검색어를 입력하세요..."
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="search"
+            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-sm"
           />
           <button
             type="button"
             onClick={closeSearch}
             aria-label="닫기"
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="-mr-1 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <ul className="min-h-0 flex-1 overflow-y-auto p-2">
+        <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
           {results.length === 0 ? (
             <li className="p-6 text-center text-sm text-muted-foreground">
               검색 결과가 없습니다.
@@ -146,8 +183,8 @@ function SearchDialog() {
               <li key={post.slug}>
                 <Link
                   href={`/posts/${post.slug}`}
-                  onClick={closeSearch}
-                  className="block rounded-md px-3 py-2.5 transition-colors hover:bg-muted"
+                  onClick={handleSelect}
+                  className="block rounded-md px-3 py-3 transition-colors hover:bg-muted active:bg-muted"
                 >
                   <div className="text-sm font-medium text-foreground">
                     {post.title}

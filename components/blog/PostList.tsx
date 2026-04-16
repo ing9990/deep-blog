@@ -7,6 +7,11 @@ import { PostCardTimeline } from './PostCardTimeline'
 import { PostCardFloating } from './PostCardFloating'
 import type { Post } from '@/lib/posts'
 
+function toDateKey(date: string): string {
+  const d = new Date(date)
+  return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`
+}
+
 export function PostList({ posts }: { posts: Post[] }) {
   const { settings } = useSettings()
 
@@ -23,13 +28,19 @@ export function PostList({ posts }: { posts: Post[] }) {
   if (settings.cardLayout === 'timeline') {
     return (
       <div className="mt-6 space-y-3">
-        {posts.map((post, i) => (
-          <PostCardTimeline
-            key={post.slug}
-            post={post}
-            isLast={i === posts.length - 1}
-          />
-        ))}
+        {posts.map((post, i) => {
+          const dateKey = toDateKey(post.date)
+          const prevKey = i > 0 ? toDateKey(posts[i - 1].date) : null
+          return (
+            <PostCardTimeline
+              key={post.slug}
+              post={post}
+              isFirst={i === 0}
+              isLast={i === posts.length - 1}
+              showDate={dateKey !== prevKey}
+            />
+          )
+        })}
       </div>
     )
   }

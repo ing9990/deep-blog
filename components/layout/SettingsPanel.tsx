@@ -12,9 +12,9 @@ interface SettingsPanelProps {
 }
 
 const LAYOUT_OPTIONS: { value: CardLayout; label: string }[] = [
-  { value: 'floating', label: 'Default' },
+  { value: 'timeline', label: 'Default' },
   { value: 'editorial', label: 'Editorial' },
-  { value: 'timeline', label: 'Timeline' },
+  { value: 'floating', label: 'Floating' },
 ]
 
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
