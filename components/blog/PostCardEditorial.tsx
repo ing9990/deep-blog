@@ -4,23 +4,24 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { CATEGORY_COLORS } from '@/lib/category-colors'
+import { categoryStyle } from '@/lib/category-colors'
 import { formatDate } from '@/lib/utils'
 
 export function PostCardEditorial({ post }: { post: Post }) {
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
-  const colors = CATEGORY_COLORS[post.category]
 
   return (
     <Link
       href={`/posts/${post.slug}`}
       className="group relative block overflow-hidden rounded-xl border border-border bg-background px-6 py-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
+      style={categoryStyle(post.category)}
+      data-cat-tinted=""
     >
       {/* Left accent bar */}
       <span
         className="absolute inset-y-0 left-0 w-[3.5px] rounded-l-xl opacity-50 transition-opacity group-hover:opacity-100"
-        style={{ backgroundColor: colors.accent }}
+        style={{ backgroundColor: 'var(--cat-accent)' }}
         aria-hidden
       />
 
@@ -28,7 +29,7 @@ export function PostCardEditorial({ post }: { post: Post }) {
       <div className="mb-2.5 flex items-center justify-between">
         <span
           className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-[3px] text-[11.5px] font-semibold tracking-wide"
-          style={{ color: colors.accent, backgroundColor: colors.tint }}
+          style={{ color: 'var(--cat-accent)', backgroundColor: 'var(--cat-tint)' }}
         >
           <Icon className="h-[13px] w-[13px]" strokeWidth={2.2} aria-hidden />
           {meta.label}

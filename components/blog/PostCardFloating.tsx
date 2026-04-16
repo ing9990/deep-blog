@@ -4,37 +4,38 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { CATEGORY_COLORS } from '@/lib/category-colors'
+import { categoryStyle } from '@/lib/category-colors'
 import { formatDate } from '@/lib/utils'
 
 export function PostCardFloating({ post }: { post: Post }) {
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
-  const colors = CATEGORY_COLORS[post.category]
 
   return (
     <Link
       href={`/posts/${post.slug}`}
       className="group grid grid-cols-[44px_1fr] items-start gap-4 rounded-[14px] border border-border bg-background p-5 transition-all hover:border-border-strong hover:shadow-[0_4px_16px_rgba(0,0,0,0.05)]"
+      style={categoryStyle(post.category)}
+      data-cat-tinted=""
     >
       {/* Icon area */}
       <span
         className="flex h-11 w-11 items-center justify-center rounded-xl transition-transform group-hover:scale-105"
         style={{
-          backgroundColor: colors.tint,
-          border: `1px solid color-mix(in oklch, ${colors.accent} 15%, transparent)`,
+          backgroundColor: 'var(--cat-tint)',
+          border: '1px solid color-mix(in oklch, var(--cat-accent) 15%, transparent)',
           boxShadow: 'none',
         }}
         aria-hidden
       >
-        <Icon className="h-5 w-5" style={{ color: colors.accent }} strokeWidth={1.8} />
+        <Icon className="h-5 w-5" style={{ color: 'var(--cat-accent)' }} strokeWidth={1.8} />
       </span>
 
       {/* Content */}
       <div className="min-w-0">
         {/* Top row */}
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-[12px] font-semibold" style={{ color: colors.accent }}>
+          <span className="text-[12px] font-semibold" style={{ color: 'var(--cat-accent)' }}>
             {meta.label}
           </span>
           <time className="text-[12px] tabular-nums text-muted-foreground" dateTime={post.date}>

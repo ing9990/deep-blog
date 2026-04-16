@@ -4,7 +4,7 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { CATEGORY_COLORS } from '@/lib/category-colors'
+import { categoryStyle } from '@/lib/category-colors'
 
 interface PostCardTimelineProps {
   post: Post
@@ -19,13 +19,12 @@ const MONTH_LABELS = [
 export function PostCardTimeline({ post, isLast = false }: PostCardTimelineProps) {
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
-  const colors = CATEGORY_COLORS[post.category]
   const d = new Date(post.date)
   const day = String(d.getUTCDate()).padStart(2, '0')
   const month = MONTH_LABELS[d.getUTCMonth()]
 
   return (
-    <div className="group flex gap-0">
+    <div className="group flex gap-0" style={categoryStyle(post.category)} data-cat-tinted="">
       {/* Timeline column */}
       <div className="relative flex w-[72px] shrink-0 flex-col items-center pt-[22px]">
         {/* Vertical line */}
@@ -50,11 +49,11 @@ export function PostCardTimeline({ post, isLast = false }: PostCardTimelineProps
         <div className="mb-2 flex items-center gap-2">
           <span
             className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[7px]"
-            style={{ backgroundColor: colors.tint }}
+            style={{ backgroundColor: 'var(--cat-tint)' }}
           >
-            <Icon className="h-[14px] w-[14px]" style={{ color: colors.accent }} strokeWidth={2.2} aria-hidden />
+            <Icon className="h-[14px] w-[14px]" style={{ color: 'var(--cat-accent)' }} strokeWidth={2.2} aria-hidden />
           </span>
-          <span className="text-[12px] font-semibold" style={{ color: colors.accent }}>
+          <span className="text-[12px] font-semibold" style={{ color: 'var(--cat-accent)' }}>
             {meta.label}
           </span>
         </div>

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { CategoryId } from './categories'
 
 export interface CategoryColor {
@@ -14,4 +15,14 @@ export const CATEGORY_COLORS: Record<CategoryId, CategoryColor> = {
   library:            { accent: '#DC2626', tint: '#FEF2F2', darkTint: '#2B0A0A' },
   knowledge:          { accent: '#D97706', tint: '#FFFBEB', darkTint: '#3B2D05' },
   etc:                { accent: '#DB2777', tint: '#FDF2F8', darkTint: '#2B0A1A' },
+}
+
+/** 카테고리 컬러를 CSS custom properties로 주입하는 인라인 스타일 반환. */
+export function categoryStyle(id: CategoryId): CSSProperties {
+  const c = CATEGORY_COLORS[id]
+  return {
+    '--cat-accent': c.accent,
+    '--cat-tint': c.tint,
+    '--cat-dark-tint': c.darkTint,
+  } as CSSProperties
 }
