@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import localFont from 'next/font/local'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { MobileUIProvider } from '@/components/providers/MobileUIProvider'
+import { SettingsProvider } from '@/components/providers/SettingsProvider'
 import { Header } from '@/components/blog/Header'
 import { Footer } from '@/components/blog/Footer'
 import { MobileOverlays } from '@/components/blog/MobileOverlays'
@@ -56,12 +57,14 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <MobileUIProvider posts={clientPosts}>
-            <div className="flex min-h-screen flex-col">
-              <Header />
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
-            <MobileOverlays />
+            <SettingsProvider>
+              <div className="flex min-h-screen flex-col">
+                <Header />
+                <main className="flex-1">{children}</main>
+                <Footer />
+              </div>
+              <MobileOverlays />
+            </SettingsProvider>
           </MobileUIProvider>
         </ThemeProvider>
       </body>
