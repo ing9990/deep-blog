@@ -8,6 +8,7 @@ import type {
 import { KeywordLink } from '@/components/blog/KeywordLink'
 import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
+import { Tab, Tabs } from '@/components/mdx/Tabs'
 import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpectrum'
 import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
@@ -68,4 +69,6 @@ export const mdxComponents: MDXComponents = {
   CompositeIndexLeaf,
   QuickSort,
   RelatedPost,
+  Tab,
+  Tabs,
 }
