@@ -355,15 +355,15 @@ body {
      Korean reading. Global default (Paperlogy) stays on everything else. */
   font-family: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-relaxed);
   color: var(--foreground);
 }
 
 .prose-kr h2 {
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: var(--text-h2);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
   letter-spacing: -0.01em;
   margin-top: 3em;
   margin-bottom: 1em;
@@ -380,9 +380,9 @@ body {
 }
 
 .prose-kr h3 {
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--text-h3);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
   margin-top: 1.6em;
   margin-bottom: 0.6em;
 }
@@ -431,8 +431,8 @@ body {
 
 .prose-kr code:not(pre code) {
   font-family: var(--font-mono);
-  font-size: 0.88em;
-  font-weight: 500;
+  font-size: var(--text-code-inline);
+  font-weight: var(--weight-medium);
   color: var(--code-inline-fg);
   background-color: color-mix(in oklab, var(--code-inline-fg) 10%, var(--background));
   padding: 0.2em 0.45em;
@@ -452,8 +452,8 @@ body {
   border-radius: var(--radius);
   background-color: var(--muted);
   overflow-x: auto;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--text-code-block);
+  line-height: var(--leading-normal);
 }
 
 .prose-kr ul,
@@ -590,7 +590,7 @@ body {
 }
 
 .prose-kr table code:not(pre code) {
-  font-size: 0.88em;
+  font-size: var(--text-code-inline);
 }
 
 /* Numeric columns: right-align cells whose first inline child is a
@@ -748,7 +748,7 @@ body {
   border-radius: 0;
   background-color: transparent;
   overflow-x: auto;
-  font-size: 14px;
+  font-size: var(--text-code-block);
   line-height: 1.65;
 }
 
