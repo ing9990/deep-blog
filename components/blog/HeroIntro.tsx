@@ -218,13 +218,13 @@ export function HeroIntro() {
       />
 
       <div className="relative mx-auto max-w-4xl text-center">
-        <p className="hero-fade-1 mb-7 inline-flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.3em] text-white/55">
+        <p className="hero-fade-1 mb-7 inline-flex items-center gap-3 text-[length:var(--text-caption)] font-medium uppercase tracking-[0.3em] text-white/55">
           <span className="h-px w-8 bg-white/30" aria-hidden="true" />
           Deep Understanding
           <span className="h-px w-8 bg-white/30" aria-hidden="true" />
         </p>
 
-        <h1 className="flex flex-col gap-3 text-balance text-[26px] font-bold leading-[1.25] tracking-[-0.02em] sm:text-[34px] md:text-[44px] lg:text-[52px]">
+        <h1 className="flex flex-col gap-3 text-balance text-[length:var(--text-h1)] font-bold leading-[1.25] tracking-[-0.02em]">
           <HeroLine stage={stage} index={1} mountClass="hero-rise-1">
             기술의 작동 원리부터
           </HeroLine>
@@ -255,7 +255,7 @@ export function HeroIntro() {
           />
           <span
             className={cn(
-              'text-[44px] font-extrabold tracking-[0.35em] transition-colors duration-500 sm:text-[52px] md:text-[60px]',
+              'text-[length:var(--text-h1)] font-extrabold tracking-[0.35em] transition-colors duration-500',
               stage === 4 ? 'text-white' : 'text-white/80',
             )}
           >
@@ -272,7 +272,7 @@ export function HeroIntro() {
       </div>
 
       <div className="hero-fade-2 absolute bottom-10 left-1/2 flex -translate-x-1/2 flex-col items-center gap-3 text-white/55">
-        <span className="text-[10px] font-medium uppercase tracking-[0.3em]">
+        <span className="text-[length:var(--text-caption)] font-medium uppercase tracking-[0.3em]">
           {stage === 0 && 'Scroll'}
           {stage >= 1 && stage <= STAGE_TOTAL && `${stage} / ${STAGE_TOTAL}`}
           {stage > STAGE_TOTAL && 'Enter'}

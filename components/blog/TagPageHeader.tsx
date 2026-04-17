@@ -15,15 +15,15 @@ export function TagPageHeader({ tag, count }: TagPageHeaderProps) {
     <div>
       <Link
         href="/"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         {t('tag.page.back')}
       </Link>
-      <h1 className="mt-6 text-[32px] font-bold tracking-[-0.02em] md:text-[40px]">
+      <h1 className="mt-6 text-[length:var(--text-h2)] font-bold tracking-[-0.02em]">
         #{tag}
       </h1>
-      <p className="mt-3 text-[15px] text-muted-foreground">{t('tag.page.count', { n: count })}</p>
+      <p className="mt-3 text-[length:var(--text-meta)] text-muted-foreground">{t('tag.page.count', { n: count })}</p>
     </div>
   )
 }

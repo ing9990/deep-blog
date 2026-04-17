@@ -46,7 +46,7 @@ export function BlogHomeClient({ allPosts }: BlogHomeClientProps) {
           onToggle={setTag}
         />
       )}
-      <div className="mt-8 flex items-center justify-between text-sm text-muted-foreground">
+      <div className="mt-8 flex items-center justify-between text-[length:var(--text-meta)] text-muted-foreground">
         <span>{t('index.total.count', { n: filtered.length })}</span>
         <SortSelect value={sort} onChange={setSort} />
       </div>

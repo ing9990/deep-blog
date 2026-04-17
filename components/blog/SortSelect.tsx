@@ -33,7 +33,7 @@ export function SortSelect({ value, onChange }: SortSelectProps) {
         if (isSortKey(next)) onChange(next)
       }}
     >
-      <SelectTrigger className="h-9 w-[120px] text-sm">
+      <SelectTrigger className="h-9 w-[120px] text-[length:var(--text-button)]">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
