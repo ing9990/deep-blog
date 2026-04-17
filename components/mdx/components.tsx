@@ -52,7 +52,7 @@ export const mdxComponents: MDXComponents = {
     <img
       src={src}
       alt={alt ?? ''}
-      className="my-6 rounded-[14px] border border-border"
+      className="my-6 rounded-[var(--radius-panel)] border border-border"
       {...props}
     />
   ),
