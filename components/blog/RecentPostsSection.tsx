@@ -3,6 +3,7 @@
 
 import type { Post } from '@/lib/posts'
 import { useSettings } from '@/components/providers/SettingsProvider'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 import { PostCardEditorial } from './PostCardEditorial'
 import { PostCardTimeline } from './PostCardTimeline'
 import { PostCardFloating } from './PostCardFloating'
@@ -17,6 +18,7 @@ function toDateKey(date: string): string {
 }
 
 export function RecentPostsSection({ posts }: RecentPostsSectionProps) {
+  const { t } = useTranslation()
   const { settings } = useSettings()
 
   if (posts.length === 0) return null
@@ -24,7 +26,7 @@ export function RecentPostsSection({ posts }: RecentPostsSectionProps) {
   return (
     <section className="mt-16 border-t border-border pt-12">
       <h2 className="text-[20px] font-semibold text-foreground md:text-[22px]">
-        최근 글
+        {t('post.recent')}
       </h2>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {settings.cardLayout === 'timeline'
