@@ -36,7 +36,7 @@ export function TableOfContents({ items }: { items: FlatTocItem[] }) {
 
   return (
     <nav aria-label="목차">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="mb-3 text-[length:var(--text-nav-header)] font-semibold uppercase tracking-wider text-muted-foreground">
         On this page
       </p>
       <ul className="space-y-2 border-l border-border">
@@ -44,7 +44,7 @@ export function TableOfContents({ items }: { items: FlatTocItem[] }) {
           <li
             key={item.slug}
             className={cn(
-              '-ml-px border-l-2 pl-4 text-sm transition-colors',
+              '-ml-px border-l-2 pl-4 text-[length:var(--text-nav-item)] transition-colors',
               item.depth === 3 && 'pl-7',
               activeSlug === item.slug
                 ? 'border-primary font-medium text-foreground'
