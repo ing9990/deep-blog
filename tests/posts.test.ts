@@ -4,11 +4,11 @@ vi.mock('#site/content', () => ({
   posts: [
     {
       slug: 'a',
-      title: 'Post A',
+      title: { ko: 'Post A', en: 'Post A' },
       date: '2026-04-14',
       tags: ['T'],
       keywords: ['K'],
-      summary: 'summary a',
+      summary: { ko: 'summary a', en: 'summary a' },
       draft: false,
       body: 'body',
       toc: [],
@@ -16,11 +16,11 @@ vi.mock('#site/content', () => ({
     },
     {
       slug: 'b',
-      title: 'Post B',
+      title: { ko: 'Post B', en: 'Post B' },
       date: '2026-04-10',
       tags: ['T'],
       keywords: ['K'],
-      summary: 'summary b',
+      summary: { ko: 'summary b', en: 'summary b' },
       draft: false,
       body: 'body',
       toc: [],
@@ -28,11 +28,11 @@ vi.mock('#site/content', () => ({
     },
     {
       slug: 'c',
-      title: 'Draft C',
+      title: { ko: 'Draft C', en: 'Draft C' },
       date: '2026-04-12',
       tags: ['T'],
       keywords: ['K'],
-      summary: 'summary c',
+      summary: { ko: 'summary c', en: 'summary c' },
       draft: true,
       body: 'body',
       toc: [],
@@ -59,7 +59,7 @@ describe('posts helpers', () => {
   })
 
   it('getPostBySlug returns the published post for a valid slug', () => {
-    expect(getPostBySlug('a')?.title).toBe('Post A')
+    expect(getPostBySlug('a')?.title.en).toBe('Post A')
   })
 
   it('getPostBySlug returns undefined for an unknown slug', () => {
