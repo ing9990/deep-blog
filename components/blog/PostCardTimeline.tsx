@@ -53,7 +53,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
       {/* Card */}
       <Link
         href={`/posts/${post.slug}`}
-        className="block min-w-0 flex-1 rounded-xl border border-border bg-background px-[22px] py-[18px] transition-all hover:border-border-strong hover:shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
+        className="block min-w-0 flex-1 rounded-xl border border-border bg-background px-[22px] py-[18px] transition-all hover:border-border-strong hover:shadow-[var(--shadow-card)]"
       >
         {/* Category */}
         <div className="mb-2 flex items-center gap-2">
