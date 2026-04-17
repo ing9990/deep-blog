@@ -262,6 +262,17 @@
   --radius-card:   var(--radius);      /* 10px — post cards, inputs */
   --radius-panel:  var(--radius-lg);   /* 14px — callouts, popovers, settings panel */
   --radius-overlay: var(--radius-xl);  /* 20px — hero, modals */
+
+  /* ------------------------------------------------------------------
+     Shadow tokens — elevation-based names for the two card elevation
+     levels and the floating FAB. Values match current literal rgba
+     shadows for bit-exact visual preservation. Dark-mode uses the same
+     strings (black-based alpha works acceptably on both themes — add
+     [data-theme="dark"] overrides only if visual regression appears).
+     ------------------------------------------------------------------ */
+  --shadow-card:        0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover:  0 4px 16px rgba(0, 0, 0, 0.05);
+  --shadow-fab:         0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
 [data-theme="dark"] {
