@@ -3,8 +3,10 @@
 import { useCallback, useState } from 'react'
 import { Settings } from 'lucide-react'
 import { SettingsPanel } from './SettingsPanel'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function SettingsFab() {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
 
   const handleToggle = useCallback(() => setOpen((prev) => !prev), [])
@@ -17,7 +19,7 @@ export function SettingsFab() {
         type="button"
         onClick={handleToggle}
         className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-xl bg-foreground text-background shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-transform hover:scale-105"
-        aria-label="설정 열기"
+        aria-label={t('settings.open')}
       >
         <Settings
           className="h-[22px] w-[22px] transition-transform duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:rotate-[60deg]"
