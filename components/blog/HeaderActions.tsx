@@ -97,7 +97,7 @@ export function HeaderActions() {
             <span
               aria-hidden="true"
               className={cn(
-                'text-[length:var(--text-button)] font-bold leading-none',
+                'text-[length:var(--text-menu)] font-bold leading-none',
                 lang === 'en' ? 'font-mono' : 'font-sans',
               )}
             >
