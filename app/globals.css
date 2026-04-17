@@ -52,6 +52,34 @@
   --font-sans: var(--font-paperlogy), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
+  /* ------------------------------------------------------------------
+     Typography primitives — T-shirt scale. All sizes multiply through
+     --text-scale so html[data-font-size="..."] can shift the whole
+     scale with one variable. See docs/superpowers/specs/2026-04-18-
+     style-token-system-design.md for the taxonomy.
+     ------------------------------------------------------------------ */
+  --text-2xs: calc(10px * var(--text-scale, 1));
+  --text-xs:  calc(11px * var(--text-scale, 1));
+  --text-sm:  calc(12px * var(--text-scale, 1));
+  --text-md:  calc(13px * var(--text-scale, 1));
+  --text-base: calc(15px * var(--text-scale, 1));
+  --text-lg:  calc(17px * var(--text-scale, 1));
+  --text-xl:  calc(19px * var(--text-scale, 1));
+  --text-2xl: calc(22px * var(--text-scale, 1));
+  --text-3xl: calc(24px * var(--text-scale, 1));
+
+  /* Line-height primitives */
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  /* Font-weight primitives */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 14px;
