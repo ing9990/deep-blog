@@ -109,6 +109,10 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 - Vitest 기본 env = `node`. DOM 테스트 파일 상단에 `// @vitest-environment jsdom` pragma 필수.
 - 테스트 범위는 순수 함수 중심 — UI 회귀는 `pnpm build` + dev 수동 확인. `@testing-library/react` 미사용.
 
+### Frontmatter / 포스트 데이터
+
+- **Frontmatter `title`/`summary`는 `{ ko, en }` nested object**. 사용처는 `post.title[lang]` / `post.summary[lang]` 접근. Server Component가 lang 없이 렌더하는 곳(`generateMetadata` 등)은 `.ko` 고정 (서버 언어 결정 인프라 없음, hreflang은 후속 PR).
+
 ## 7. 코드 컨벤션
 
 - Server Component 기본. 클라이언트 상태 필요 leaf에만 `'use client'`.
