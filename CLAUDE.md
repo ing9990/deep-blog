@@ -85,6 +85,8 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 - Shiki 라인 하이라이트는 `.prose-kr .highlighted` 클래스 (`@shikijs/transformers@4`는 className 생성, data-* 아님).
 - MDX 테이블은 `components/mdx/components.tsx`의 `table` override가 자동 `.table-wrapper` div로 래핑.
 - **`.prose-kr h2` 구분선**: 모든 H2 상단에 `border-top: 1px solid var(--border)` + `margin-top: 3em` + `padding-top: 1.5em` 자동 적용. 섹션 전환마다 시각적 호흡을 제공한다. MDX 본문에 수동 `---`(thematic break) 삽입 금지 — 이중 구분선 회귀.
+- **MDX `<Tabs>` / `<Tab>` 자식 식별은 duck-typing**: `components/mdx/tabs-utils.ts`의 `extractTabs`는 `props.label`이 string인 React element만 Tab으로 취급한다. `type === Tab` 레퍼런스 비교나 symbol-on-function 패턴으로 갈아끼우지 말 것 — Server Component(MDXContent)에서 client `<Tabs>`로 children이 serialize될 때 `type`이 client module reference로 바뀌어 식별 실패(결과: SSR에서 Tabs 전체가 `null`). props는 RSC 경계를 깨끗이 round-trip한다.
+- **`TabsGroupProvider`는 `components/mdx/MDXContent.tsx` 최상위 1개만**. 블로그 레이아웃(`app/layout.tsx` 등) 상위로 올리면 포스트 간 `group` state leak이 발생한다. 포스트 = 스코프 1개.
 
 ### 검색 / 필터
 
