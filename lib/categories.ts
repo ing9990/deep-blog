@@ -14,55 +14,55 @@ export type CategoryId = (typeof CATEGORY_IDS)[number]
 
 export interface CategoryMeta {
   id: CategoryId
-  label: string
-  description: string
+  label:       { ko: string; en: string }
+  description: { ko: string; en: string }
 }
 
 export const CATEGORIES: readonly CategoryMeta[] = [
   {
     id: 'computer-science',
-    label: 'Computer Science',
-    description: 'OS, 알고리즘',
+    label:       { en: 'Computer Science', ko: '컴퓨터 과학' },
+    description: { en: 'OS, algorithms', ko: 'OS, 알고리즘' },
   },
   {
     id: 'data-structure',
-    label: 'Data Structure',
-    description: 'B-Tree, 해시맵, 배열, 연결 리스트',
+    label:       { en: 'Data Structure', ko: '자료구조' },
+    description: { en: 'B-Tree, hash maps, arrays, linked lists', ko: 'B-Tree, 해시맵, 배열, 연결 리스트' },
   },
   {
     id: 'language',
-    label: 'Language',
-    description: 'Kotlin, TypeScript, Java, JVM',
+    label:       { en: 'Language', ko: '언어' },
+    description: { en: 'Kotlin, TypeScript, Java, JVM', ko: 'Kotlin, TypeScript, Java, JVM' },
   },
   {
     id: 'database',
-    label: 'Database',
-    description: 'MySQL, PostgreSQL, 인덱스',
+    label:       { en: 'Database', ko: '데이터베이스' },
+    description: { en: 'MySQL, PostgreSQL, indexes', ko: 'MySQL, PostgreSQL, 인덱스' },
   },
   {
     id: 'frameworks',
-    label: 'Frameworks',
-    description: 'Spring Boot, Next.js',
+    label:       { en: 'Frameworks', ko: '프레임워크' },
+    description: { en: 'Spring Boot, Next.js', ko: 'Spring Boot, Next.js' },
   },
   {
     id: 'library',
-    label: 'Library',
-    description: 'Querydsl, JPA',
+    label:       { en: 'Library', ko: '라이브러리' },
+    description: { en: 'Querydsl, JPA', ko: 'Querydsl, JPA' },
   },
   {
     id: 'ai',
-    label: 'AI',
-    description: 'LLM, 머신러닝, AI 엔지니어링',
+    label:       { en: 'AI', ko: 'AI' },
+    description: { en: 'LLM, machine learning, AI engineering', ko: 'LLM, 머신러닝, AI 엔지니어링' },
   },
   {
     id: 'knowledge',
-    label: 'Knowledge',
-    description: '용어, 개념, 기초 지식',
+    label:       { en: 'Knowledge', ko: '지식' },
+    description: { en: 'Terms, concepts, fundamentals', ko: '용어, 개념, 기초 지식' },
   },
   {
     id: 'etc',
-    label: 'ETC',
-    description: '그 외 주제',
+    label:       { en: 'ETC', ko: '그 외' },
+    description: { en: 'Other topics', ko: '그 외 주제' },
   },
 ]
 

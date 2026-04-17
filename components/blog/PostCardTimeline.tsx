@@ -5,6 +5,7 @@ import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { categoryStyle } from '@/lib/category-colors'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface PostCardTimelineProps {
   post: Post
@@ -19,6 +20,7 @@ const MONTH_LABELS = [
 ]
 
 export function PostCardTimeline({ post, isFirst = false, isLast = false, showDate = true }: PostCardTimelineProps) {
+  const { lang } = useTranslation()
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
   const d = new Date(post.date)
@@ -66,7 +68,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
             <Icon className="h-[14px] w-[14px]" style={{ color: 'var(--cat-accent)' }} strokeWidth={2.2} aria-hidden />
           </span>
           <span className="text-[12px] font-semibold" style={{ color: 'var(--cat-accent)' }}>
-            {meta.label}
+            {meta.label[lang]}
           </span>
         </div>
 

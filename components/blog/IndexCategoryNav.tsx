@@ -11,18 +11,20 @@ import { cn } from '@/lib/utils'
 import { useIndexFilter } from './IndexFilterContext'
 import type { Post } from '@/lib/posts'
 import { useMemo } from 'react'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface IndexCategoryNavProps {
   allPosts: Post[]
 }
 
 export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
+  const { t, lang } = useTranslation()
   const { category, setCategory } = useIndexFilter()
 
   const groups = useMemo(() => groupPostsByCategory(allPosts), [allPosts])
 
   return (
-    <nav aria-label="카테고리 필터" className="flex flex-col gap-1">
+    <nav aria-label={t('index.category.filter')} className="flex flex-col gap-1">
       <button
         type="button"
         onClick={() => setCategory(null)}
@@ -34,7 +36,7 @@ export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
         )}
       >
         <Layers className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-        <span className="flex-1 text-left">전체</span>
+        <span className="flex-1 text-left">{t('index.all')}</span>
         <span className="tabular-nums text-xs opacity-60">
           {allPosts.length}
         </span>
@@ -64,7 +66,7 @@ export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
               strokeWidth={2}
               aria-hidden
             />
-            <span className="flex-1 text-left">{meta.label}</span>
+            <span className="flex-1 text-left">{meta.label[lang]}</span>
             <span className="tabular-nums text-xs opacity-60">{count}</span>
           </button>
         )

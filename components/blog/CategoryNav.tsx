@@ -5,6 +5,7 @@ import { ChevronDown } from 'lucide-react'
 import type { ClientPost } from '@/lib/client-post'
 import { groupPostsByCategory } from '@/lib/categories'
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface CategoryNavProps {
   posts: ClientPost[]
@@ -13,6 +14,7 @@ interface CategoryNavProps {
 }
 
 export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProps) {
+  const { lang } = useTranslation()
   if (!Array.isArray(posts) || posts.length === 0) return null
   const groups = groupPostsByCategory(posts)
 
@@ -26,7 +28,7 @@ export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProp
             className="group/cat border-b border-border/60 pb-1 last:border-b-0"
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
-              <span>{category.label}</span>
+              <span>{category.label[lang]}</span>
               <ChevronDown
                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 group-open/cat:rotate-180"
                 aria-hidden="true"

@@ -6,8 +6,10 @@ import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { categoryStyle } from '@/lib/category-colors'
 import { formatDate } from '@/lib/utils'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function PostCardFloating({ post }: { post: Post }) {
+  const { lang } = useTranslation()
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
 
@@ -36,7 +38,7 @@ export function PostCardFloating({ post }: { post: Post }) {
         {/* Top row */}
         <div className="mb-1 flex items-center justify-between">
           <span className="text-[12px] font-semibold" style={{ color: 'var(--cat-accent)' }}>
-            {meta.label}
+            {meta.label[lang]}
           </span>
           <time className="text-[12px] tabular-nums text-muted-foreground" dateTime={post.date}>
             {formatDate(post.date)}

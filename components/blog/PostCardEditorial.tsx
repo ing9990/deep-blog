@@ -6,8 +6,10 @@ import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { categoryStyle } from '@/lib/category-colors'
 import { formatDate } from '@/lib/utils'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function PostCardEditorial({ post }: { post: Post }) {
+  const { lang } = useTranslation()
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
 
@@ -32,7 +34,7 @@ export function PostCardEditorial({ post }: { post: Post }) {
           style={{ color: 'var(--cat-accent)', backgroundColor: 'var(--cat-tint)' }}
         >
           <Icon className="h-[13px] w-[13px]" strokeWidth={2.2} aria-hidden />
-          {meta.label}
+          {meta.label[lang]}
         </span>
         <time className="text-[12.5px] tabular-nums text-muted-foreground" dateTime={post.date}>
           {formatDate(post.date)}
