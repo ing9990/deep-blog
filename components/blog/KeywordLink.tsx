@@ -39,10 +39,10 @@ export function KeywordLink({ href, children }: KeywordLinkProps) {
               sideOffset={6}
               className="w-[320px] p-4"
             >
-              <p className="text-sm font-semibold leading-tight text-foreground">
+              <p className="text-[length:var(--text-body)] font-semibold leading-tight text-foreground">
                 {entry.title[lang]}
               </p>
-              <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-muted-foreground">
+              <p className="mt-2 line-clamp-3 text-[length:var(--text-body-sm)] leading-relaxed text-muted-foreground">
                 {entry.summary[lang]}
               </p>
             </PopoverContent>

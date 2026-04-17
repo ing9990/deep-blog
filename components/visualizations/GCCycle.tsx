@@ -58,7 +58,7 @@ function computeSnapshots(): Snapshot[] {
     alive: new Set(['A', 'C', 'E']),
     garbage: new Set(['B', 'D']),
     moving: NONE, promoting: NONE,
-    note: 'Eden이 가득 찼습니다. Minor GC — 살아있는 객체(A, C, E)를 Mark합니다.',
+    note: 'Eden이 가득 찼습니다. Minor GC가 시작되어 살아있는 객체(A, C, E)를 Mark합니다.',
   })
 
   snaps.push({
@@ -128,7 +128,7 @@ function computeSnapshots(): Snapshot[] {
     alive: NONE, garbage: NONE,
     moving: new Set(['K', 'M', 'F']),
     promoting: new Set(['A', 'E']),
-    note: 'age 임계치 도달 — A와 E가 Old Generation으로 승격됩니다.',
+    note: 'age 임계치 도달. A와 E가 Old Generation으로 승격됩니다.',
   })
 
   snaps.push({
@@ -148,7 +148,7 @@ function computeSnapshots(): Snapshot[] {
     alive: new Set(['A', 'R']),
     garbage: new Set(['E', 'P', 'Q']),
     moving: NONE, promoting: NONE,
-    note: 'Old 임계치 도달 — Full GC. 전체 힙을 Mark합니다. Stop-the-World 발생.',
+    note: 'Old 임계치 도달. Full GC가 전체 힙을 Mark합니다. Stop-the-World 발생.',
   })
 
   snaps.push({

@@ -52,6 +52,43 @@
   --font-sans: var(--font-paperlogy), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
+  /* ------------------------------------------------------------------
+     Typography primitives — T-shirt scale. All sizes multiply through
+     --text-scale so html[data-font-size="..."] can shift the whole
+     scale with one variable. See docs/superpowers/specs/2026-04-18-
+     style-token-system-design.md for the taxonomy.
+     ------------------------------------------------------------------ */
+  --text-2xs: calc(10px * var(--text-scale, 1));
+  --text-xs:  calc(11px * var(--text-scale, 1));
+  --text-sm:  calc(12px * var(--text-scale, 1));
+  --text-md:  calc(13px * var(--text-scale, 1));
+  --text-base: calc(15px * var(--text-scale, 1));
+  --text-lg:  calc(17px * var(--text-scale, 1));
+  --text-xl:  calc(19px * var(--text-scale, 1));
+  --text-2xl: calc(22px * var(--text-scale, 1));
+  --text-3xl: calc(24px * var(--text-scale, 1));
+
+  /* Line-height primitives */
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  /* Letter-spacing (tracking) primitives */
+  --tracking-tightest: -0.02em;
+  --tracking-tighter:  -0.015em;
+  --tracking-tight:    -0.01em;
+  --tracking-wide:      0.08em;
+  --tracking-wider:     0.2em;
+  --tracking-widest:    0.3em;
+  --tracking-display:   0.35em;
+
+  /* Font-weight primitives */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 14px;
@@ -59,6 +96,10 @@
 }
 
 :root {
+  /* Font-scale multiplier — overridden by html[data-font-size="small"|"large"].
+     Default 1 ("normal") is the reference scale. */
+  --text-scale: 1;
+
   --background: #FFFFFF;
   --foreground: #09090B;
   --muted: #F4F4F5;
@@ -151,6 +192,97 @@
   --viz-highlight-border: #8B5CF6;
   --viz-highlight-bg:     #EDE9FE;
   --viz-highlight-fg:     #4C1D95;
+
+  /* ------------------------------------------------------------------
+     Typography semantic aliases — role-driven names. Consumers reference
+     these (e.g., text-[length:var(--text-body)]) so primitive shifts and
+     responsive overrides propagate without touching call sites.
+
+     Responsive values (--text-body, --text-h1, --text-h2, --text-h3,
+     --text-code-block) are re-declared in the @media (min-width: 768px)
+     block below. Non-responsive aliases appear only once here.
+     ------------------------------------------------------------------ */
+  --text-body:            var(--text-base);
+  --text-body-sm:         var(--text-md);
+  --text-meta:            var(--text-sm);
+  --text-caption:         var(--text-xs);
+  --text-hint:            var(--text-2xs);
+
+  --text-h1:              calc(28px * var(--text-scale, 1));
+  --text-h2:              var(--text-2xl);
+  --text-h3:              calc(18px * var(--text-scale, 1));
+  --text-h4:              var(--text-lg);
+
+  --text-menu:            var(--text-lg);
+  --text-nav-item:        var(--text-md);
+  --text-nav-header:      var(--text-xs);
+
+  --text-search-input:    var(--text-base);
+  --text-search-title:    var(--text-md);
+  --text-search-summary:  var(--text-sm);
+
+  --text-callout-body:    var(--text-base);
+  --text-callout-label:   var(--text-sm);
+
+  --text-code-block:      calc(13px * var(--text-scale, 1));
+  --text-code-inline:     0.9em;  /* ratio exception — stays relative to parent */
+
+  --text-button:          var(--text-md);
+  --text-badge:           var(--text-xs);
+  --text-settings-title:  var(--text-base);
+  --text-settings-header: 11.5px;  /* one-off exception: uppercase section label */
+
+  /* ------------------------------------------------------------------
+     Layout dimension tokens — fixed widths, sticky offsets, page pads,
+     content caps. Consumers reference via w-[var(--layout-*)] etc.
+     Only hardcoded LAYOUT literals are tokenized; Tailwind's default
+     spacing scale (p-*, gap-*, m-*) stays as-is.
+     ------------------------------------------------------------------ */
+  --layout-nav-width:      288px;      /* DocShell left rail (CategoryNav) */
+  --layout-toc-width:      224px;      /* DocShell right rail (TOC) */
+  --layout-content-gap:    2rem;       /* grid column gap */
+  --layout-header-height:  64px;       /* sticky header height */
+  --layout-sticky-offset:  5rem;       /* TOC/CategoryNav sticky top (was top-20) */
+  --layout-page-pad:       1rem;       /* mobile edge padding */
+  --layout-page-pad-md:    1.5rem;     /* md+ edge padding */
+  --layout-content-max:    46rem;      /* reading width cap */
+  --layout-panel-width:    300px;      /* SettingsPanel width */
+  --layout-popover-width:  18rem;      /* popover/KeywordLink default */
+
+  /* ------------------------------------------------------------------
+     Z-index tokens — named layers for overlapping UI. Replaces
+     scattered z-10/z-20/z-50/z-[100] hardcodes.
+     ------------------------------------------------------------------ */
+  --z-sticky:  20;      /* TOC, sticky header inner rails */
+  --z-header:  50;      /* page-level sticky header */
+  --z-nav:     10;      /* in-card badges, timeline bullet points */
+  --z-overlay: 40;      /* MobileOverlays search/menu */
+  --z-fab:     50;      /* SettingsFab floating button */
+  --z-fab-intro: calc(var(--z-fab) - 1);  /* One below FAB so button stays clickable */
+  --z-panel:   50;      /* SettingsPanel (sibling of fab) */
+  --z-popover: 50;      /* shadcn popover/select content */
+  --z-hero:    100;     /* HeroIntro session-once overlay (top of stack) */
+  --z-toast:   60;      /* reserved for future toasts */
+
+  /* ------------------------------------------------------------------
+     Radius semantic aliases — role-based names mapping to the existing
+     shadcn primitive scale (--radius-sm/base/lg/xl in @theme inline).
+     ------------------------------------------------------------------ */
+  --radius-chip:   var(--radius-sm);   /* 6px  — tag chips, small pills */
+  --radius-card:   var(--radius);      /* 10px — post cards, inputs */
+  --radius-panel:  var(--radius-lg);   /* 14px — callouts, popovers, settings panel */
+  --radius-overlay: var(--radius-xl);  /* 20px — hero, modals */
+
+  /* ------------------------------------------------------------------
+     Shadow tokens — elevation-based names for the two card elevation
+     levels and the floating FAB. Values match current literal rgba
+     shadows for bit-exact visual preservation. Dark-mode uses the same
+     strings (black-based alpha works acceptably on both themes — add
+     [data-theme="dark"] overrides only if visual regression appears).
+     ------------------------------------------------------------------ */
+  --shadow-card:        0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover:  0 4px 16px rgba(0, 0, 0, 0.05);
+  --shadow-fab:         0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
 [data-theme="dark"] {
@@ -241,6 +373,21 @@
   --viz-highlight-fg:     #E9D5FF;
 }
 
+/* ------------------------------------------------------------------
+   Font-scale overrides — user preference via Settings > 폰트 크기.
+   Written to html[data-font-size] by the SettingsProvider sync effect
+   (Task 9) and a pre-hydration script in app/layout.tsx (Task 10,
+   for FOUC prevention).
+
+   "normal" is the default (1.0). Small shrinks by 8 %, large grows by
+   10 %. The multiplier propagates through every primitive declared in
+   @theme inline (see Task 1) and every responsive literal in the
+   :root / @media blocks (Tasks 2 & 4) that uses calc(Npx * scale).
+   ------------------------------------------------------------------ */
+html[data-font-size="small"]  { --text-scale: 0.92; }
+html[data-font-size="normal"] { --text-scale: 1; }
+html[data-font-size="large"]  { --text-scale: 1.10; }
+
 html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -269,15 +416,15 @@ body {
      Korean reading. Global default (Paperlogy) stays on everything else. */
   font-family: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-relaxed);
   color: var(--foreground);
 }
 
 .prose-kr h2 {
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: var(--text-h2);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
   letter-spacing: -0.01em;
   margin-top: 3em;
   margin-bottom: 1em;
@@ -294,9 +441,9 @@ body {
 }
 
 .prose-kr h3 {
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--text-h3);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
   margin-top: 1.6em;
   margin-bottom: 0.6em;
 }
@@ -345,8 +492,8 @@ body {
 
 .prose-kr code:not(pre code) {
   font-family: var(--font-mono);
-  font-size: 0.88em;
-  font-weight: 500;
+  font-size: var(--text-code-inline);
+  font-weight: var(--weight-medium);
   color: var(--code-inline-fg);
   background-color: color-mix(in oklab, var(--code-inline-fg) 10%, var(--background));
   padding: 0.2em 0.45em;
@@ -366,8 +513,8 @@ body {
   border-radius: var(--radius);
   background-color: var(--muted);
   overflow-x: auto;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--text-code-block);
+  line-height: var(--leading-normal);
 }
 
 .prose-kr ul,
@@ -504,7 +651,7 @@ body {
 }
 
 .prose-kr table code:not(pre code) {
-  font-size: 0.88em;
+  font-size: var(--text-code-inline);
 }
 
 /* Numeric columns: right-align cells whose first inline child is a
@@ -517,9 +664,16 @@ body {
 }
 
 @media (min-width: 768px) {
-  .prose-kr { font-size: 17px; }
-  .prose-kr h2 { font-size: 24px; }
-  .prose-kr h3 { font-size: 19px; }
+  :root {
+    /* Responsive semantic re-declarations. Primitives already pick up
+       --text-scale; these aliases swap to the larger size at md+. */
+    --text-body:       var(--text-lg);
+    --text-h1:         calc(32px * var(--text-scale, 1));
+    --text-h2:         var(--text-3xl);
+    --text-h3:         var(--text-xl);
+    --text-code-block: calc(14px * var(--text-scale, 1));
+  }
+
   .prose-kr table { font-size: 15px; }
   .prose-kr table th,
   .prose-kr table td { padding: 14px 18px; }
@@ -655,7 +809,7 @@ body {
   border-radius: 0;
   background-color: transparent;
   overflow-x: auto;
-  font-size: 14px;
+  font-size: var(--text-code-block);
   line-height: 1.65;
 }
 
@@ -794,6 +948,52 @@ body {
 @keyframes panel-in {
   0% { opacity: 0; transform: scale(0.95) translateY(8px); }
   100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ================================================================
+   SettingsFab orbit intro — icons enter, hold, then absorb into FAB
+   ================================================================ */
+
+@keyframes fab-orbit-full {
+  0% {
+    transform: translate(var(--start-x, 0), var(--start-y, 0)) scale(0.6);
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  31.25% {
+    /* 500ms / 1600ms = 31.25%. Entry complete, settled at orbit position */
+    transform: translate(var(--end-x, 0), var(--end-y, 0)) scale(1);
+    opacity: 1;
+    animation-timing-function: linear;
+  }
+  62.5% {
+    /* 1000ms / 1600ms = 62.5%. Hold ends, absorb begins */
+    transform: translate(var(--end-x, 0), var(--end-y, 0)) scale(1);
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  100% {
+    transform: translate(0, 0) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes fab-orbit-static {
+  0%   { transform: translate(var(--end-x, 0), var(--end-y, 0)) scale(0.85); opacity: 0; }
+  15%  { transform: translate(var(--end-x, 0), var(--end-y, 0)) scale(1);    opacity: 1; }
+  85%  { transform: translate(var(--end-x, 0), var(--end-y, 0)) scale(1);    opacity: 1; }
+  100% { transform: translate(var(--end-x, 0), var(--end-y, 0)) scale(0.85); opacity: 0; }
+}
+
+@keyframes fab-ring-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.35;
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
 }
 
 /* Category card tint — dark mode uses --cat-dark-tint */

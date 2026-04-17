@@ -21,13 +21,13 @@ export function PostMeta({ tags, date, readingTime }: PostMetaProps) {
           <Link
             key={tag}
             href={`/tags/${encodeURIComponent(tag)}`}
-            className="text-xs font-medium text-primary hover:underline"
+            className="text-[length:var(--text-meta)] font-medium text-primary hover:underline"
           >
             #{tag}
           </Link>
         ))}
       </div>
-      <div className="mt-3 flex items-center gap-2 text-[13px] text-muted-foreground">
+      <div className="mt-3 flex items-center gap-2 text-[length:var(--text-meta)] text-muted-foreground">
         <time dateTime={date}>{formattedDate}</time>
         <span aria-hidden="true">·</span>
         <ReadingTime minutes={readingTime} />

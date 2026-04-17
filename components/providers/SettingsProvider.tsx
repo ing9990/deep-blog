@@ -11,15 +11,18 @@ import {
 
 export type CardLayout = 'editorial' | 'timeline' | 'floating'
 export type Language = 'en' | 'ko'
+export type FontSize = 'small' | 'normal' | 'large'
 
 export interface Settings {
   cardLayout: CardLayout
   language: Language
+  fontSize: FontSize
 }
 
 const DEFAULT_SETTINGS: Settings = {
   cardLayout: 'timeline',
-  language: 'ko',
+  language: 'en',
+  fontSize: 'normal',
 }
 
 const STORAGE_KEY = 'deep-settings'
@@ -48,6 +51,12 @@ function normalizeCardLayout(value: unknown): CardLayout {
     : 'timeline'
 }
 
+export function normalizeFontSize(value: unknown): FontSize {
+  return value === 'small' || value === 'normal' || value === 'large'
+    ? value
+    : 'normal'
+}
+
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -56,6 +65,7 @@ function loadSettings(): Settings {
     return {
       cardLayout: normalizeCardLayout(parsed.cardLayout),
       language: normalizeLanguage(parsed.language),
+      fontSize: normalizeFontSize(parsed.fontSize),
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -76,6 +86,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setSettings(loadSettings())
   }, [])
+
+  useEffect(() => {
+    document.documentElement.dataset.fontSize = settings.fontSize
+  }, [settings.fontSize])
 
   const updateSetting = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {

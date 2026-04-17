@@ -38,43 +38,43 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
 
         {showDate ? (
           <>
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-border bg-background text-[13px] font-bold text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
+            <div className="relative z-[var(--z-nav)] flex h-10 w-10 items-center justify-center rounded-full border-2 border-border bg-background text-[length:var(--text-meta)] font-bold text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
               {day}
             </div>
-            <span className="mt-1 text-[10.5px] font-medium uppercase tracking-widest text-muted-foreground">
+            <span className="mt-1 text-[length:var(--text-meta)] font-medium uppercase tracking-widest text-muted-foreground">
               {month}
             </span>
           </>
         ) : (
-          <div className="relative z-10 mt-[15px] h-2.5 w-2.5 rounded-full border-[1.5px] border-border bg-background transition-colors group-hover:border-primary" />
+          <div className="relative z-[var(--z-nav)] mt-[15px] h-2.5 w-2.5 rounded-full border-[1.5px] border-border bg-background transition-colors group-hover:border-primary" />
         )}
       </div>
 
       {/* Card */}
       <Link
         href={`/posts/${post.slug}`}
-        className="block min-w-0 flex-1 rounded-xl border border-border bg-background px-[22px] py-[18px] transition-all hover:border-border-strong hover:shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
+        className="block min-w-0 flex-1 rounded-xl border border-border bg-background px-[22px] py-[18px] transition-all hover:border-border-strong hover:shadow-[var(--shadow-card)]"
       >
         {/* Category */}
         <div className="mb-2 flex items-center gap-2">
           <span
-            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[7px]"
+            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-chip)]"
             style={{ backgroundColor: 'var(--cat-tint)' }}
           >
             <Icon className="h-[14px] w-[14px]" style={{ color: 'var(--cat-accent)' }} strokeWidth={2.2} aria-hidden />
           </span>
-          <span className="text-[12px] font-semibold" style={{ color: 'var(--cat-accent)' }}>
+          <span className="text-[length:var(--text-caption)] font-semibold" style={{ color: 'var(--cat-accent)' }}>
             {meta.label[lang]}
           </span>
         </div>
 
         {/* Title */}
-        <h2 className="text-[16.5px] font-semibold leading-[1.45] tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary">
+        <h2 className="text-[length:var(--text-h4)] font-semibold leading-[var(--leading-snug)] tracking-[var(--tracking-tight)] text-foreground transition-colors group-hover:text-primary">
           {post.title[lang]}
         </h2>
 
         {/* Summary */}
-        <p className="mt-[5px] line-clamp-2 text-[14px] leading-[1.6] text-muted-foreground">
+        <p className="mt-[5px] line-clamp-2 text-[length:var(--text-body-sm)] leading-[var(--leading-normal)] text-muted-foreground">
           {post.summary[lang]}
         </p>
 
@@ -82,7 +82,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
         {post.tags.length > 0 && (
           <div className="mt-2.5 flex gap-[5px]">
             {post.tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="text-[11px] font-medium text-muted-foreground">
+              <span key={tag} className="text-[length:var(--text-badge)] font-medium text-muted-foreground">
                 #{tag}
               </span>
             ))}

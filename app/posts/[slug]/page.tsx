@@ -63,7 +63,7 @@ export default async function PostPage({
     <DocShell toc={tocItems} currentSlug={slug}>
       <Link
         href="/"
-        className="mb-10 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="mb-10 inline-flex items-center gap-1.5 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:text-foreground"
       >
         ← 목록으로
       </Link>

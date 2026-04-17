@@ -44,7 +44,7 @@ export function StepController({
   return (
     <div className={cn('mt-4 space-y-3', className)}>
       {stepDescription && (
-        <div className="rounded-[10px] border border-border bg-muted/30 p-3 text-[13px] leading-relaxed text-foreground">
+        <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-3 text-[length:var(--text-meta)] leading-relaxed text-foreground">
           <span className="font-semibold">
             Step {step} / {lastStep}:
           </span>{' '}
@@ -108,7 +108,7 @@ function ControlButton({ onClick, disabled, ariaLabel, children }: ControlButton
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-card)] border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>
@@ -138,7 +138,7 @@ function ProgressBar({ progress, step, totalSteps, onJump }: ProgressBarProps) {
       aria-valuenow={step}
       aria-valuemin={0}
       aria-valuemax={totalSteps - 1}
-      aria-label="진행 상황 — 클릭해서 점프"
+      aria-label="진행 상황, 클릭해서 점프"
     >
       <span
         className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-300 motion-reduce:transition-none"

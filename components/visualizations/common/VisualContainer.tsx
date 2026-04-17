@@ -25,15 +25,15 @@ export function VisualContainer({
   return (
     <figure
       className={cn(
-        'not-prose my-8 rounded-[14px] border border-border bg-background p-5',
+        'not-prose my-8 rounded-[var(--radius-panel)] border border-border bg-background p-5',
         className,
       )}
     >
       <figcaption className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-[length:var(--text-h4)] font-semibold text-foreground">{title}</p>
           {description && (
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+            <p className="mt-1 text-[length:var(--text-caption)] leading-relaxed text-muted-foreground">
               {description}
             </p>
           )}
@@ -42,7 +42,7 @@ export function VisualContainer({
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[var(--radius-card)] border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="초기 상태로 리셋"
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />

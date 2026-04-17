@@ -16,7 +16,7 @@ export function PostCardFloating({ post }: { post: Post }) {
   return (
     <Link
       href={`/posts/${post.slug}`}
-      className="group grid grid-cols-[44px_1fr] items-start gap-4 rounded-[14px] border border-border bg-background p-5 transition-all hover:border-border-strong hover:shadow-[0_4px_16px_rgba(0,0,0,0.05)]"
+      className="group grid grid-cols-[44px_1fr] items-start gap-4 rounded-[var(--radius-panel)] border border-border bg-background p-5 transition-all hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
       style={categoryStyle(post.category)}
       data-cat-tinted=""
     >
@@ -37,21 +37,21 @@ export function PostCardFloating({ post }: { post: Post }) {
       <div className="min-w-0">
         {/* Top row */}
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-[12px] font-semibold" style={{ color: 'var(--cat-accent)' }}>
+          <span className="text-[length:var(--text-caption)] font-semibold" style={{ color: 'var(--cat-accent)' }}>
             {meta.label[lang]}
           </span>
-          <time className="text-[12px] tabular-nums text-muted-foreground" dateTime={post.date}>
+          <time className="text-[length:var(--text-meta)] tabular-nums text-muted-foreground" dateTime={post.date}>
             {formatDate(post.date, lang)}
           </time>
         </div>
 
         {/* Title */}
-        <h2 className="text-[17px] font-semibold leading-[1.4] tracking-[-0.015em] text-foreground transition-colors group-hover:text-primary">
+        <h2 className="text-[length:var(--text-h4)] font-semibold leading-[var(--leading-snug)] tracking-[var(--tracking-tighter)] text-foreground transition-colors group-hover:text-primary">
           {post.title[lang]}
         </h2>
 
         {/* Summary */}
-        <p className="mt-[5px] line-clamp-2 text-[14px] leading-[1.6] text-muted-foreground">
+        <p className="mt-[5px] line-clamp-2 text-[length:var(--text-body-sm)] leading-[var(--leading-normal)] text-muted-foreground">
           {post.summary[lang]}
         </p>
 
@@ -61,7 +61,7 @@ export function PostCardFloating({ post }: { post: Post }) {
             {post.tags.slice(0, 3).map((tag) => (
               <span
                 key={tag}
-                className="rounded bg-muted px-[7px] py-[2px] text-[11px] font-medium text-muted-foreground"
+                className="rounded bg-muted px-[7px] py-[2px] text-[length:var(--text-badge)] font-medium text-muted-foreground"
               >
                 #{tag}
               </span>

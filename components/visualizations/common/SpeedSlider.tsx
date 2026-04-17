@@ -17,7 +17,7 @@ export function SpeedSlider({ speed, onChange, className }: SpeedSliderProps) {
   return (
     <div
       className={cn(
-        'flex items-center gap-2 text-[11px] text-muted-foreground',
+        'flex items-center gap-2 text-[length:var(--text-caption)] text-muted-foreground',
         className,
       )}
       role="group"

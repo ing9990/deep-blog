@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
+import Script from 'next/script'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { MobileUIProvider } from '@/components/providers/MobileUIProvider'
 import { SettingsProvider } from '@/components/providers/SettingsProvider'
@@ -81,6 +82,9 @@ export default function RootLayout({
   return (
     <html lang="ko" className={`${paperlogy.variable} ${pretendard.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body>
+        <Script id="font-size-init" strategy="beforeInteractive">
+          {`try{var s=localStorage.getItem('deep-settings');if(s){var f=JSON.parse(s).fontSize;if(f==='small'||f==='large'||f==='normal'){document.documentElement.dataset.fontSize=f}}}catch(e){}`}
+        </Script>
         <ThemeProvider>
           <MobileUIProvider posts={clientPosts}>
             <SettingsProvider>

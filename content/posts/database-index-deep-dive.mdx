@@ -44,9 +44,9 @@ draft: false
 
 흔한 오해 몇 가지를 짚겠습니다:
 
-- **"카디널리티가 낮은 컬럼은 인덱스에 쓸모없다"** — 단독 인덱스에서는 맞지만, 복합 인덱스의 중간 등호 컬럼으로는 매우 유효합니다
-- **"PK 조회는 $O(1)$이다"** — 클러스터드 인덱스도 B+Tree이므로 $O(\log n)$입니다. 2,100만 건이면 3~4회 페이지 접근이 필요합니다
-- **"커버링 인덱스는 항상 좋다"** — 컬럼이 20개인 테이블에 커버링 인덱스를 걸면 인덱스 크기가 테이블에 육박합니다
+- **"카디널리티가 낮은 컬럼은 인덱스에 쓸모없다"**: 단독 인덱스에서는 맞지만, 복합 인덱스의 중간 등호 컬럼으로는 매우 유효합니다
+- **"PK 조회는 $O(1)$이다"**: 클러스터드 인덱스도 B+Tree이므로 $O(\log n)$입니다. 2,100만 건이면 3~4회 페이지 접근이 필요합니다
+- **"커버링 인덱스는 항상 좋다"**: 컬럼이 20개인 테이블에 커버링 인덱스를 걸면 인덱스 크기가 테이블에 육박합니다
 
 ## 동작 원리
 
@@ -69,7 +69,7 @@ draft: false
 
 이 비용 격차가 B+Tree의 모든 설계를 결정합니다:
 
-**높은 fanout**: 이진 트리는 노드당 자식이 2개뿐이라 트리 높이가 $\log_2 n$입니다. 2,100만 건이면 약 24레벨 — 한 건 찾는 데 24번의 Random I/O가 필요합니다. B+Tree는 노드 하나를 **디스크 페이지(보통 16KB)**에 맞춰 수백 개의 키를 담으므로 fanout이 수백입니다. $\log_{200} 21000000 \approx 3.2$ — 불과 3~4레벨이면 충분합니다.
+**높은 fanout**: 이진 트리는 노드당 자식이 2개뿐이라 트리 높이가 $\log_2 n$입니다. 2,100만 건이면 약 24레벨이고, 한 건 찾는 데 24번의 Random I/O가 필요합니다. B+Tree는 노드 하나를 **디스크 페이지(보통 16KB)**에 맞춰 수백 개의 키를 담으므로 fanout이 수백입니다. $\log_{200} 21000000 \approx 3.2$이므로 불과 3~4레벨이면 충분합니다.
 
 **리프 노드 연결 리스트**: 범위 스캔(`WHERE created_at BETWEEN ? AND ?`)에서 트리를 매번 루트부터 타고 내려가면 Random I/O가 범위 크기만큼 발생합니다. 리프 노드를 양방향 연결 리스트로 연결하면 한 번만 트리를 타고 내려간 뒤 **연속된 리프를 Sequential I/O로 쭉 읽을 수 있습니다**.
 
@@ -81,7 +81,7 @@ InnoDB에서 테이블은 **그 자체가 클러스터드 인덱스**입니다. 
 
 세컨더리 인덱스는 별도의 B+Tree입니다. 리프 노드에는 **인덱스 키 컬럼 + PK 값**만 저장합니다. 실제 행 데이터가 필요하면 이 PK로 **클러스터드 인덱스를 다시 탐색**해야 합니다:
 
-![세컨더리 인덱스의 이중 탐색 — 인덱스 리프에서 PK를 꺼낸 뒤 클러스터드 인덱스를 재탐색하는 과정](/images/database-index-deep-dive-dual-lookup.svg)
+<SecondaryIndexLookup />
 
 이 "이중 탐색"의 비용은 다음과 같습니다:
 
@@ -106,10 +106,10 @@ InnoDB에서 테이블은 **그 자체가 클러스터드 인덱스**입니다. 
 
 **둘째, `status` 조건 없이 `ORDER BY created_at DESC`만 하면** 전체 엔트리를 읽어야 하는데, `created_at`이 status 그룹별로 분리되어 있어 전역 정렬이 깨져 있습니다. **filesort가 필요합니다.** 이것이 "중간 컬럼 건너뛰기 문제"입니다.
 
-### 등호 먼저, 정렬 마지막 — 복합 인덱스의 황금 규칙
+### 복합 인덱스의 황금 규칙
 
 <Callout type="warning" title="복합 인덱스 컬럼 순서 원칙">
-  등호(`=`) 조건 컬럼을 선두에, 정렬(`ORDER BY`) 또는 범위(`BETWEEN`, `>=`) 컬럼을 마지막에 배치합니다. 등호 컬럼끼리의 카디널리티 차이는 중요하지 않습니다 — 어차피 `=` 조건은 정확히 하나의 파티션으로 점프하기 때문입니다.
+  등호(`=`) 조건 컬럼을 선두에, 정렬(`ORDER BY`) 또는 범위(`BETWEEN`, `>=`) 컬럼을 마지막에 배치합니다. 등호 컬럼끼리의 카디널리티 차이는 중요하지 않습니다. `=` 조건은 정확히 하나의 파티션으로 점프하기 때문입니다.
 </Callout>
 
 이 원칙을 이커머스 시나리오에 적용해봅시다:
@@ -159,7 +159,7 @@ LIMIT 20;
 
 | 테이블 | 인덱스 | 이유 |
 |---|---|---|
-| `follows` | `(follower_id, followee_id)` | 커버링 인덱스 — followee 목록을 인덱스만으로 |
+| `follows` | `(follower_id, followee_id)` | 커버링 인덱스 (followee 목록을 인덱스만으로) |
 | `posts` | `(author_id, created_at DESC)` | JOIN 조건 + 각 author 내 정렬 |
 
 `follows` 테이블은 컬럼이 3개뿐이므로 커버링 인덱스의 비용이 낮습니다. `posts` 테이블은 `author_id`로 점프한 뒤 `created_at` 내림차순으로 스캔합니다.
@@ -231,7 +231,7 @@ LIMIT 20 OFFSET 10000;  -- 10,001건을 읽고 10,000건 버림 // [!code highli
 
 ## 참고 자료
 
-- [Use The Index, Luke — Anatomy of an Index](https://use-the-index-luke.com/sql/anatomy)
-- [MySQL 8.0 Reference Manual — InnoDB Index Types](https://dev.mysql.com/doc/refman/8.0/en/innodb-index-types.html)
-- [Markus Winand — SQL Performance Explained](https://sql-performance-explained.com/)
-- [Percona — Covering Index and Covering Query](https://www.percona.com/blog/covering-index-and-covering-query/)
+- [Use The Index, Luke: Anatomy of an Index](https://use-the-index-luke.com/sql/anatomy)
+- [MySQL 8.0 Reference Manual: InnoDB Index Types](https://dev.mysql.com/doc/refman/8.0/en/innodb-index-types.html)
+- [Markus Winand, SQL Performance Explained](https://sql-performance-explained.com/)
+- [Percona: Covering Index and Covering Query](https://www.percona.com/blog/covering-index-and-covering-query/)

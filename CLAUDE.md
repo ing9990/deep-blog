@@ -18,7 +18,7 @@
 
 ## 2. 스택
 
-Next.js 15 App Router · TypeScript strict · Velite (MDX → type-safe) · Tailwind v4 + shadcn/ui · Shiki · KaTeX · Vitest · pnpm 9.15.4 (corepack pinned, Node 23.5 keyid 버그 회피용).
+Next.js 15 App Router · TypeScript strict · Velite (MDX → type-safe) · Tailwind v4 + shadcn/ui · Shiki · KaTeX · Vitest · **Stylelint**(CSS 토큰 강제) · ESLint `no-restricted-syntax`(className 토큰 강제) · pnpm 9.15.4 (corepack pinned, Node 23.5 keyid 버그 회피용).
 
 ## 3. 디렉토리 (top-level)
 
@@ -38,7 +38,8 @@ velite.config.ts      # Zod 스키마 + 파이프라인
 pnpm dev                   # predev: 키워드 맵 자동 재생성
 pnpm build                 # prebuild: 키워드 맵 + Velite
 pnpm type-check            # tsc --noEmit
-pnpm lint                  # next lint
+pnpm lint                  # next lint + stylelint (토큰 강제 포함)
+pnpm lint:fix              # 자동 수정 (next lint --fix + stylelint --fix)
 pnpm test                  # velite + vitest
 pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 ```
@@ -58,6 +59,15 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 6. `content/posts/*.mdx` 직접 `Write` 금지 — blog-writer 스킬로.
 7. 동작/상태 변화가 핵심인 개념을 텍스트만으로 설명 금지 (시각화 필수).
 8. 파괴적 git 명령(`push --force`, `reset --hard`, `clean -f`) + `--no-verify` 훅 우회 금지.
+9. **Style 하드코딩 금지** — ESLint + Stylelint가 차단:
+   - Typography: `text-[Npx]` / `text-xs|sm|base|lg|xl|2xl|3xl|4xl` / CSS `font-size: Npx` → `--text-*` 토큰
+   - Letter-spacing/line-height: `tracking-[Nem]` / `leading-[N]` arbitrary → `--tracking-*` / `--leading-*` 토큰
+   - Layout 상수: `w-[288px]` / `w-[224px]` / `w-[300px]` / `top-20` 등 → `--layout-*` 토큰
+   - Z-index: `z-[N]` / `z-10|20|40|50|60|100` → `--z-*` 토큰
+   - Radius: `rounded-[Npx]` → `--radius-chip|card|panel|overlay` (Tailwind named `rounded-md|lg|xl|2xl|full`는 허용)
+   - Hex color: `bg-[#...]` / `text-[#...]` / `border-[#...]` / CSS `color: #...` → shadcn semantic 또는 `--keyword`/`--callout-*`/`--code-*`/`--viz-*`
+   - Shadow: `shadow-[0_...rgba...]` → `--shadow-card|card-hover|fab`
+   예외 (자동 whitelist): `components/visualizations/{BTreeInsert,QuickSort,...}` SVG 로직 상수, `em`/`%` 상대 단위, primitive 정의 블록(`@theme inline`, `:root`, `[data-theme="dark"]`, `html[data-font-size="..."]`), 아이콘 픽셀 크기(`h-[22px] w-[22px]`), 단일 사용 리터럴(HeroIntro radial gradient 등). 토큰 전체 목록: `docs/design-tokens.md`.
 
 ## 6. 변경 금지 결정 (비자명 불변식)
 
@@ -76,6 +86,7 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 - **`CategoryNav` 모든 `<details>`는 기본 `open`**. 현재 글 카테고리만 여는 동작 폐기.
 - **Hero Intro (`components/blog/HeroIntro.tsx`)**: 세션 1회(`sessionStorage['deep-hero-seen']`), 4단계 progressive highlight, **재진입 경로 없음(단방향)**. 트랙패드 내성 `createBurstDetector` (`IDLE_GAP=120 / COMMIT_DELTA=220 / COOLDOWN=420`). **Dismiss 타이머는 `dismissScheduledRef` 가드 + 이펙트 deps `[stage, show]`만**. `dismissing`을 deps에 넣으면 cleanup이 `clearTimeout`으로 `setShow(false)`를 영구 취소 → **body scroll 영구 잠금 회귀**.
 - **폰트 3-way split**: `--font-sans` = Paperlogy(9 weights TTF) / `.prose-kr`만 `--font-pretendard` 오버라이드 / `--font-mono` = JetBrains Mono. `app/layout.tsx`가 세 `next/font/local` 선언 동시 보유. 통합/제거 금지.
+- **Style 토큰 시스템 (PR1–PR4)**: `app/globals.css`에 2-tier — (1) `@theme inline` primitives (typography `--text-*` scale + `--leading-*` + `--weight-*` + `--tracking-*` + shadcn `--radius-*`) (2) `:root` semantic aliases. 반응형은 `@media (min-width: 768px) :root { }`에서 semantic 재선언. **카테고리**: typography, layout(`--layout-nav-width/toc-width/sticky-offset/...`), z-index(`--z-header/fab/panel/popover/hero/...`), radius semantic(`--radius-chip/card/panel/overlay`), shadow(`--shadow-card/card-hover/fab`), colors(shadcn + `--callout-*` + `--keyword` + `--code-*` + `--viz-*`). **사용자 조정 font-scale**: `html[data-font-size="small|normal|large"]`가 `--text-scale`을 `0.92 / 1 / 1.10`로 오버라이드. `SettingsProvider`의 `fontSize` 필드 → `document.documentElement.dataset.fontSize` effect 동기화, FOUC 차단은 `app/layout.tsx`의 `next/script strategy="beforeInteractive"`. 기본값 `normal`. **강제**: `.eslintrc.json`의 `no-restricted-syntax` (7 regex)  + `.stylelintrc.json`의 `declaration-property-value-disallowed-list`가 `pnpm lint`에서 위반 차단. 새 토큰 프로토콜: primitive → semantic alias → `docs/design-tokens.md` 표 업데이트 → 필요 시 CLAUDE.md §6에 불변식 추가. 전체 참조: `docs/design-tokens.md`.
 - **Category 아이콘은 `lib/category-icons.ts`에 분리**. `lib/categories.ts`에 `lucide-react` import 금지 (velite가 로드하는 서버 번들 오염).
 - shadcn 토큰(`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--ring`, `--accent`) + 확장(`--keyword`, `--keyword-bg`, `--code-inline-fg`, `--border-strong`, `--viz-*`). 다크모드는 `next-themes` `attribute="data-theme"` 고정 + Tailwind `darkMode: ['selector', '[data-theme="dark"]']`.
 - **인라인 요소 3색 체계**: 일반 링크=blue(`--primary`) / 키워드 링크=indigo(`--keyword` + `.keyword-link` 클래스) / 인라인 코드=teal(`--code-inline-fg` 텍스트 + 10% 틴트 배경). 세 색상 영역 혼용 금지.
@@ -85,7 +96,7 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 - Shiki 라인 하이라이트는 `.prose-kr .highlighted` 클래스 (`@shikijs/transformers@4`는 className 생성, data-* 아님).
 - MDX 테이블은 `components/mdx/components.tsx`의 `table` override가 자동 `.table-wrapper` div로 래핑.
 - **`.prose-kr h2` 구분선**: 모든 H2 상단에 `border-top: 1px solid var(--border)` + `margin-top: 3em` + `padding-top: 1.5em` 자동 적용. 섹션 전환마다 시각적 호흡을 제공한다. MDX 본문에 수동 `---`(thematic break) 삽입 금지 — 이중 구분선 회귀.
-- **MDX `<Tabs>` / `<Tab>` 자식 식별은 duck-typing**: `components/mdx/tabs-utils.ts`의 `extractTabs`는 `props.label`이 string인 React element만 Tab으로 취급한다. `type === Tab` 레퍼런스 비교나 symbol-on-function 패턴으로 갈아끼우지 말 것 — Server Component(MDXContent)에서 client `<Tabs>`로 children이 serialize될 때 `type`이 client module reference로 바뀌어 식별 실패(결과: SSR에서 Tabs 전체가 `null`). props는 RSC 경계를 깨끗이 round-trip한다.
+- **MDX `<Tabs>`는 Server Component, `<TabsView>`는 Client Component로 분리 유지**. `Tabs`(`components/mdx/Tabs.tsx`)가 서버에서 `extractTabs(children)`로 Tab을 추출한 뒤 `<TabsView tabs={...}>`(`components/mdx/TabsView.tsx`)에 배열로 넘긴다. `Tabs`에 `'use client'`를 다시 붙이면 RSC 경계에서 children이 직렬화되고, 앞 Tab의 Shiki 코드 블록이 스트림 청크를 분할하는 순간 뒤 Tab이 `{$$typeof: react.lazy, _payload: Promise<pending>}` lazy reference로 도착해 **두 번째 탭이 조용히 사라진다**(trigger/content 미생성). `extractTabs`는 duck-typing(`props.label`이 string)만 유지 — `type === Tab` 레퍼런스 비교로 갈아끼우지 말 것.
 - **`TabsGroupProvider`는 `components/mdx/MDXContent.tsx` 최상위 1개만**. 블로그 레이아웃(`app/layout.tsx` 등) 상위로 올리면 포스트 간 `group` state leak이 발생한다. 포스트 = 스코프 1개.
 
 ### 검색 / 필터

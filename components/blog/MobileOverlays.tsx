@@ -164,7 +164,7 @@ function SearchDialog() {
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="search"
-            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-sm"
+            className="min-w-0 flex-1 bg-transparent text-[length:var(--text-search-input)] outline-none placeholder:text-muted-foreground"
           />
           <button
             type="button"
@@ -177,7 +177,7 @@ function SearchDialog() {
         </div>
         <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
           {results.length === 0 ? (
-            <li className="p-6 text-center text-sm text-muted-foreground">
+            <li className="p-6 text-center text-[length:var(--text-body-sm)] text-muted-foreground">
               검색 결과가 없습니다.
             </li>
           ) : (
@@ -188,10 +188,10 @@ function SearchDialog() {
                   onClick={handleSelect}
                   className="block rounded-md px-3 py-3 transition-colors hover:bg-muted active:bg-muted"
                 >
-                  <div className="text-sm font-medium text-foreground">
+                  <div className="text-[length:var(--text-search-title)] font-medium text-foreground">
                     {post.title[lang]}
                   </div>
-                  <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                  <div className="mt-0.5 line-clamp-1 text-[length:var(--text-search-summary)] text-muted-foreground">
                     {post.summary[lang]}
                   </div>
                 </Link>

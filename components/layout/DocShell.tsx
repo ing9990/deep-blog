@@ -32,16 +32,16 @@ export function DocShell({
         currentSlug={currentSlug ?? null}
       />
       <div className="mx-auto max-w-screen-2xl pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] sm:pl-[max(env(safe-area-inset-left),1.5rem)] sm:pr-[max(env(safe-area-inset-right),1.5rem)] md:pl-[max(env(safe-area-inset-left),2rem)] md:pr-[max(env(safe-area-inset-right),2rem)]">
-        <div className="grid grid-cols-1 lg:grid-cols-[288px_minmax(0,1fr)_224px] lg:gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-[var(--layout-nav-width)_minmax(0,1fr)_var(--layout-toc-width)] lg:gap-12">
           {leftSlot ? (
             <div className="hidden lg:block">
-              <div className="sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto py-16 pr-2">
+              <div className="sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
                 {leftSlot}
               </div>
             </div>
           ) : showCategoryNav ? (
             <div className="hidden lg:block">
-              <div className="sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto py-16 pr-2">
+              <div className="sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
                 <CategoryNav posts={posts} currentSlug={currentSlug} />
               </div>
             </div>
@@ -53,7 +53,7 @@ export function DocShell({
 
           {hasToc ? (
             <aside className="hidden lg:block" aria-label="목차 사이드바">
-              <div className="sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto py-16 pr-2">
+              <div className="sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
                 <TableOfContents items={toc!} />
               </div>
             </aside>

@@ -16,7 +16,7 @@ category: language
 draft: false
 ---
 
-C/C++에서 메모리를 직접 관리해본 개발자라면 `free` 누락으로 인한 메모리 누수나 Dangling Pointer의 고통을 알고 있습니다. JVM의 Garbage Collector는 이 책임을 런타임으로 옮겨 개발자를 해방시킵니다. 하지만 공짜는 아닙니다 — GC가 가져가는 대가를 이해해야 합니다.
+C/C++에서 메모리를 직접 관리해본 개발자라면 `free` 누락으로 인한 메모리 누수나 Dangling Pointer의 고통을 알고 있습니다. JVM의 Garbage Collector는 이 책임을 런타임으로 옮겨 개발자를 해방시킵니다. 하지만 공짜는 아닙니다. GC가 가져가는 대가를 이해해야 합니다.
 
 <Callout type="info" title="이 글의 학습 목표">
   1. JVM GC가 왜 필요하고 어떤 문제를 해결하는지 이해한다
@@ -30,11 +30,11 @@ C/C++에서 메모리를 직접 관리해본 개발자라면 `free` 누락으로
 
 JVM에서는 `new`로 객체를 생성하지만 `free`를 직접 호출하지 않습니다. 대신 GC가 주기적으로 힙을 순회하면서 아무도 참조하지 않는 객체를 찾아 메모리를 반환합니다.
 
-핵심은 **도달 가능성** (Reachability)입니다. GC Root — 스택 프레임의 로컬 변수, 스태틱 필드, JNI 참조 — 에서 출발해 참조 체인을 따라 도달할 수 있으면 살아 있는 것, 도달할 수 없으면 가비지입니다.
+핵심은 **도달 가능성** (Reachability)입니다. GC Root(스택 프레임의 로컬 변수, 스태틱 필드, JNI 참조)에서 출발해 참조 체인을 따라 도달할 수 있으면 살아 있는 것, 도달할 수 없으면 가비지입니다.
 
 | 방식 | 원리 | JVM 채택 여부 |
 |---|---|---|
-| 참조 카운팅 | 객체마다 참조 수를 세고, 0이면 회수 | 미채택 — 순환 참조 감지 불가 |
+| 참조 카운팅 | 객체마다 참조 수를 세고, 0이면 회수 | 미채택 (순환 참조 감지 불가) |
 | 도달 가능성 추적 | GC Root에서 참조 그래프 순회 | 채택 (Tracing GC) |
 
 JVM이 참조 카운팅 대신 Tracing GC를 선택한 이유는 명확합니다. 참조 카운팅은 A→B→A 같은 순환 참조를 감지하지 못하고, 참조가 바뀔 때마다 카운터를 갱신하는 오버헤드도 무시할 수 없습니다.
@@ -79,7 +79,7 @@ Old Generation은 Young에서 오래 살아남은 객체가 **승격** (Promotio
 
 <Callout type="error" title="핵심 통찰: STW는 GC의 비용이자 진화의 동기">
   Mark 단계에서 객체 그래프를 추적하는 동안 애플리케이션 스레드가 참조 관계를
-  바꾸면 결과가 틀어집니다. 그래서 애플리케이션을 멈춥니다 — 이것이
+  바꾸면 결과가 틀어집니다. 그래서 애플리케이션을 멈춥니다. 이것이
   Stop-the-World입니다. STW 시간을 줄이는 것이 GC 알고리즘 진화의 핵심 축입니다.
 </Callout>
 
@@ -88,7 +88,7 @@ Old Generation은 Young에서 오래 살아남은 객체가 **승격** (Promotio
 | 단계 | 동작 | 비용 |
 |---|---|---|
 | Mark | GC Root에서 참조 체인을 따라가며 살아 있는 객체를 표시 | STW 발생 |
-| Sweep | 표시되지 않은 객체의 메모리를 해제 | — |
+| Sweep | 표시되지 않은 객체의 메모리를 해제 | 없음 |
 | Compact | 살아남은 객체를 한쪽으로 밀어 단편화 제거 | 선택적 |
 
 ### 세대별 수거
@@ -144,7 +144,7 @@ GC 알고리즘의 역사는 하나의 축을 따라 진화했습니다. STW를 
 
 **G1**은 힙을 수천 개의 Region (기본 1–32 MB)으로 나누고 가비지가 많은 Region부터 우선 수거합니다. `-XX:MaxGCPauseMillis` (기본 200 ms)로 STW 목표를 설정할 수 있지만, Region 관리를 위한 Remembered Set 유지에 메모리와 CPU를 사용합니다.
 
-**ZGC**는 거의 모든 작업을 애플리케이션 스레드와 동시에 수행합니다. STW는 GC Root 스캔에만 발생하며 힙 크기와 무관하게 1 ms 이하입니다. 대가는 Load Barrier — 객체 참조를 읽을 때마다 추가 검사가 삽입되어 단일 스레드 처리량이 소폭 감소합니다.
+**ZGC**는 거의 모든 작업을 애플리케이션 스레드와 동시에 수행합니다. STW는 GC Root 스캔에만 발생하며 힙 크기와 무관하게 1 ms 이하입니다. 대가는 Load Barrier입니다. 객체 참조를 읽을 때마다 추가 검사가 삽입되어 단일 스레드 처리량이 소폭 감소합니다.
 
 **Shenandoah**는 ZGC와 유사한 저지연 목표를 Brooks Pointer (포워딩 포인터)로 달성합니다. 포인터 자체에 메타데이터를 넣지 않아 호환성이 좋지만 간접 참조 비용이 있습니다.
 
@@ -154,10 +154,10 @@ GC 알고리즘의 역사는 하나의 축을 따라 진화했습니다. STW를 
 
 GC는 수동 메모리 관리의 구조적 위험을 제거하되, 그 대가로 Stop-the-World라는 비용을 지불합니다. Weak Generational Hypothesis에 기반한 세대별 수거는 이 비용을 최소화하는 핵심 전략이고, Serial → Parallel → G1 → ZGC로의 진화는 STW를 줄이기 위해 무엇을 더 지불할 것인가라는 단일 축을 따릅니다.
 
-GC 튜닝은 문제가 관측된 뒤에 해도 충분합니다. 먼저 할 일은 워크로드의 우선순위 — 지연, 처리량, 메모리 — 를 명확히 하는 것입니다.
+GC 튜닝은 문제가 관측된 뒤에 해도 충분합니다. 먼저 할 일은 워크로드의 우선순위(지연, 처리량, 메모리)를 명확히 하는 것입니다.
 
 ## 참고 자료
 
 - [HotSpot Virtual Machine Garbage Collection Tuning Guide (Oracle JDK 21)](https://docs.oracle.com/en/java/javase/21/gctuning/)
-- [JEP 333: ZGC — A Scalable Low-Latency Garbage Collector](https://openjdk.org/jeps/333)
+- [JEP 333: ZGC (A Scalable Low-Latency Garbage Collector)](https://openjdk.org/jeps/333)
 - [Shenandoah GC (OpenJDK Wiki)](https://wiki.openjdk.org/display/shenandoah)

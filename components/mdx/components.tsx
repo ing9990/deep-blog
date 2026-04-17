@@ -14,7 +14,14 @@ import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTrad
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
 import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
 import { GCCycle } from '@/components/visualizations/GCCycle'
+import { IdempotencyCausalityChain } from '@/components/visualizations/IdempotencyCausalityChain'
+import { IdempotencyKeyFlow } from '@/components/visualizations/IdempotencyKeyFlow'
 import { QuickSort } from '@/components/visualizations/QuickSort'
+import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
+import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
+import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndexLookup'
+import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
+import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   'data-keyword-link'?: string
@@ -22,7 +29,7 @@ type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
 
 export const mdxComponents: MDXComponents = {
   h1: ({ children, ...props }) => (
-    <h1 className="mt-10 mb-4 text-[26px] font-bold tracking-[-0.015em]" {...props}>
+    <h1 className="mt-10 mb-4 text-[length:var(--text-h1)] font-bold tracking-[var(--tracking-tighter)]" {...props}>
       {children}
     </h1>
   ),
@@ -45,7 +52,7 @@ export const mdxComponents: MDXComponents = {
     <img
       src={src}
       alt={alt ?? ''}
-      className="my-6 rounded-[14px] border border-border"
+      className="my-6 rounded-[var(--radius-panel)] border border-border"
       {...props}
     />
   ),
@@ -67,8 +74,15 @@ export const mdxComponents: MDXComponents = {
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,
+  IdempotencyCausalityChain,
+  IdempotencyKeyFlow,
   QuickSort,
+  QuickSortPivot,
   RelatedPost,
+  RemoteCallOutcomes,
+  SecondaryIndexLookup,
+  SequentialVsRandomIO,
   Tab,
+  TwoGeneralsMessenger,
   Tabs,
 }

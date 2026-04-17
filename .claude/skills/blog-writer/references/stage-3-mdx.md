@@ -149,9 +149,9 @@ N은 실제 전략/대안 개수로 치환한다. 문구는 주제에 맞게 조
 
 어떤 시각화를 어디에 배치할지 결정하는 기준이다. 자세한 판단 로직은 `visualization-rules.md` 참조.
 
-- **Section 3 (Alternatives & Tradeoffs)**: 비교표 (`| ... |`) 우선. 영역별 유불리가 다른 복잡한 트레이드오프 매트릭스는 **정적 React 컴포넌트**(센티먼트 인디케이터 — `CardinalityTradeoff` 패턴 참고)로 색상 코딩. 단순 비교표는 정적 SVG로 보완.
-- **Section 4 (Root Cause)**: SVG 다이어그램 권장. 가정/모델의 시각화, 시스템 개념도, 타이밍 도식. 정적 이미지만으로 충분히 설명 가능한 경우가 많다.
-- **Section 5 (How)**: React 컴포넌트 권장. 동적 동작, 단계별 진행, 타임라인, 사용자가 조작하며 결과를 확인하는 인터랙티브 시각화.
+- **Section 3 (Alternatives & Tradeoffs)**: 비교표 (`| ... |`) 우선. 영역별 유불리가 다른 복잡한 트레이드오프 매트릭스는 **[A-2] 정적 React 컴포넌트**(센티먼트 인디케이터 — `CardinalityTradeoff` 패턴 참고)로 색상 코딩한다.
+- **Section 4 (Root Cause)**: [A-2] 정적 React 컴포넌트 권장. 가정/모델의 시각화, 시스템 개념도, 타이밍 도식. `vizStateClasses()` 기반 색상 시맨틱으로 구조를 한눈에 전달한다.
+- **Section 5 (How)**: [A-1] 인터랙티브 React 컴포넌트 권장. 동적 동작, 단계별 진행, 타임라인, 사용자가 조작하며 결과를 확인하는 인터랙티브 시각화.
 - **Section 6 (Anti-use cases)**: 시각화 거의 사용하지 않는다. 텍스트로 "이런 상황에서는 쓰지 마라"를 명시하는 것이 더 명확하다.
 - **Section 7 (Gotchas)**: 필요 시 코드 블록으로 안티패턴/올바른 패턴 대비. 시각화는 거의 없음.
 
@@ -326,9 +326,7 @@ draft: false
 
 [내부 메커니즘 상세 — 글에서 가장 긴 섹션]
 
-![<alt>](/images/<slug>-diagram.svg)  {/* 있을 때만 */}
-
-<VisualizationComponent />  {/* 있을 때만 */}
+<VisualizationComponent />  {/* 있을 때만 — React 컴포넌트 ([A-1] 또는 [A-2]) */}
 
 <RelatedPost slug="<deep-dive-slug>" type="deep-dive" />  {/* 있을 때만 */}
 

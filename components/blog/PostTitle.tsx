@@ -9,7 +9,7 @@ interface PostTitleProps {
 export function PostTitle({ title }: PostTitleProps) {
   const { lang } = useTranslation()
   return (
-    <h1 className="mt-4 text-[28px] font-bold leading-[1.3] tracking-[-0.015em] md:text-[32px]">
+    <h1 className="mt-4 text-[length:var(--text-h1)] font-bold leading-[var(--leading-snug)] tracking-[var(--tracking-tighter)]">
       {title[lang]}
     </h1>
   )

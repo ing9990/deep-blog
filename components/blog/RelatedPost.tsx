@@ -65,7 +65,7 @@ export function RelatedPost({ slug, type = 'deep-dive', label }: RelatedPostProp
     <Link
       href={`/posts/${slug}`}
       className={cn(
-        'group my-6 flex items-start gap-4 rounded-[14px] border border-border bg-background p-5 transition-colors hover:border-border-strong hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group my-6 flex items-start gap-4 rounded-[var(--radius-panel)] border border-border bg-background p-5 transition-colors hover:border-border-strong hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         variant.surfaceClass,
       )}
     >
@@ -74,13 +74,13 @@ export function RelatedPost({ slug, type = 'deep-dive', label }: RelatedPostProp
         aria-hidden="true"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="text-[length:var(--text-caption)] font-semibold uppercase tracking-wider text-muted-foreground">
           {displayLabel}
         </p>
-        <p className="mt-1.5 text-[15px] font-semibold text-foreground transition-colors group-hover:text-primary">
+        <p className="mt-1.5 text-[length:var(--text-h4)] font-semibold text-foreground transition-colors group-hover:text-primary">
           {entry.title[lang]}
         </p>
-        <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+        <p className="mt-1 line-clamp-2 text-[length:var(--text-body-sm)] leading-relaxed text-muted-foreground">
           {entry.summary[lang]}
         </p>
       </div>

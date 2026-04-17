@@ -20,7 +20,7 @@ export function PostList({ posts }: { posts: Post[] }) {
   if (posts.length === 0) {
     return (
       <div className="mt-6 rounded-lg border border-dashed border-border py-16 text-center">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[length:var(--text-body-sm)] text-muted-foreground">
           {t('index.empty')}
         </p>
       </div>
