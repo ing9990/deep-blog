@@ -69,39 +69,44 @@ Claude Code는 여러분 컴퓨터 안에서 돌아가는 프로그램입니다.
 3. **브라우저 로그인** — Claude 계정 인증
 4. **준비 완료** — 자연어로 지시 시작
 
-### macOS · Linux 설치
+### 설치
 
-터미널에 아래를 복사·붙여넣고 Enter:
+사용 중인 운영체제 탭을 선택하세요.
 
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-```
+<Tabs group="os">
+  <Tab label="macOS · Linux">
+    터미널에 아래를 복사·붙여넣고 Enter:
 
-1–2분이면 끝납니다. 비밀번호를 물어볼 수도 있어요 (Mac 로그인 비밀번호 입력).
+    ```bash
+    curl -fsSL https://claude.ai/install.sh | bash
+    ```
 
-이미 Homebrew를 쓰는 분은 이 방법도 됩니다.
+    1–2분이면 끝납니다. 비밀번호를 물어볼 수도 있어요 (Mac 로그인 비밀번호 입력).
 
-```bash
-brew install --cask claude-code
-```
+    이미 Homebrew를 쓰는 분은 이 방법도 됩니다.
 
-### Windows 설치
+    ```bash
+    brew install --cask claude-code
+    ```
+  </Tab>
+  <Tab label="Windows">
+    <Callout type="warning" title="Windows 전용 선행 작업">
+      Windows에서는 [Git for Windows](https://git-scm.com/downloads/win)가 먼저 설치돼 있어야 합니다. 없으면 링크에서 다운로드해 기본 옵션으로 설치하세요 (약 3분).
+    </Callout>
 
-<Callout type="warning" title="Windows 전용 선행 작업">
-  Windows에서는 [Git for Windows](https://git-scm.com/downloads/win)가 먼저 설치돼 있어야 합니다. 없으면 링크에서 다운로드해 기본 옵션으로 설치하세요 (약 3분).
-</Callout>
+    PowerShell을 열고 아래를 실행.
 
-PowerShell을 열고 아래를 실행.
+    ```powershell
+    irm https://claude.ai/install.ps1 | iex
+    ```
 
-```powershell
-irm https://claude.ai/install.ps1 | iex
-```
+    Winget(Windows 11 기본 패키지 관리자)을 쓰는 분은 이렇게도 가능합니다.
 
-Winget(Windows 11 기본 패키지 관리자)을 쓰는 분은 이렇게도 가능합니다.
-
-```powershell
-winget install Anthropic.ClaudeCode
-```
+    ```powershell
+    winget install Anthropic.ClaudeCode
+    ```
+  </Tab>
+</Tabs>
 
 ### 설치 확인
 
