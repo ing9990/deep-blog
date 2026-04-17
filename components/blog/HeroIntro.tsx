@@ -190,6 +190,9 @@ export function HeroIntro() {
     try {
       sessionStorage.setItem(STORAGE_KEY, String(Date.now()))
     } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent('deep-hero-dismissed'))
+    } catch {}
     window.setTimeout(() => setShow(false), FADE_MS)
   }, [stage, show])
 
