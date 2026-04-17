@@ -74,7 +74,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       ref={panelRef}
       role="dialog"
       aria-label={t('settings.title')}
-      className="fixed bottom-20 right-6 z-50 w-[300px] origin-bottom-right animate-[panel-in_0.25s_cubic-bezier(0.22,1,0.36,1)_both] rounded-2xl border border-border bg-background shadow-xl"
+      className="fixed bottom-20 right-6 z-[var(--z-panel)] w-[var(--layout-panel-width)] origin-bottom-right animate-[panel-in_0.25s_cubic-bezier(0.22,1,0.36,1)_both] rounded-2xl border border-border bg-background shadow-xl"
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-5 pb-3 pt-4">
