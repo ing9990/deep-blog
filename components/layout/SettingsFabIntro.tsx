@@ -66,6 +66,13 @@ export function SettingsFabIntro() {
       } catch {
         return
       }
+      // Compute radii synchronously so the first playing render has correct
+      // mobile/desktop values. Resize effect still handles mid-animation changes.
+      const isMobile = window.innerWidth <= MOBILE_BREAKPOINT
+      setRadii({
+        orbit: isMobile ? ORBIT_RADIUS_MOBILE : ORBIT_RADIUS_DESKTOP,
+        start: isMobile ? START_RADIUS_MOBILE : START_RADIUS_DESKTOP,
+      })
       setStage('playing')
     }
 
@@ -91,10 +98,14 @@ export function SettingsFabIntro() {
 
     const heroVisible = document.querySelector(HERO_DIALOG_SELECTOR)
     if (heroVisible) {
-      const onDismissed = () => schedule(DELAY_AFTER_HERO_MS)
+      let fallbackId: number
+      const onDismissed = () => {
+        window.clearTimeout(fallbackId)
+        schedule(DELAY_AFTER_HERO_MS)
+      }
       window.addEventListener(HERO_DISMISSED_EVENT, onDismissed, { once: true })
       addCleanup(() => window.removeEventListener(HERO_DISMISSED_EVENT, onDismissed))
-      const fallbackId = window.setTimeout(() => {
+      fallbackId = window.setTimeout(() => {
         window.removeEventListener(HERO_DISMISSED_EVENT, onDismissed)
         schedule(DELAY_AFTER_HERO_MS)
       }, HERO_FALLBACK_MS)
