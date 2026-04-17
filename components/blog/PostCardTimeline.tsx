@@ -69,12 +69,12 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
         </div>
 
         {/* Title */}
-        <h2 className="text-[length:var(--text-h4)] font-semibold leading-[1.45] tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary">
+        <h2 className="text-[length:var(--text-h4)] font-semibold leading-[var(--leading-snug)] tracking-[var(--tracking-tight)] text-foreground transition-colors group-hover:text-primary">
           {post.title}
         </h2>
 
         {/* Summary */}
-        <p className="mt-[5px] line-clamp-2 text-[length:var(--text-body-sm)] leading-[1.6] text-muted-foreground">
+        <p className="mt-[5px] line-clamp-2 text-[length:var(--text-body-sm)] leading-[var(--leading-normal)] text-muted-foreground">
           {post.summary}
         </p>
 

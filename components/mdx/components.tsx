@@ -29,7 +29,7 @@ type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
 
 export const mdxComponents: MDXComponents = {
   h1: ({ children, ...props }) => (
-    <h1 className="mt-10 mb-4 text-[length:var(--text-h1)] font-bold tracking-[-0.015em]" {...props}>
+    <h1 className="mt-10 mb-4 text-[length:var(--text-h1)] font-bold tracking-[var(--tracking-tighter)]" {...props}>
       {children}
     </h1>
   ),

@@ -69,7 +69,7 @@ export default async function PostPage({
 
       <article className="min-w-0">
         <PostMeta tags={post.tags} date={post.date} readingTime={post.readingTime} />
-        <h1 className="mt-4 text-[length:var(--text-h1)] font-bold leading-[1.3] tracking-[-0.015em]">
+        <h1 className="mt-4 text-[length:var(--text-h1)] font-bold leading-[var(--leading-snug)] tracking-[var(--tracking-tighter)]">
           {post.title}
         </h1>
         <hr className="my-8 border-border" />

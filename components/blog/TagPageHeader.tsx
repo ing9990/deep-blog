@@ -20,7 +20,7 @@ export function TagPageHeader({ tag, count }: TagPageHeaderProps) {
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         {t('tag.page.back')}
       </Link>
-      <h1 className="mt-6 text-[length:var(--text-h2)] font-bold tracking-[-0.02em]">
+      <h1 className="mt-6 text-[length:var(--text-h2)] font-bold tracking-[var(--tracking-tightest)]">
         #{tag}
       </h1>
       <p className="mt-3 text-[length:var(--text-meta)] text-muted-foreground">{t('tag.page.count', { n: count })}</p>
