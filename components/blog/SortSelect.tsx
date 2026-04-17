@@ -8,21 +8,24 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { SortKey } from '@/lib/filters'
+import { useTranslation } from '@/lib/i18n/useTranslation'
+import type { MessageKey } from '@/lib/i18n/messages'
 
 interface SortSelectProps {
   value: SortKey
   onChange: (next: SortKey) => void
 }
 
-const LABELS: Record<SortKey, string> = {
-  latest: '최신순',
-  oldest: '오래된순',
-  title: '제목순',
+const LABEL_KEYS: Record<SortKey, MessageKey> = {
+  latest: 'sort.latest',
+  oldest: 'sort.oldest',
+  title:  'sort.title',
 }
 
-const isSortKey = (s: string): s is SortKey => s in LABELS
+const isSortKey = (s: string): s is SortKey => s in LABEL_KEYS
 
 export function SortSelect({ value, onChange }: SortSelectProps) {
+  const { t } = useTranslation()
   return (
     <Select
       value={value}
@@ -34,9 +37,9 @@ export function SortSelect({ value, onChange }: SortSelectProps) {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {(Object.keys(LABELS) as SortKey[]).map((key) => (
+        {(Object.keys(LABEL_KEYS) as SortKey[]).map((key) => (
           <SelectItem key={key} value={key}>
-            {LABELS[key]}
+            {t(LABEL_KEYS[key])}
           </SelectItem>
         ))}
       </SelectContent>

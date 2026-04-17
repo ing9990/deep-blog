@@ -1,3 +1,8 @@
+'use client'
+
+import { useTranslation } from '@/lib/i18n/useTranslation'
+
 export function ReadingTime({ minutes }: { minutes: number }) {
-  return <span>읽기 {minutes}분</span>
+  const { t } = useTranslation()
+  return <span>{t('post.reading.time', { n: minutes })}</span>
 }
