@@ -62,6 +62,8 @@
     "jsdom": "^25.0.1",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
+    "stylelint": "^17.8.0",
+    "stylelint-config-standard": "^40.0.0",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",
