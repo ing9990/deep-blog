@@ -46,9 +46,7 @@ export function HeaderActions() {
           href="/"
           className="flex shrink-0 items-center font-bold tracking-tight"
         >
-          <span className="bg-gradient-to-b from-foreground to-foreground/60 bg-clip-text text-[length:var(--text-xl)] text-transparent">
-            DEEP
-          </span>
+          <span className="text-[length:var(--text-xl)]">DEEP</span>
         </Link>
 
         <button
