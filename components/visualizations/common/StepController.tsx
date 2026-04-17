@@ -44,7 +44,7 @@ export function StepController({
   return (
     <div className={cn('mt-4 space-y-3', className)}>
       {stepDescription && (
-        <div className="rounded-[10px] border border-border bg-muted/30 p-3 text-[13px] leading-relaxed text-foreground">
+        <div className="rounded-[10px] border border-border bg-muted/30 p-3 text-[length:var(--text-meta)] leading-relaxed text-foreground">
           <span className="font-semibold">
             Step {step} / {lastStep}:
           </span>{' '}

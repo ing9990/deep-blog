@@ -25,7 +25,7 @@ export function RecentPostsSection({ posts }: RecentPostsSectionProps) {
 
   return (
     <section className="mt-16 border-t border-border pt-12">
-      <h2 className="text-[20px] font-semibold text-foreground md:text-[22px]">
+      <h2 className="text-[length:var(--text-h3)] font-semibold text-foreground">
         {t('post.recent')}
       </h2>
       <div className="mt-6 grid gap-4 md:grid-cols-2">

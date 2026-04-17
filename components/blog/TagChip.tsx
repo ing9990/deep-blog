@@ -16,7 +16,7 @@ export function TagChip({ label, count, active, onClick }: TagChipProps) {
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'rounded border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'rounded border px-3 py-1.5 text-[length:var(--text-badge)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         active
           ? 'border-primary bg-primary text-primary-foreground'
           : 'border-border bg-background text-muted-foreground hover:border-border-strong hover:text-foreground',
@@ -24,7 +24,7 @@ export function TagChip({ label, count, active, onClick }: TagChipProps) {
     >
       {label}
       {typeof count === 'number' && (
-        <span className={cn('ml-1.5 text-xs', active ? 'opacity-80' : 'opacity-60')}>
+        <span className={cn('ml-1.5 text-[length:var(--text-badge)]', active ? 'opacity-80' : 'opacity-60')}>
           {count}
         </span>
       )}

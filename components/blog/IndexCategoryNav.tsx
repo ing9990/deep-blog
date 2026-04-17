@@ -29,7 +29,7 @@ export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
         type="button"
         onClick={() => setCategory(null)}
         className={cn(
-          'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+          'flex items-center gap-3 rounded-md px-3 py-2 text-[length:var(--text-nav-item)] transition-colors',
           category === null
             ? 'bg-accent font-medium text-accent-foreground'
             : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -37,7 +37,7 @@ export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
       >
         <Layers className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
         <span className="flex-1 text-left">{t('index.all')}</span>
-        <span className="tabular-nums text-xs opacity-60">
+        <span className="tabular-nums text-[length:var(--text-meta)] opacity-60">
           {allPosts.length}
         </span>
       </button>
@@ -55,7 +55,7 @@ export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
             type="button"
             onClick={() => setCategory(isActive ? null : meta.id)}
             className={cn(
-              'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+              'flex items-center gap-3 rounded-md px-3 py-2 text-[length:var(--text-nav-item)] transition-colors',
               isActive
                 ? 'bg-accent font-medium text-accent-foreground'
                 : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -67,7 +67,7 @@ export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
               aria-hidden
             />
             <span className="flex-1 text-left">{meta.label[lang]}</span>
-            <span className="tabular-nums text-xs opacity-60">{count}</span>
+            <span className="tabular-nums text-[length:var(--text-meta)] opacity-60">{count}</span>
           </button>
         )
       })}

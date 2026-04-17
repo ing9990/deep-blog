@@ -31,9 +31,9 @@ export function VisualContainer({
     >
       <figcaption className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-[length:var(--text-h4)] font-semibold text-foreground">{title}</p>
           {description && (
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+            <p className="mt-1 text-[length:var(--text-caption)] leading-relaxed text-muted-foreground">
               {description}
             </p>
           )}

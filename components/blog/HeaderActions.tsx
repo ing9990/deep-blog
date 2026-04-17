@@ -42,18 +42,18 @@ export function HeaderActions() {
           href="/"
           className="flex shrink-0 items-center font-semibold tracking-tight"
         >
-          <span className="text-[17px]">DEEP</span>
+          <span className="text-[length:var(--text-menu)]">DEEP</span>
         </Link>
 
         <button
           type="button"
           onClick={openSearch}
           aria-label={t('header.open.search')}
-          className="mx-auto inline-flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-auto md:w-[180px] md:justify-start md:px-3 md:py-2 lg:w-[220px] xl:w-[280px]"
+          className="mx-auto inline-flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 text-[length:var(--text-search-input)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-auto md:w-[180px] md:justify-start md:px-3 md:py-2 lg:w-[220px] xl:w-[280px]"
         >
           <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="hidden md:inline">{t('header.search.placeholder')}</span>
-          <kbd className="ml-auto hidden rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground md:inline">
+          <kbd className="ml-auto hidden rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[length:var(--text-hint)] text-muted-foreground md:inline">
             ⌘K
           </kbd>
         </button>

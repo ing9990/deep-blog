@@ -27,7 +27,7 @@ export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProp
             open
             className="group/cat border-b border-border/60 pb-1 last:border-b-0"
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-[length:var(--text-nav-header)] font-semibold uppercase tracking-[0.08em] text-foreground transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
               <span>{category.label[lang]}</span>
               <ChevronDown
                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 group-open/cat:rotate-180"
@@ -44,7 +44,7 @@ export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProp
                       onClick={onLinkClick}
                       aria-current={isActive ? 'page' : undefined}
                       className={cn(
-                        'block rounded-md px-3 py-1.5 text-sm transition-colors',
+                        'block rounded-md px-3 py-1.5 text-[length:var(--text-nav-item)] transition-colors',
                         isActive
                           ? 'bg-accent font-medium text-accent-foreground'
                           : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',

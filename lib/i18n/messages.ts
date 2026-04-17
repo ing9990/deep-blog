@@ -39,6 +39,10 @@ export const MESSAGES = {
   'settings.language':         { ko: '언어',              en: 'Language' },
   'settings.lang.ko':          { ko: '한국어',            en: 'Korean' },
   'settings.lang.en':          { ko: '영어',              en: 'English' },
+  'settings.font':             { ko: '폰트 크기',         en: 'Font size' },
+  'settings.font.small':       { ko: '작게',              en: 'Small' },
+  'settings.font.normal':      { ko: '보통',              en: 'Normal' },
+  'settings.font.large':       { ko: '크게',              en: 'Large' },
 } as const
 
 export type MessageKey = keyof typeof MESSAGES
