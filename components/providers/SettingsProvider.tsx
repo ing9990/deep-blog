@@ -21,7 +21,7 @@ export interface Settings {
 
 const DEFAULT_SETTINGS: Settings = {
   cardLayout: 'timeline',
-  language: 'en',
+  language: 'ko',
   fontSize: 'normal',
 }
 
