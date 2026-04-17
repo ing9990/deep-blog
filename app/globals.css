@@ -222,6 +222,23 @@
   --text-badge:           var(--text-xs);
   --text-settings-title:  var(--text-base);
   --text-settings-header: 11.5px;  /* one-off exception: uppercase section label */
+
+  /* ------------------------------------------------------------------
+     Layout dimension tokens — fixed widths, sticky offsets, page pads,
+     content caps. Consumers reference via w-[var(--layout-*)] etc.
+     Only hardcoded LAYOUT literals are tokenized; Tailwind's default
+     spacing scale (p-*, gap-*, m-*) stays as-is.
+     ------------------------------------------------------------------ */
+  --layout-nav-width:      288px;      /* DocShell left rail (CategoryNav) */
+  --layout-toc-width:      224px;      /* DocShell right rail (TOC) */
+  --layout-content-gap:    2rem;       /* grid column gap */
+  --layout-header-height:  64px;       /* sticky header height */
+  --layout-sticky-offset:  5rem;       /* TOC/CategoryNav sticky top (was top-20) */
+  --layout-page-pad:       1rem;       /* mobile edge padding */
+  --layout-page-pad-md:    1.5rem;     /* md+ edge padding */
+  --layout-content-max:    46rem;      /* reading width cap */
+  --layout-panel-width:    300px;      /* SettingsPanel width */
+  --layout-popover-width:  18rem;      /* popover/KeywordLink default */
 }
 
 [data-theme="dark"] {
