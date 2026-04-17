@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { MDXComponents } from 'mdx/types'
 import * as runtime from 'react/jsx-runtime'
 import { mdxComponents } from './index'
+import { TabsGroupProvider } from '@/components/mdx/TabsGroupProvider'
 
 // The runtime module shape expected by Velite's compiled body strings.
 // Each body string begins with: const{Fragment,jsx,jsxs}=arguments[0];
@@ -43,5 +44,9 @@ interface MDXContentProps {
  */
 export function MDXContent({ code }: MDXContentProps) {
   const Component = useMDXComponent(code)
-  return <Component components={mdxComponents} />
+  return (
+    <TabsGroupProvider>
+      <Component components={mdxComponents} />
+    </TabsGroupProvider>
+  )
 }
