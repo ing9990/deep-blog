@@ -30,7 +30,7 @@ Quick Sort의 핵심 아이디어는 간단합니다:
 
 이 과정을 그림으로 표현하면 다음과 같습니다:
 
-![Quick Sort 피벗 분할 개념도](/images/quicksort-diagram.svg)
+<QuickSortPivot />
 
 데이터베이스 인덱스도 유사한 분할 정복 사고방식을 활용합니다. 인덱스 탐색은 B-Tree를 통해 매 단계 탐색 범위를 절반 가까이로 줄이는 방식인데, Quick Sort의 "피벗으로 분할" 아이디어와 직관적으로 닮아있습니다.
 
@@ -65,73 +65,78 @@ def partition(arr, lo, hi):
     return i + 1
 ```
 
-### Kotlin 구현
+### 언어별 구현
 
-실무에서 자주 쓰이는 Kotlin으로는 다음과 같이 작성할 수 있습니다:
+동일한 Lomuto 파티션을 Kotlin과 TypeScript로 옮긴 예입니다. 언어 탭을 전환해 문법 차이를 비교하세요.
 
-```kotlin title="QuickSort.kt"
-fun <T : Comparable<T>> quickSort(arr: MutableList<T>, lo: Int = 0, hi: Int = arr.lastIndex) {
-    if (lo >= hi) return
-    val pivotIndex = partition(arr, lo, hi)  // [!code highlight]
-    quickSort(arr, lo, pivotIndex - 1)
-    quickSort(arr, pivotIndex + 1, hi)
-}
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="QuickSort.kt"
+    fun <T : Comparable<T>> quickSort(arr: MutableList<T>, lo: Int = 0, hi: Int = arr.lastIndex) {
+        if (lo >= hi) return
+        val pivotIndex = partition(arr, lo, hi)  // [!code highlight]
+        quickSort(arr, lo, pivotIndex - 1)
+        quickSort(arr, pivotIndex + 1, hi)
+    }
 
-private fun <T : Comparable<T>> partition(arr: MutableList<T>, lo: Int, hi: Int): Int {
-    val pivot = arr[hi]
-    var i = lo - 1
-    for (j in lo until hi) {
-        if (arr[j] <= pivot) {
-            i++
-            val tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp
+    private fun <T : Comparable<T>> partition(arr: MutableList<T>, lo: Int, hi: Int): Int {
+        val pivot = arr[hi]
+        var i = lo - 1
+        for (j in lo until hi) {
+            if (arr[j] <= pivot) {
+                i++
+                val tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp
+            }
         }
+        val tmp = arr[i + 1]; arr[i + 1] = arr[hi]; arr[hi] = tmp
+        return i + 1
     }
-    val tmp = arr[i + 1]; arr[i + 1] = arr[hi]; arr[hi] = tmp
-    return i + 1
-}
 
-fun main() {
-    val nums = mutableListOf(38, 27, 43, 3, 9, 82, 10)
-    quickSort(nums)
-    println(nums) // [3, 9, 10, 27, 38, 43, 82]
-}
-```
-
-Kotlin의 `<T : Comparable<T>>` 제약은 Java의 `<T extends Comparable<T>>` 와 동일합니다. 타입 파라미터를 통해 모든 비교 가능한 타입에 대해 재사용할 수 있습니다.
-
-### TypeScript 구현
-
-```typescript title="quicksort.ts"
-export function quickSort<T>(arr: T[], compare: (a: T, b: T) => number = defaultCompare): T[] {
-  const out = arr.slice()
-  sort(out, 0, out.length - 1, compare)
-  return out
-}
-
-function sort<T>(arr: T[], lo: number, hi: number, compare: (a: T, b: T) => number): void {
-  if (lo >= hi) return
-  const p = partition(arr, lo, hi, compare)
-  sort(arr, lo, p - 1, compare)
-  sort(arr, p + 1, hi, compare)
-}
-
-function partition<T>(arr: T[], lo: number, hi: number, compare: (a: T, b: T) => number): number {
-  const pivot = arr[hi]
-  let i = lo - 1
-  for (let j = lo; j < hi; j++) {
-    if (compare(arr[j], pivot) <= 0) {
-      i++
-      ;[arr[i], arr[j]] = [arr[j], arr[i]]
+    fun main() {
+        val nums = mutableListOf(38, 27, 43, 3, 9, 82, 10)
+        quickSort(nums)
+        println(nums) // [3, 9, 10, 27, 38, 43, 82]
     }
-  }
-  ;[arr[i + 1], arr[hi]] = [arr[hi], arr[i + 1]]
-  return i + 1
-}
+    ```
 
-function defaultCompare<T>(a: T, b: T): number {
-  return a < b ? -1 : a > b ? 1 : 0
-}
-```
+    Kotlin의 `<T : Comparable<T>>` 제약은 Java의 `<T extends Comparable<T>>` 와 동일합니다. 타입 파라미터를 통해 모든 비교 가능한 타입에 대해 재사용할 수 있습니다.
+  </Tab>
+  <Tab label="TypeScript">
+    ```typescript title="quicksort.ts"
+    export function quickSort<T>(arr: T[], compare: (a: T, b: T) => number = defaultCompare): T[] {
+      const out = arr.slice()
+      sort(out, 0, out.length - 1, compare)
+      return out
+    }
+
+    function sort<T>(arr: T[], lo: number, hi: number, compare: (a: T, b: T) => number): void {
+      if (lo >= hi) return
+      const p = partition(arr, lo, hi, compare)
+      sort(arr, lo, p - 1, compare)
+      sort(arr, p + 1, hi, compare)
+    }
+
+    function partition<T>(arr: T[], lo: number, hi: number, compare: (a: T, b: T) => number): number {
+      const pivot = arr[hi]
+      let i = lo - 1
+      for (let j = lo; j < hi; j++) {
+        if (compare(arr[j], pivot) <= 0) {
+          i++
+          ;[arr[i], arr[j]] = [arr[j], arr[i]]
+        }
+      }
+      ;[arr[i + 1], arr[hi]] = [arr[hi], arr[i + 1]]
+      return i + 1
+    }
+
+    function defaultCompare<T>(a: T, b: T): number {
+      return a < b ? -1 : a > b ? 1 : 0
+    }
+    ```
+
+    TypeScript는 비교 함수를 파라미터로 받아 사용자 정의 정렬 기준을 지원합니다. 기본값 `defaultCompare`로 `<`·`>` 비교를 하며, 필요 시 주입해 숫자 정렬(`(a,b) => a - b`)이나 키 기반 정렬로 확장할 수 있습니다.
+  </Tab>
+</Tabs>
 
 ## 시각화
 
@@ -183,7 +188,7 @@ Quick Sort를 쓸 때 자주 마주치는 함정들입니다.
   - **Introsort**: Quick Sort가 재귀 깊이 임계값을 넘으면 Heap Sort로 fallback
 </Callout>
 
-<Callout type="success" title="실무 팁 — 표준 라이브러리 활용">
+<Callout type="success" title="실무 팁: 표준 라이브러리 활용">
   대부분의 경우 언어 표준 라이브러리의 정렬이 Quick Sort 또는 그 개량판을 내부에서 사용하며, 이미 위의 함정을 모두 해결해뒀습니다.
 
   - **Java**: `Arrays.sort(int[])` → Dual-Pivot Quicksort
@@ -200,6 +205,6 @@ Quick Sort를 쓸 때 자주 마주치는 함정들입니다.
 
 ## 참고 자료
 
-- [Wikipedia — Quicksort](https://en.wikipedia.org/wiki/Quicksort)
+- [Wikipedia: Quicksort](https://en.wikipedia.org/wiki/Quicksort)
 - [Sedgewick, Robert. *Algorithms* (4th ed.)](https://algs4.cs.princeton.edu/23quicksort/)
-- [PostgreSQL Documentation — `work_mem`](https://www.postgresql.org/docs/current/runtime-config-resource.html#GUC-WORK-MEM)
+- [PostgreSQL Documentation: `work_mem`](https://www.postgresql.org/docs/current/runtime-config-resource.html#GUC-WORK-MEM)

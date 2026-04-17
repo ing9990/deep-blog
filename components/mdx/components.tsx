@@ -14,7 +14,14 @@ import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTrad
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
 import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
 import { GCCycle } from '@/components/visualizations/GCCycle'
+import { IdempotencyCausalityChain } from '@/components/visualizations/IdempotencyCausalityChain'
+import { IdempotencyKeyFlow } from '@/components/visualizations/IdempotencyKeyFlow'
 import { QuickSort } from '@/components/visualizations/QuickSort'
+import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
+import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
+import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndexLookup'
+import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
+import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   'data-keyword-link'?: string
@@ -67,8 +74,15 @@ export const mdxComponents: MDXComponents = {
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,
+  IdempotencyCausalityChain,
+  IdempotencyKeyFlow,
   QuickSort,
+  QuickSortPivot,
   RelatedPost,
+  RemoteCallOutcomes,
+  SecondaryIndexLookup,
+  SequentialVsRandomIO,
   Tab,
+  TwoGeneralsMessenger,
   Tabs,
 }

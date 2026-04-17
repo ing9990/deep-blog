@@ -138,7 +138,7 @@ function ProgressBar({ progress, step, totalSteps, onJump }: ProgressBarProps) {
       aria-valuenow={step}
       aria-valuemin={0}
       aria-valuemax={totalSteps - 1}
-      aria-label="진행 상황 — 클릭해서 점프"
+      aria-label="진행 상황, 클릭해서 점프"
     >
       <span
         className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-300 motion-reduce:transition-none"

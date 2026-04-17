@@ -52,7 +52,7 @@ draft: false
 
 ### 나누기의 원리
 
-데이터를 다루는 시스템은 끊임없이 데이터를 "나눕니다" — 인덱스는 값 기준으로 나누고, 캐시는 키 기준으로 나누고, 파티셔닝은 범위/해시 기준으로 나눕니다. 이때 **나누는 기준의 카디널리티가 낮으면** 한쪽에 데이터가 몰리고, **높으면** 골고루 분산됩니다.
+데이터를 다루는 시스템은 끊임없이 데이터를 "나눕니다". 인덱스는 값 기준으로 나누고, 캐시는 키 기준으로 나누고, 파티셔닝은 범위/해시 기준으로 나눕니다. 이때 **나누는 기준의 카디널리티가 낮으면** 한쪽에 데이터가 몰리고, **높으면** 골고루 분산됩니다.
 
 `gender` 컬럼(카디널리티 2)으로 2억 건을 나누면 한 그룹에 1억 건이 몰립니다. `user_id` 컬럼(카디널리티 500만)으로 나누면 그룹당 평균 40건입니다. 같은 "나누기"인데 결과가 완전히 다릅니다.
 
@@ -114,9 +114,9 @@ draft: false
 
 캐시는 키를 기준으로 결과를 저장합니다. 카디널리티는 캐시의 **적중률**과 **메모리 사용량**을 결정합니다.
 
-- **카디널리티가 적당히 높은 키** — `user_id` 기준 캐시. 500만 개의 키가 생기지만 같은 사용자의 반복 요청에 적중합니다.
-- **카디널리티가 너무 높은 키** — 요청 URL 전체를 키로 쓰면 거의 모든 요청이 고유해져 캐시 적중률이 0에 가까워집니다. 메모리만 낭비합니다.
-- **카디널리티가 너무 낮은 키** — `status` 기준 캐시. 3개의 키에 수천만 건의 결과가 매달려, 키 하나가 만료되면 대량의 DB 요청이 한꺼번에 발생할 수 있습니다.
+- **카디널리티가 적당히 높은 키**: `user_id` 기준 캐시. 500만 개의 키가 생기지만 같은 사용자의 반복 요청에 적중합니다.
+- **카디널리티가 너무 높은 키**: 요청 URL 전체를 키로 쓰면 거의 모든 요청이 고유해져 캐시 적중률이 0에 가까워집니다. 메모리만 낭비합니다.
+- **카디널리티가 너무 낮은 키**: `status` 기준 캐시. 3개의 키에 수천만 건의 결과가 매달려, 키 하나가 만료되면 대량의 DB 요청이 한꺼번에 발생할 수 있습니다.
 
 ### 3. 파티셔닝 / 샤딩
 
@@ -129,7 +129,7 @@ draft: false
 
 Prometheus, Datadog 같은 시계열 DB에서 메트릭 라벨의 카디널리티가 높으면 **시계열 폭발(cardinality explosion)**이 발생합니다.
 
-`http_requests_total{method="GET", path="/api/users"}` — `method`는 카디널리티 ~5, `path`는 카디널리티 수십~수백 정도라 감당 가능합니다. 여기에 `user_id`(카디널리티 500만)를 라벨로 추가하면 시계열 수가 수백만 배로 폭증해 DB가 감당할 수 없게 됩니다.
+`http_requests_total{method="GET", path="/api/users"}`의 경우 `method`는 카디널리티 약 5, `path`는 카디널리티 수십–수백 정도라 감당 가능합니다. 여기에 `user_id`(카디널리티 500만)를 라벨로 추가하면 시계열 수가 수백만 배로 폭증해 DB가 감당할 수 없게 됩니다.
 
 ## 트레이드오프
 
@@ -151,6 +151,6 @@ Prometheus, Datadog 같은 시계열 DB에서 메트릭 라벨의 카디널리�
 
 ## 참고 자료
 
-- [Use The Index, Luke — Cardinality](https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys)
-- [Prometheus — Label Cardinality](https://prometheus.io/docs/practices/naming/#labels)
-- [MySQL EXPLAIN — Cardinality Statistics](https://dev.mysql.com/doc/refman/8.0/en/show-index.html)
+- [Use The Index, Luke: Cardinality](https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys)
+- [Prometheus: Label Cardinality](https://prometheus.io/docs/practices/naming/#labels)
+- [MySQL EXPLAIN: Cardinality Statistics](https://dev.mysql.com/doc/refman/8.0/en/show-index.html)

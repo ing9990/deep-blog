@@ -62,7 +62,7 @@ DEEP(구 Backend Notes) 블로그(`content/posts/`)의 MDX 포스트를 3단계 
 
 ### Stage 3: MDX 생성 + 자산 생성 + 검증
 
-최종화된 노트를 입력으로 실제 MDX 파일, 필요 시 신규 시각화 컴포넌트, SVG 자산을 생성한다. 자동 콜아웃 3종(학습 목표 / 핵심 포인트 / 핵심 통찰)과 `<RelatedPost />` 교차 참조를 정해진 위치에 배치한다. 마지막으로 검증 루프(`generate-keyword-map` → `velite` → `type-check` → `build`)를 실행해 완성도를 보장한다.
+최종화된 노트를 입력으로 실제 MDX 파일과 필요 시 신규 시각화 컴포넌트(React, [A-1] 인터랙티브 또는 [A-2] 정적)를 생성한다. 자동 콜아웃 3종(학습 목표 / 핵심 포인트 / 핵심 통찰)과 `<RelatedPost />` 교차 참조를 정해진 위치에 배치한다. 마지막으로 검증 루프(`generate-keyword-map` → `velite` → `type-check` → `build`)를 실행해 완성도를 보장한다.
 
 상세: `references/stage-3-mdx.md`, `references/frontmatter-rules.md`, `references/visualization-rules.md`, `references/validation-loop.md`
 
@@ -87,8 +87,7 @@ DEEP(구 Backend Notes) 블로그(`content/posts/`)의 MDX 포스트를 3단계 
 
 - **필수**: `content/posts/<slug>.mdx` (검증 후 `draft: false`로 확정)
 - **필수**: `lib/generated/keyword-map.ts` (재생성)
-- **선택**: `components/visualizations/<Name>.tsx` (시각화 필요 시 신규)
-- **선택**: `public/images/<slug>-<descriptor>.svg` (정적 다이어그램 필요 시)
+- **선택**: `components/visualizations/<Name>.tsx` (시각화 필요 시 신규 — React [A-1] 또는 [A-2])
 - **선택**: `components/mdx/components.tsx` (신규 시각화 컴포넌트 등록 시)
 - **보존**: `.claude/drafts/<slug>-notes.md` (학습 노트, 자동 삭제 안 함)
 

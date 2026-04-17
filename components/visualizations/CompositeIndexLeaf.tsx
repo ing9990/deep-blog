@@ -112,7 +112,7 @@ export function CompositeIndexLeaf({
       <div className="mb-3 rounded-[8px] border border-border bg-muted/30 px-3 py-2 text-[13px] font-semibold text-foreground">
         인덱스: {current.indexLabel}
         <span className="ml-2 text-muted-foreground font-normal">
-          — user_id = 123 내부
+          (user_id = 123 내부)
         </span>
       </div>
 

@@ -8,6 +8,8 @@ export interface KeywordEntry {
 }
 
 export const KEYWORD_MAP: ReadonlyMap<string, KeywordEntry> = new Map([
+  ["두 장군 문제", { slug: "two-generals-problem", title: "Two Generals' Problem", summary: "비신뢰 채널 위에서 두 당사자가 확정적 합의에 도달하는 것이 왜 불가능한지 이해하고, 현대 분산 시스템이 이 불가능성과 어떻게 타협하는지 구분할 수 있습니다. At-least-once와 멱등성이 표준이 된 근본 이유를 설명합니다." }],
+  ["멱등성", { slug: "idempotency", title: "Idempotency (멱등성)", summary: "같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 멱등성이 왜 필요하고 어떻게 구현되는지 이해합니다. HTTP 메서드 의미론부터 Idempotency-Key 패턴, 자연 멱등 설계까지의 내부 동작을 정리합니다." }],
   ["복합 인덱스", { slug: "database-index-deep-dive", title: "Database Index (데이터베이스 인덱스)", summary: "B+Tree 기반 인덱스의 내부 동작 원리를 이해하고, 복합 인덱스의 리프 노드 배치부터 등호 먼저·정렬 마지막 원칙, 인덱스 개수 결정까지 실전 설계 기준을 얻습니다." }],
   ["카디널리티", { slug: "cardinality", title: "Cardinality (카디널리티)", summary: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다." }],
   ["퀵 정렬", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
@@ -17,37 +19,46 @@ export const KEYWORD_MAP: ReadonlyMap<string, KeywordEntry> = new Map([
   ["cardinality", { slug: "cardinality", title: "Cardinality (카디널리티)", summary: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다." }],
   ["claude cli", { slug: "claude-code-primer", title: "Claude Code", summary: "Claude Code가 일반 챗봇과 무엇이 다른지 이해하고, 네 가지 확장 축(CLAUDE.md·Skills·Agents·Plugins)의 설계 원리와 트레이드오프를 구분할 수 있습니다. 설치부터 실무 시나리오까지 한 글로 정리합니다." }],
   ["claude code", { slug: "claude-code-primer", title: "Claude Code", summary: "Claude Code가 일반 챗봇과 무엇이 다른지 이해하고, 네 가지 확장 축(CLAUDE.md·Skills·Agents·Plugins)의 설계 원리와 트레이드오프를 구분할 수 있습니다. 설치부터 실무 시나리오까지 한 글로 정리합니다." }],
-  ["consumer group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
+  ["common knowledge", { slug: "two-generals-problem", title: "Two Generals' Problem", summary: "비신뢰 채널 위에서 두 당사자가 확정적 합의에 도달하는 것이 왜 불가능한지 이해하고, 현대 분산 시스템이 이 불가능성과 어떻게 타협하는지 구분할 수 있습니다. At-least-once와 멱등성이 표준이 된 근본 이유를 설명합니다." }],
   ["full table scan", { slug: "full-table-scan", title: "Full Table Scan", summary: "Full Table Scan이 언제 문제이고 언제 정상인지 구분할 수 있습니다. 옵티마이저가 인덱스 대신 Full Table Scan을 선택하는 이유와 Sequential I/O vs Random I/O 트레이드오프를 이해합니다." }],
   ["garbage collection", { slug: "jvm-gc-intro", title: "JVM Garbage Collection (GC)", summary: "JVM GC가 왜 필요하고, 힙 구조와 세대별 수거가 어떻게 동작하며, 알고리즘별 트레이드오프를 판단하는 기준을 얻습니다." }],
+  ["idempotency", { slug: "idempotency", title: "Idempotency (멱등성)", summary: "같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 멱등성이 왜 필요하고 어떻게 구현되는지 이해합니다. HTTP 메서드 의미론부터 Idempotency-Key 패턴, 자연 멱등 설계까지의 내부 동작을 정리합니다." }],
+  ["idempotency-key", { slug: "idempotency", title: "Idempotency (멱등성)", summary: "같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 멱등성이 왜 필요하고 어떻게 구현되는지 이해합니다. HTTP 메서드 의미론부터 Idempotency-Key 패턴, 자연 멱등 설계까지의 내부 동작을 정리합니다." }],
   ["quick sort", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
+  ["two generals' problem", { slug: "two-generals-problem", title: "Two Generals' Problem", summary: "비신뢰 채널 위에서 두 당사자가 확정적 합의에 도달하는 것이 왜 불가능한지 이해하고, 현대 분산 시스템이 이 불가능성과 어떻게 타협하는지 구분할 수 있습니다. At-least-once와 멱등성이 표준이 된 근본 이유를 설명합니다." }],
 ])
 
 
 export const KEYWORDS_BY_LENGTH: readonly string[] = [
+  "two generals' problem",
   "garbage collection",
+  "common knowledge",
   "full table scan",
-  "consumer group",
+  "idempotency-key",
   "cardinality",
   "claude code",
+  "idempotency",
   "claude cli",
   "quick sort",
   "풀 테이블 스캔",
+  "두 장군 문제",
   "복합 인덱스",
   "클로드 코드",
   "b-tree",
   "카디널리티",
   "퀵 정렬",
+  "멱등성",
 ]
 
 
 export const SLUG_TO_ENTRY: ReadonlyMap<string, KeywordEntry> = new Map([
+  ["two-generals-problem", { slug: "two-generals-problem", title: "Two Generals' Problem", summary: "비신뢰 채널 위에서 두 당사자가 확정적 합의에 도달하는 것이 왜 불가능한지 이해하고, 현대 분산 시스템이 이 불가능성과 어떻게 타협하는지 구분할 수 있습니다. At-least-once와 멱등성이 표준이 된 근본 이유를 설명합니다." }],
+  ["idempotency", { slug: "idempotency", title: "Idempotency (멱등성)", summary: "같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 멱등성이 왜 필요하고 어떻게 구현되는지 이해합니다. HTTP 메서드 의미론부터 Idempotency-Key 패턴, 자연 멱등 설계까지의 내부 동작을 정리합니다." }],
   ["database-index-deep-dive", { slug: "database-index-deep-dive", title: "Database Index (데이터베이스 인덱스)", summary: "B+Tree 기반 인덱스의 내부 동작 원리를 이해하고, 복합 인덱스의 리프 노드 배치부터 등호 먼저·정렬 마지막 원칙, 인덱스 개수 결정까지 실전 설계 기준을 얻습니다." }],
   ["cardinality", { slug: "cardinality", title: "Cardinality (카디널리티)", summary: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다." }],
   ["quick-sort", { slug: "quick-sort", title: "Quick Sort (퀵 정렬)", summary: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다." }],
   ["claude-code-primer", { slug: "claude-code-primer", title: "Claude Code", summary: "Claude Code가 일반 챗봇과 무엇이 다른지 이해하고, 네 가지 확장 축(CLAUDE.md·Skills·Agents·Plugins)의 설계 원리와 트레이드오프를 구분할 수 있습니다. 설치부터 실무 시나리오까지 한 글로 정리합니다." }],
   ["full-table-scan", { slug: "full-table-scan", title: "Full Table Scan", summary: "Full Table Scan이 언제 문제이고 언제 정상인지 구분할 수 있습니다. 옵티마이저가 인덱스 대신 Full Table Scan을 선택하는 이유와 Sequential I/O vs Random I/O 트레이드오프를 이해합니다." }],
   ["b-tree-structure", { slug: "b-tree-structure", title: "B-Tree", summary: "B-Tree가 왜 디스크 기반 시스템의 표준 자료구조가 되었는지 이해하고, 탐색·삽입·분할의 내부 동작 원리와 B+Tree·해시 인덱스와의 트레이드오프를 구분할 수 있습니다." }],
-  ["kafka-consumer-group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
   ["jvm-gc-intro", { slug: "jvm-gc-intro", title: "JVM Garbage Collection (GC)", summary: "JVM GC가 왜 필요하고, 힙 구조와 세대별 수거가 어떻게 동작하며, 알고리즘별 트레이드오프를 판단하는 기준을 얻습니다." }],
 ])

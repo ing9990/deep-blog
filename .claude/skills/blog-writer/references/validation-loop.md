@@ -134,8 +134,7 @@ MDX 생성과 자산 생성이 모두 완료된 후, 스킬은 4단계 검증을
 
 작성된 파일:
   ✓ content/posts/<slug>.mdx (N줄)
-  ✓ components/visualizations/<Name>.tsx (M줄, 신규)  # 시각화 신규 생성 시
-  ✓ public/images/<slug>-<descriptor>.svg (신규)      # SVG 신규 생성 시
+  ✓ components/visualizations/<Name>.tsx (M줄, 신규)  # React 시각화([A-1]/[A-2]) 신규 생성 시
   ✓ components/mdx/components.tsx 업데이트             # 컴포넌트 등록 시
   ✓ lib/generated/keyword-map.ts (N → M keywords)
 
