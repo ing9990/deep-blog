@@ -92,7 +92,7 @@ export function TwoGeneralsMessenger({ description }: TwoGeneralsMessengerProps)
             <Swords className="h-6 w-6" aria-hidden="true" />
           </div>
           <span className="text-xs font-semibold text-foreground">적 계곡</span>
-          <span className="text-[11px] text-muted-foreground">사자가 잡힐 수 있는 구간</span>
+          <span className="text-[11px] text-muted-foreground">부하가 잡힐 수 있는 구간</span>
         </div>
 
         <div className="flex flex-col items-center gap-2">
