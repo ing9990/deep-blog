@@ -16,6 +16,9 @@ coverage/
 .env.local
 .env*.local
 
+# git worktrees (isolated workspaces for parallel feature work)
+.worktrees/
+
 # editor / OS
 .DS_Store
 *.log
