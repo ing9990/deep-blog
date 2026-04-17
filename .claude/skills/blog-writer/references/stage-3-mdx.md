@@ -278,15 +278,22 @@ $$T(n) = 2T(n/2) + O(n) = O(n \log n)$$
 
 ````mdx
 ---
-title: "<주제명>"
-slug: "<slug>"
-date: <YYYY-MM-DD>
+title:
+  ko: "{한글 제목}"
+  en: "{English Title}"
+slug: "{kebab-case-slug}"
+date: YYYY-MM-DD
 tags:
-  - <카테고리 상위 태그>
-  - <세부 태그>
+  - {tag1}
+  - {tag2}
 keywords:
-  - <키워드>
-summary: "<독자가 읽으면 무엇을 이해하게 되는가 — 10~300자>"
+  - {keyword1}
+  - {keyword2}
+summary:
+  ko: "{한글 요약 (10~300자)}"
+  en: "{English summary (10~300 chars)}"
+category: {category-id}
+draft: false
 ---
 
 [Hook paragraph — 독자가 읽을 이유, 2~3 문장]
