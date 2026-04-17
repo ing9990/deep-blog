@@ -1,8 +1,11 @@
+'use client'
+
 // components/blog/RelatedPost.tsx
 import Link from 'next/link'
 import { ArrowRight, BookOpen, Compass, Layers } from 'lucide-react'
 import { SLUG_TO_ENTRY } from '@/lib/generated/keyword-map'
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 type RelatedPostType = 'prerequisite' | 'deep-dive' | 'parallel'
 
@@ -45,6 +48,7 @@ const VARIANTS: Record<
 }
 
 export function RelatedPost({ slug, type = 'deep-dive', label }: RelatedPostProps) {
+  const { lang } = useTranslation()
   const entry = SLUG_TO_ENTRY.get(slug)
   if (!entry) {
     if (process.env.NODE_ENV !== 'production') {
@@ -74,10 +78,10 @@ export function RelatedPost({ slug, type = 'deep-dive', label }: RelatedPostProp
           {displayLabel}
         </p>
         <p className="mt-1.5 text-[15px] font-semibold text-foreground transition-colors group-hover:text-primary">
-          {entry.title}
+          {entry.title[lang]}
         </p>
         <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
-          {entry.summary}
+          {entry.summary[lang]}
         </p>
       </div>
       <ArrowRight
