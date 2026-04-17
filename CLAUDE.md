@@ -58,6 +58,7 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 6. `content/posts/*.mdx` 직접 `Write` 금지 — blog-writer 스킬로.
 7. 동작/상태 변화가 핵심인 개념을 텍스트만으로 설명 금지 (시각화 필수).
 8. 파괴적 git 명령(`push --force`, `reset --hard`, `clean -f`) + `--no-verify` 훅 우회 금지.
+9. **Typography 하드코딩 금지** — `text-[Npx]` / `text-xs|sm|base|lg|xl|2xl|3xl|4xl` / CSS `font-size: Npx` 직접 사용 금지. `app/globals.css`의 semantic 토큰(`--text-body`, `--text-menu`, `--text-h*`, `--text-callout-*`, `--text-button`, `--text-badge`, `--text-meta`, `--text-caption`, `--text-hint`, `--text-nav-*`, `--text-search-*`, `--text-code-*`, `--text-settings-*`) 사용. Tailwind에서는 `text-[length:var(--text-*)]` 구문. 예외: `components/visualizations/{BTreeInsert,QuickSort,...}` SVG 내부 로직 상수, `em`/`%` 상대 단위, primitive 정의 블록 (`@theme inline`, `:root`, `[data-theme="dark"]`, `html[data-font-size="..."]`).
 
 ## 6. 변경 금지 결정 (비자명 불변식)
 
@@ -76,6 +77,7 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 - **`CategoryNav` 모든 `<details>`는 기본 `open`**. 현재 글 카테고리만 여는 동작 폐기.
 - **Hero Intro (`components/blog/HeroIntro.tsx`)**: 세션 1회(`sessionStorage['deep-hero-seen']`), 4단계 progressive highlight, **재진입 경로 없음(단방향)**. 트랙패드 내성 `createBurstDetector` (`IDLE_GAP=120 / COMMIT_DELTA=220 / COOLDOWN=420`). **Dismiss 타이머는 `dismissScheduledRef` 가드 + 이펙트 deps `[stage, show]`만**. `dismissing`을 deps에 넣으면 cleanup이 `clearTimeout`으로 `setShow(false)`를 영구 취소 → **body scroll 영구 잠금 회귀**.
 - **폰트 3-way split**: `--font-sans` = Paperlogy(9 weights TTF) / `.prose-kr`만 `--font-pretendard` 오버라이드 / `--font-mono` = JetBrains Mono. `app/layout.tsx`가 세 `next/font/local` 선언 동시 보유. 통합/제거 금지.
+- **Typography 토큰 시스템 (PR1)**: `app/globals.css`에 2-tier 토큰 — (1) `@theme inline` primitives(`--text-2xs`~`--text-3xl`, `--leading-*`, `--weight-*`, 모두 `calc(Npx * var(--text-scale, 1))` 래핑) (2) `:root` semantic aliases(25개, role 기반). 반응형은 `@media (min-width: 768px) :root { }`에서 semantic 재선언으로만 처리(사용처는 분기 없음). **사용자 조정 가능 font-scale**: `html[data-font-size="small|normal|large"]`가 `--text-scale`을 `0.92 / 1 / 1.10`으로 오버라이드 → primitive 전체가 동시 스케일. `SettingsProvider`의 `fontSize` 필드가 `document.documentElement.dataset.fontSize`에 effect로 동기화, 초기 FOUC는 `app/layout.tsx`의 `next/script strategy="beforeInteractive"`로 차단. 기본값 `normal`. 새 토큰 추가 시 primitive → semantic alias 순서, 반응형 필요 시 media 블록에도 재선언 필수.
 - **Category 아이콘은 `lib/category-icons.ts`에 분리**. `lib/categories.ts`에 `lucide-react` import 금지 (velite가 로드하는 서버 번들 오염).
 - shadcn 토큰(`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--ring`, `--accent`) + 확장(`--keyword`, `--keyword-bg`, `--code-inline-fg`, `--border-strong`, `--viz-*`). 다크모드는 `next-themes` `attribute="data-theme"` 고정 + Tailwind `darkMode: ['selector', '[data-theme="dark"]']`.
 - **인라인 요소 3색 체계**: 일반 링크=blue(`--primary`) / 키워드 링크=indigo(`--keyword` + `.keyword-link` 클래스) / 인라인 코드=teal(`--code-inline-fg` 텍스트 + 10% 틴트 배경). 세 색상 영역 혼용 금지.
