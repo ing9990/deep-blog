@@ -7,6 +7,7 @@ export const MESSAGES = {
   'header.open.search':        { ko: '검색 열기',         en: 'Open search' },
   'header.open.toc':           { ko: '목차 열기',         en: 'Open table of contents' },
   'header.open.github':        { ko: 'GitHub 저장소 열기', en: 'Open GitHub repository' },
+  'header.open.settings':      { ko: '언어 및 테마 설정 열기', en: 'Open language and theme settings' },
   'header.site.actions':       { ko: '사이트 액션',       en: 'Site actions' },
 
   // 인덱스 / 필터

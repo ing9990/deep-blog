@@ -1,13 +1,12 @@
 'use client'
 
-import { Monitor, Moon, Sun } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 
 const OPTIONS = [
   { value: 'light', icon: Sun, label: '라이트 모드' },
-  { value: 'system', icon: Monitor, label: '시스템 테마' },
   { value: 'dark', icon: Moon, label: '다크 모드' },
 ] as const
 

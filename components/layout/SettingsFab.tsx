@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Settings } from 'lucide-react'
 import { SettingsPanel } from './SettingsPanel'
 import { SettingsFabIntro } from './SettingsFabIntro'
@@ -12,6 +12,14 @@ export function SettingsFab() {
 
   const handleToggle = useCallback(() => setOpen((prev) => !prev), [])
   const handleClose = useCallback(() => setOpen(false), [])
+
+  // External open trigger: header language button dispatches this event
+  // so both the FAB and the header share a single open/close owner.
+  useEffect(() => {
+    const handler = () => setOpen(true)
+    window.addEventListener('deep-settings-open', handler)
+    return () => window.removeEventListener('deep-settings-open', handler)
+  }, [])
 
   return (
     <>
