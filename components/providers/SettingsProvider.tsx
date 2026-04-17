@@ -87,6 +87,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(loadSettings())
   }, [])
 
+  useEffect(() => {
+    document.documentElement.dataset.fontSize = settings.fontSize
+  }, [settings.fontSize])
+
   const updateSetting = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
       setSettings((prev) => {
