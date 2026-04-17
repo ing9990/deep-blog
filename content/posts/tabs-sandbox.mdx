@@ -1,0 +1,115 @@
+---
+title: "Tabs Sandbox"
+slug: "tabs-sandbox"
+date: 2026-04-17
+tags:
+  - tabs
+  - sandbox
+keywords:
+  - MDX Tabs Component
+summary: "Regression reference for the <Tabs> MDX component. Not published. Covers group sync, independent mode, mixed content, and long labels."
+category: knowledge
+draft: true
+---
+
+## Group sync — install
+
+<Tabs group="os">
+  <Tab label="macOS">
+    ```bash
+    curl -fsSL https://claude.ai/install.sh | bash
+    ```
+  </Tab>
+  <Tab label="Linux">
+    ```bash
+    curl -fsSL https://claude.ai/install.sh | bash
+    ```
+  </Tab>
+  <Tab label="Windows">
+    ```powershell
+    irm https://claude.ai/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+## Group sync — config path (should mirror above)
+
+<Tabs group="os">
+  <Tab label="macOS">
+    `~/Library/Application Support/claude/config.json`
+  </Tab>
+  <Tab label="Linux">
+    `~/.config/claude/config.json`
+  </Tab>
+  <Tab label="Windows">
+    `%APPDATA%\claude\config.json`
+  </Tab>
+</Tabs>
+
+## Independent tabs (no group)
+
+<Tabs>
+  <Tab label="Java">
+    ```java
+    System.out.println("hello");
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin
+    println("hello")
+    ```
+  </Tab>
+</Tabs>
+
+<Tabs>
+  <Tab label="Java">
+    Independent from the one above.
+  </Tab>
+  <Tab label="Kotlin">
+    Changing this should not affect the other Java/Kotlin tabs.
+  </Tab>
+</Tabs>
+
+## Mixed content — tables, callouts, keyword links
+
+<Tabs group="os">
+  <Tab label="macOS">
+    | Path | Purpose |
+    | --- | --- |
+    | `~/Library/Logs/claude` | Log output |
+    | `~/Library/Caches/claude` | Disk cache |
+
+    <Callout type="info" title="팁">
+      로그 파일은 7일 이상 보관됩니다.
+    </Callout>
+  </Tab>
+  <Tab label="Linux">
+    Linux uses XDG paths — `$XDG_CACHE_HOME` takes precedence.
+  </Tab>
+  <Tab label="Windows">
+    Windows stores logs under `%LOCALAPPDATA%\claude\logs`.
+  </Tab>
+</Tabs>
+
+## Many tabs with long labels (mobile horizontal scroll)
+
+<Tabs>
+  <Tab label="Native Install (Recommended)">
+    One.
+  </Tab>
+  <Tab label="Homebrew">
+    Two.
+  </Tab>
+  <Tab label="WinGet">
+    Three.
+  </Tab>
+  <Tab label="Debian / Ubuntu APT">
+    Four.
+  </Tab>
+  <Tab label="Arch Linux (AUR)">
+    Five.
+  </Tab>
+  <Tab label="Fedora (DNF)">
+    Six.
+  </Tab>
+</Tabs>
