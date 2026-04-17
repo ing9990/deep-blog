@@ -41,7 +41,7 @@ export function Callout({ type = 'info', title, children }: CalloutProps) {
 
   return (
     <aside
-      className="my-6 flex gap-3 rounded-[14px] border border-border border-l-4 p-4 text-[length:var(--text-callout-body)] leading-[1.7] text-foreground"
+      className="my-6 flex gap-3 rounded-[var(--radius-panel)] border border-border border-l-4 p-4 text-[length:var(--text-callout-body)] leading-[1.7] text-foreground"
       style={surface}
       role="note"
     >

@@ -60,7 +60,7 @@ export function TabsView({ group, defaultValue, tabs }: TabsViewProps) {
     <RadixTabs.Root
       value={current}
       onValueChange={handleChange}
-      className="my-6 overflow-hidden rounded-[14px] border border-border"
+      className="my-6 overflow-hidden rounded-[var(--radius-panel)] border border-border"
     >
       <RadixTabs.List
         className={cn(

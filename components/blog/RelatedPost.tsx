@@ -61,7 +61,7 @@ export function RelatedPost({ slug, type = 'deep-dive', label }: RelatedPostProp
     <Link
       href={`/posts/${slug}`}
       className={cn(
-        'group my-6 flex items-start gap-4 rounded-[14px] border border-border bg-background p-5 transition-colors hover:border-border-strong hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group my-6 flex items-start gap-4 rounded-[var(--radius-panel)] border border-border bg-background p-5 transition-colors hover:border-border-strong hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         variant.surfaceClass,
       )}
     >

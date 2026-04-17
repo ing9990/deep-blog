@@ -38,7 +38,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
 
         {showDate ? (
           <>
-            <div className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-border bg-background text-[length:var(--text-meta)] font-bold text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
+            <div className="relative z-[var(--z-nav)] flex h-10 w-10 items-center justify-center rounded-full border-2 border-border bg-background text-[length:var(--text-meta)] font-bold text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
               {day}
             </div>
             <span className="mt-1 text-[length:var(--text-meta)] font-medium uppercase tracking-widest text-muted-foreground">
@@ -46,7 +46,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
             </span>
           </>
         ) : (
-          <div className="relative z-10 mt-[15px] h-2.5 w-2.5 rounded-full border-[1.5px] border-border bg-background transition-colors group-hover:border-primary" />
+          <div className="relative z-[var(--z-nav)] mt-[15px] h-2.5 w-2.5 rounded-full border-[1.5px] border-border bg-background transition-colors group-hover:border-primary" />
         )}
       </div>
 
@@ -58,7 +58,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
         {/* Category */}
         <div className="mb-2 flex items-center gap-2">
           <span
-            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[7px]"
+            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-chip)]"
             style={{ backgroundColor: 'var(--cat-tint)' }}
           >
             <Icon className="h-[14px] w-[14px]" style={{ color: 'var(--cat-accent)' }} strokeWidth={2.2} aria-hidden />
