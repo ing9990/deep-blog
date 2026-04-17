@@ -190,9 +190,10 @@ export function HeroIntro() {
     try {
       sessionStorage.setItem(STORAGE_KEY, String(Date.now()))
     } catch {}
-    try {
-      window.dispatchEvent(new CustomEvent('deep-hero-dismissed'))
-    } catch {}
+    // SettingsFabIntro listens for this to schedule its own intro playback
+    // after hero fade-out. CustomEvent is always available in the client
+    // effect runtime, so no try/catch is needed.
+    window.dispatchEvent(new CustomEvent('deep-hero-dismissed'))
     window.setTimeout(() => setShow(false), FADE_MS)
   }, [stage, show])
 
