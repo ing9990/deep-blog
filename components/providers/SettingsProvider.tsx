@@ -66,17 +66,15 @@ function saveSettings(settings: Settings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
   } catch {
-    // quota exceeded — ignore silently
+    // quota exceeded: ignore silently
   }
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
-  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     setSettings(loadSettings())
-    setHydrated(true)
   }, [])
 
   const updateSetting = useCallback(
