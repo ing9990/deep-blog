@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { postFrontmatterSchema } from '../velite.config'
 
 const validFrontmatter = {
-  title: 'Test Post',
+  title: { ko: '테스트 포스트', en: 'Test Post' },
   slug: 'test-post',
   date: '2026-04-14',
   tags: ['Database'],
   keywords: ['Index'],
-  summary: 'A short summary for testing the frontmatter schema.',
+  summary: {
+    ko: '프론트매터 스키마를 테스트하기 위한 요약입니다.',
+    en: 'A short summary for testing the frontmatter schema.',
+  },
   category: 'database' as const,
 }
 
@@ -30,7 +33,10 @@ describe('postFrontmatterSchema', () => {
 
   it('rejects summary shorter than 10 characters', () => {
     expect(() =>
-      postFrontmatterSchema.parse({ ...validFrontmatter, summary: 'too short' }),
+      postFrontmatterSchema.parse({
+        ...validFrontmatter,
+        summary: { ko: 'too short', en: 'too short' },
+      }),
     ).toThrow()
   })
 
