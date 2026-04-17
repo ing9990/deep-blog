@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import type { SortKey } from './filters'
 import type { CategoryId } from './categories'
+import type { Language } from '@/components/providers/SettingsProvider'
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
@@ -20,10 +21,19 @@ export function buildPostsUrl(params: {
   return qs ? `/?${qs}` : '/'
 }
 
-export function formatDate(iso: string): string {
+const EN_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+export function formatDate(iso: string, lang: Language = 'en'): string {
   const d = new Date(iso)
-  const yyyy = d.getUTCFullYear()
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
-  const dd = String(d.getUTCDate()).padStart(2, '0')
-  return `${yyyy}.${mm}.${dd}`
+  const y = d.getUTCFullYear()
+  const m = d.getUTCMonth() // 0-indexed
+  const day = d.getUTCDate()
+
+  if (lang === 'ko') {
+    return `${y}년 ${m + 1}월 ${day}일`
+  }
+  return `${EN_MONTHS[m]} ${day}, ${y}`
 }

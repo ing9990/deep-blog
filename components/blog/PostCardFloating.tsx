@@ -41,7 +41,7 @@ export function PostCardFloating({ post }: { post: Post }) {
             {meta.label[lang]}
           </span>
           <time className="text-[12px] tabular-nums text-muted-foreground" dateTime={post.date}>
-            {formatDate(post.date)}
+            {formatDate(post.date, lang)}
           </time>
         </div>
 

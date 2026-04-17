@@ -1,6 +1,9 @@
+'use client'
+
 import Link from 'next/link'
 import { ReadingTime } from './ReadingTime'
 import { formatDate } from '@/lib/utils'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface PostMetaProps {
   tags: readonly string[]
@@ -9,7 +12,8 @@ interface PostMetaProps {
 }
 
 export function PostMeta({ tags, date, readingTime }: PostMetaProps) {
-  const formattedDate = formatDate(date)
+  const { lang } = useTranslation()
+  const formattedDate = formatDate(date, lang)
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
@@ -31,4 +35,3 @@ export function PostMeta({ tags, date, readingTime }: PostMetaProps) {
     </div>
   )
 }
-
