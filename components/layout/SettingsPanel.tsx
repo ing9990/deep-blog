@@ -3,25 +3,37 @@
 
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import { useSettings, type CardLayout } from '@/components/providers/SettingsProvider'
+import {
+  useSettings,
+  type CardLayout,
+  type Language,
+} from '@/components/providers/SettingsProvider'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 import { cn } from '@/lib/utils'
+import type { MessageKey } from '@/lib/i18n/messages'
 
 interface SettingsPanelProps {
   open: boolean
   onClose: () => void
 }
 
-const LAYOUT_OPTIONS: { value: CardLayout; label: string }[] = [
-  { value: 'timeline', label: 'Default' },
-  { value: 'editorial', label: 'Editorial' },
-  { value: 'floating', label: 'Floating' },
+const LAYOUT_OPTIONS: { value: CardLayout; labelKey: MessageKey }[] = [
+  { value: 'timeline',  labelKey: 'settings.layout.timeline' },
+  { value: 'editorial', labelKey: 'settings.layout.editorial' },
+  { value: 'floating',  labelKey: 'settings.layout.floating' },
+]
+
+const LANGUAGE_OPTIONS: { value: Language; labelKey: MessageKey }[] = [
+  { value: 'ko', labelKey: 'settings.lang.ko' },
+  { value: 'en', labelKey: 'settings.lang.en' },
 ]
 
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { settings, updateSetting } = useSettings()
+  const { t, lang } = useTranslation()
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // ESC 닫기
+  // ESC close
   useEffect(() => {
     if (!open) return
     function handleKey(e: KeyboardEvent) {
@@ -31,7 +43,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, onClose])
 
-  // 외부 클릭 닫기
+  // Outside click close
   useEffect(() => {
     if (!open) return
     function handleClick(e: MouseEvent) {
@@ -39,7 +51,6 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         onClose()
       }
     }
-    // requestAnimationFrame으로 FAB 클릭 이벤트와 충돌 방지
     const id = requestAnimationFrame(() => {
       document.addEventListener('mousedown', handleClick)
     })
@@ -55,17 +66,17 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     <div
       ref={panelRef}
       role="dialog"
-      aria-label="설정"
+      aria-label={t('settings.title')}
       className="fixed bottom-20 right-6 z-50 w-[300px] origin-bottom-right animate-[panel-in_0.25s_cubic-bezier(0.22,1,0.36,1)_both] rounded-2xl border border-border bg-background shadow-xl"
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-5 pb-3 pt-4">
-        <h3 className="text-[15px] font-bold tracking-tight">설정</h3>
+        <h3 className="text-[15px] font-bold tracking-tight">{t('settings.title')}</h3>
         <button
           type="button"
           onClick={onClose}
           className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
-          aria-label="설정 닫기"
+          aria-label={t('settings.close')}
         >
           <X className="h-4 w-4" />
         </button>
@@ -76,7 +87,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         {/* Theme Section */}
         <div className="px-5 py-3">
           <div className="mb-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-            테마
+            {t('settings.theme')}
           </div>
           <div className="flex gap-2">
             {LAYOUT_OPTIONS.map((opt) => (
@@ -92,7 +103,34 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 )}
               >
                 <LayoutMiniIcon layout={opt.value} active={settings.cardLayout === opt.value} />
-                <span className="text-[11px] font-semibold">{opt.label}</span>
+                <span className="text-[11px] font-semibold">{t(opt.labelKey)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-border" />
+
+        {/* Language Section */}
+        <div className="px-5 py-3">
+          <div className="mb-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.language')}
+          </div>
+          <div className="flex gap-2">
+            {LANGUAGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => updateSetting('language', opt.value)}
+                className={cn(
+                  'flex-1 rounded-lg border-[1.5px] px-3 py-2 text-[12.5px] font-semibold transition-all',
+                  lang === opt.value
+                    ? 'border-primary bg-accent text-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:border-border-strong',
+                )}
+              >
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
@@ -102,7 +140,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   )
 }
 
-/* 각 레이아웃의 특징을 추상화한 미니 와이어프레임 아이콘 */
+/* Mini wireframe icons for each layout option */
 function LayoutMiniIcon({ layout, active }: { layout: CardLayout; active: boolean }) {
   const barColor = active ? 'bg-primary' : 'bg-muted-foreground/30'
   const dotColor = active ? 'bg-primary' : 'bg-muted-foreground/30'
