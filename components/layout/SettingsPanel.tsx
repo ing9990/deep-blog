@@ -6,6 +6,7 @@ import { X } from 'lucide-react'
 import {
   useSettings,
   type CardLayout,
+  type FontSize,
   type Language,
 } from '@/components/providers/SettingsProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
@@ -26,6 +27,12 @@ const LAYOUT_OPTIONS: { value: CardLayout; labelKey: MessageKey }[] = [
 const LANGUAGE_OPTIONS: { value: Language; labelKey: MessageKey }[] = [
   { value: 'ko', labelKey: 'settings.lang.ko' },
   { value: 'en', labelKey: 'settings.lang.en' },
+]
+
+const FONT_SIZE_OPTIONS: { value: FontSize; labelKey: MessageKey }[] = [
+  { value: 'small',  labelKey: 'settings.font.small' },
+  { value: 'normal', labelKey: 'settings.font.normal' },
+  { value: 'large',  labelKey: 'settings.font.large' },
 ]
 
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
@@ -71,7 +78,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-5 pb-3 pt-4">
-        <h3 className="text-[15px] font-bold tracking-tight">{t('settings.title')}</h3>
+        <h3 className="text-[length:var(--text-settings-title)] font-bold tracking-tight">{t('settings.title')}</h3>
         <button
           type="button"
           onClick={onClose}
@@ -86,7 +93,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       <div className="py-2">
         {/* Theme Section */}
         <div className="px-5 py-3">
-          <div className="mb-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="mb-2.5 text-[length:var(--text-settings-header)] font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.theme')}
           </div>
           <div className="flex gap-2">
@@ -103,7 +110,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 )}
               >
                 <LayoutMiniIcon layout={opt.value} active={settings.cardLayout === opt.value} />
-                <span className="text-[11px] font-semibold">{t(opt.labelKey)}</span>
+                <span className="text-[length:var(--text-caption)] font-semibold">{t(opt.labelKey)}</span>
               </button>
             ))}
           </div>
@@ -114,7 +121,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
         {/* Language Section */}
         <div className="px-5 py-3">
-          <div className="mb-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="mb-2.5 text-[length:var(--text-settings-header)] font-semibold uppercase tracking-wider text-muted-foreground">
             {t('settings.language')}
           </div>
           <div className="flex gap-2">
@@ -124,8 +131,35 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 type="button"
                 onClick={() => updateSetting('language', opt.value)}
                 className={cn(
-                  'flex-1 rounded-lg border-[1.5px] px-3 py-2 text-[12.5px] font-semibold transition-all',
+                  'flex-1 rounded-lg border-[1.5px] px-3 py-2 text-[length:var(--text-button)] font-semibold transition-all',
                   lang === opt.value
+                    ? 'border-primary bg-accent text-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:border-border-strong',
+                )}
+              >
+                {t(opt.labelKey)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-border" />
+
+        {/* Font Size Section */}
+        <div className="px-5 py-3">
+          <div className="mb-2.5 text-[length:var(--text-settings-header)] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.font')}
+          </div>
+          <div className="flex gap-2">
+            {FONT_SIZE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => updateSetting('fontSize', opt.value)}
+                className={cn(
+                  'flex-1 rounded-lg border-[1.5px] px-3 py-2 text-[length:var(--text-button)] font-semibold transition-all',
+                  settings.fontSize === opt.value
                     ? 'border-primary bg-accent text-foreground'
                     : 'border-border bg-background text-muted-foreground hover:border-border-strong',
                 )}
