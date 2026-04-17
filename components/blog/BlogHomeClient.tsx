@@ -7,12 +7,14 @@ import { PostList } from './PostList'
 import { TagFilterBar } from './TagFilterBar'
 import { SortSelect } from './SortSelect'
 import { useIndexFilter } from './IndexFilterContext'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface BlogHomeClientProps {
   allPosts: Post[]
 }
 
 export function BlogHomeClient({ allPosts }: BlogHomeClientProps) {
+  const { t } = useTranslation()
   const { category, tag, setTag, sort, setSort } = useIndexFilter()
 
   const scopedPosts = useMemo(
@@ -45,7 +47,7 @@ export function BlogHomeClient({ allPosts }: BlogHomeClientProps) {
         />
       )}
       <div className="mt-8 flex items-center justify-between text-sm text-muted-foreground">
-        <span>전체 {filtered.length}개 글</span>
+        <span>{t('index.total.count', { n: filtered.length })}</span>
         <SortSelect value={sort} onChange={setSort} />
       </div>
       <PostList posts={filtered} />
