@@ -21,7 +21,7 @@ export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
   const { t, lang } = useTranslation()
   const { category, setCategory } = useIndexFilter()
 
-  const groups = useMemo(() => groupPostsByCategory(allPosts), [allPosts])
+  const groups = useMemo(() => groupPostsByCategory(allPosts, lang), [allPosts, lang])
 
   return (
     <nav aria-label={t('index.category.filter')} className="flex flex-col gap-1">
