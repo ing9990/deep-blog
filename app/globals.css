@@ -258,7 +258,7 @@
   --z-nav:     10;      /* in-card badges, timeline bullet points */
   --z-overlay: 40;      /* MobileOverlays search/menu */
   --z-fab:     50;      /* SettingsFab floating button */
-  --z-fab-intro: calc(var(--z-fab) - 1);  /* One below FAB so button stays clickable */
+  --z-fab-intro: calc(var(--z-fab) - 1);  /* Within the FAB wrapper stacking context; pointer-events-none keeps the button clickable */
   --z-panel:   50;      /* SettingsPanel (sibling of fab) */
   --z-popover: 50;      /* shadcn popover/select content */
   --z-hero:    100;     /* HeroIntro session-once overlay (top of stack) */
