@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createElement } from 'react'
-import { toValue, extractTabs, TAB_SYMBOL } from '@/components/mdx/tabs-utils'
+import { toValue, extractTabs } from '@/components/mdx/tabs-utils'
 
 describe('toValue', () => {
   it('lowercases', () => {
@@ -24,12 +24,10 @@ describe('toValue', () => {
   })
 })
 
-type TabLike = ((props: { label: string; children?: unknown }) => null) & {
-  [TAB_SYMBOL]?: true
-}
-
-const FakeTab: TabLike = () => null
-FakeTab[TAB_SYMBOL] = true
+// Stand-in for the real <Tab> component. Since extractTabs identifies tabs by
+// duck-typing on a string `label` prop (see tabs-utils.ts), any component will
+// do — its identity is not consulted.
+const FakeTab = (_props: { label: string; children?: unknown }) => null
 const OtherComponent = () => null
 
 describe('extractTabs', () => {
@@ -49,7 +47,7 @@ describe('extractTabs', () => {
     expect(tabs[1]).toMatchObject({ label: 'Linux', value: 'linux', children: 'linux body' })
   })
 
-  it('ignores non-Tab children', () => {
+  it('ignores children without a string label prop', () => {
     const tabs = extractTabs([
       createElement(FakeTab, { label: 'A' }),
       createElement(OtherComponent, {}),
@@ -68,10 +66,12 @@ describe('extractTabs', () => {
     expect(tabs[0].children).toBe('first')
   })
 
-  it('falls back to "unlabeled" when label missing', () => {
+  it('falls back to "unlabeled" when label is empty or whitespace', () => {
     const tabs = extractTabs([
       createElement(FakeTab, { label: '' as string }),
+      createElement(FakeTab, { label: '   ' as string }),
     ])
+    // both empty-ish labels normalize to "" via toValue -> dedup -> length 1
     expect(tabs).toHaveLength(1)
     expect(tabs[0].label).toBe('unlabeled')
     expect(tabs[0].value).toBe('unlabeled')

@@ -4,7 +4,6 @@ import * as RadixTabs from '@radix-ui/react-tabs'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import {
-  TAB_SYMBOL,
   extractTabs,
   toValue,
   type TabProps,
@@ -13,7 +12,6 @@ import { useTabsGroup } from '@/components/mdx/TabsGroupProvider'
 
 export const Tab = (_props: TabProps): null => null
 Tab.displayName = 'Tab'
-;(Tab as unknown as { [TAB_SYMBOL]: true })[TAB_SYMBOL] = true
 
 interface TabsProps {
   group?: string

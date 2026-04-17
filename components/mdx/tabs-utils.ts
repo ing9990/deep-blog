@@ -2,8 +2,6 @@ import type { ReactNode, ReactElement } from 'react'
 
 export const toValue = (label: string): string => label.toLowerCase().trim()
 
-export const TAB_SYMBOL = Symbol.for('mdx.Tab')
-
 export interface TabProps {
   label: string
   children?: ReactNode
@@ -15,12 +13,15 @@ export interface NormalizedTab {
   children: ReactNode
 }
 
-type TabComponent = ((props: TabProps) => ReactNode) & { [TAB_SYMBOL]?: true }
-
+// Identify a <Tab> child by duck-typing: any React element whose props have a
+// string `label`. Using reference identity (type === Tab) is unreliable across
+// the RSC client boundary — the `type` field may be a client module reference
+// on the server, not the Tab function itself. Props, however, round-trip
+// cleanly through RSC serialization.
 const isTabElement = (node: ReactNode): node is ReactElement<TabProps> => {
-  if (!node || typeof node !== 'object' || !('type' in node)) return false
-  const type = (node as ReactElement).type as TabComponent
-  return typeof type === 'function' && type[TAB_SYMBOL] === true
+  if (!node || typeof node !== 'object' || !('props' in node)) return false
+  const props = (node as ReactElement).props as { label?: unknown } | null
+  return !!props && typeof props.label === 'string'
 }
 
 export function extractTabs(children: ReactNode): NormalizedTab[] {
@@ -35,12 +36,11 @@ export function extractTabs(children: ReactNode): NormalizedTab[] {
       }
       continue
     }
-    const rawLabel = node.props.label
-    const label = typeof rawLabel === 'string' ? rawLabel : ''
-    if (!label && process.env.NODE_ENV !== 'production') {
-      console.warn('<Tab>: missing label, using "unlabeled".')
+    const label = (node.props as TabProps).label
+    const safeLabel = label.trim() || 'unlabeled'
+    if (!label.trim() && process.env.NODE_ENV !== 'production') {
+      console.warn('<Tab>: empty label, using "unlabeled".')
     }
-    const safeLabel = label || 'unlabeled'
     const value = toValue(safeLabel)
     if (seen.has(value)) {
       if (process.env.NODE_ENV !== 'production') {
