@@ -253,6 +253,15 @@
   --z-popover: 50;      /* shadcn popover/select content */
   --z-hero:    100;     /* HeroIntro session-once overlay (top of stack) */
   --z-toast:   60;      /* reserved for future toasts */
+
+  /* ------------------------------------------------------------------
+     Radius semantic aliases — role-based names mapping to the existing
+     shadcn primitive scale (--radius-sm/base/lg/xl in @theme inline).
+     ------------------------------------------------------------------ */
+  --radius-chip:   var(--radius-sm);   /* 6px  — tag chips, small pills */
+  --radius-card:   var(--radius);      /* 10px — post cards, inputs */
+  --radius-panel:  var(--radius-lg);   /* 14px — callouts, popovers, settings panel */
+  --radius-overlay: var(--radius-xl);  /* 20px — hero, modals */
 }
 
 [data-theme="dark"] {
