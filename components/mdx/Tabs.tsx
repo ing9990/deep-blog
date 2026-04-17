@@ -84,7 +84,7 @@ export function Tabs({ group, defaultValue, children }: TabsProps) {
             key={t.value}
             value={t.value}
             className={cn(
-              '-mb-px whitespace-nowrap px-4 py-2.5 text-[14px] font-medium',
+              '-mb-px whitespace-nowrap px-4 py-2.5 text-[length:var(--text-button)] font-medium',
               'text-muted-foreground transition-colors',
               'hover:text-foreground',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
