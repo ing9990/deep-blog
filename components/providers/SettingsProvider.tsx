@@ -42,7 +42,7 @@ export function useSettings(): SettingsContextValue {
 }
 
 function normalizeLanguage(value: unknown): Language {
-  return value === 'ko' || value === 'en' ? value : 'en'
+  return value === 'ko' || value === 'en' ? value : 'ko'
 }
 
 function normalizeCardLayout(value: unknown): CardLayout {

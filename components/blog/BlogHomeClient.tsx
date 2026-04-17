@@ -14,7 +14,7 @@ interface BlogHomeClientProps {
 }
 
 export function BlogHomeClient({ allPosts }: BlogHomeClientProps) {
-  const { t } = useTranslation()
+  const { t, lang } = useTranslation()
   const { category, tag, setTag, sort, setSort } = useIndexFilter()
 
   const scopedPosts = useMemo(
@@ -33,8 +33,8 @@ export function BlogHomeClient({ allPosts }: BlogHomeClientProps) {
   }, [scopedTags, tag, setTag])
 
   const filtered = useMemo(
-    () => applyFilters(scopedPosts, { tag, sort }),
-    [scopedPosts, tag, sort],
+    () => applyFilters(scopedPosts, { tag, sort }, lang),
+    [scopedPosts, tag, sort, lang],
   )
 
   return (

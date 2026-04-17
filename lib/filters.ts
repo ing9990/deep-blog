@@ -1,5 +1,6 @@
 // lib/filters.ts
 import type { Post } from './posts'
+import type { Language } from '@/components/providers/SettingsProvider'
 
 export type SortKey = 'latest' | 'oldest' | 'title'
 
@@ -18,9 +19,6 @@ export function filterByTag<T extends Pick<Post, 'tags'>>(
   return posts.filter((p) => p.tags.some((t) => t.toLowerCase() === needle))
 }
 
-// Post-like shape for search. plainBody is optional so callers outside the
-// index page (e.g. unit tests on small fixtures) can omit it — the function
-// falls back to searching only the frontmatter-derived fields.
 type Searchable = Pick<Post, 'title' | 'summary' | 'tags' | 'keywords'> & {
   plainBody?: string
 }
@@ -32,8 +30,10 @@ export function searchPosts<T extends Searchable>(
   const q = query?.trim().toLowerCase()
   if (!q) return posts.slice()
   return posts.filter((p) => {
-    if (p.title.toLowerCase().includes(q)) return true
-    if (p.summary.toLowerCase().includes(q)) return true
+    if (p.title.ko.toLowerCase().includes(q)) return true
+    if (p.title.en.toLowerCase().includes(q)) return true
+    if (p.summary.ko.toLowerCase().includes(q)) return true
+    if (p.summary.en.toLowerCase().includes(q)) return true
     if (p.tags.some((t) => t.toLowerCase().includes(q))) return true
     if (p.keywords.some((k) => k.toLowerCase().includes(q))) return true
     if (p.plainBody && p.plainBody.toLowerCase().includes(q)) return true
@@ -41,14 +41,13 @@ export function searchPosts<T extends Searchable>(
   })
 }
 
-// Korean-aware collator for title and tag sorting.
-// sensitivity: 'base' treats 'Spring' and 'spring' as equal, which is the intended
-// behavior for sorted display — users don't care about case in listings.
+// Korean-aware collator for tag sorting (language-independent).
 const koCollator = new Intl.Collator('ko', { sensitivity: 'base' })
 
 export function sortPosts<T extends Pick<Post, 'date' | 'title'>>(
   posts: readonly T[],
-  sort?: SortKey,
+  sort: SortKey | undefined,
+  lang: Language,
 ): T[] {
   const out = posts.slice()
   const key = sort ?? 'latest'
@@ -57,17 +56,19 @@ export function sortPosts<T extends Pick<Post, 'date' | 'title'>>(
       return out.sort((a, b) => b.date.localeCompare(a.date))
     case 'oldest':
       return out.sort((a, b) => a.date.localeCompare(b.date))
-    case 'title':
-      return out.sort((a, b) => koCollator.compare(a.title, b.title))
+    case 'title': {
+      const collator = new Intl.Collator(lang, { sensitivity: 'base' })
+      return out.sort((a, b) => collator.compare(a.title[lang], b.title[lang]))
+    }
   }
 }
 
 export function applyFilters<
   T extends Searchable & Pick<Post, 'date'>,
->(posts: readonly T[], filters: PostFilters): T[] {
+>(posts: readonly T[], filters: PostFilters, lang: Language): T[] {
   const afterTag = filterByTag(posts, filters.tag)
   const afterSearch = searchPosts(afterTag, filters.query)
-  return sortPosts(afterSearch, filters.sort)
+  return sortPosts(afterSearch, filters.sort, lang)
 }
 
 export function extractAllTags<T extends Pick<Post, 'tags'>>(

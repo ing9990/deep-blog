@@ -52,8 +52,17 @@ MDX 생성과 자산 생성이 모두 완료된 후, 스킬은 4단계 검증을
 
 **목적**: Velite schema 검증 — frontmatter 필드 유효성, MDX 파싱, 결과 JSON 생성.
 
+**frontmatter 구조 체크리스트**:
+- [ ] `title`이 `{ ko, en }` object 형태인가 (flat string 아님)
+- [ ] `title.ko`와 `title.en` 둘 다 존재하는가 (한쪽 누락 시 Velite 빌드 실패)
+- [ ] `summary`가 `{ ko, en }` object 형태인가
+- [ ] `summary.ko`와 `summary.en` 둘 다 10~300자인가
+- [ ] 두 요약이 동일 의미를 전달하는가 (재작성 아닌 번역)
+- [ ] 어느 필드도 em-dash `—` (U+2014) 포함하지 않는가
+
 **흔한 위반 목록**:
-- `summary` 길이 10~300자 범위 벗어남
+- `title` 또는 `summary`가 flat string으로 작성됨 (`{ ko, en }` 중첩 필요)
+- `summary.ko` 또는 `summary.en` 길이 10~300자 범위 벗어남
 - `slug` 형식 오류 (대문자, 특수문자 포함)
 - `tags` 빈 배열 또는 5개 초과
 - `keywords` 빈 배열
@@ -110,7 +119,7 @@ MDX 생성과 자산 생성이 모두 완료된 후, 스킬은 4단계 검증을
 
 | 에러 종류 | 자동 수정 내용 |
 |---|---|
-| `summary` 길이 초과/미달 | 요약 텍스트 재작성 |
+| `summary.ko` / `summary.en` 길이 초과/미달 | 해당 언어 요약 텍스트 재작성 |
 | `slug` 형식 오류 (대문자) | 소문자 변환 |
 | `tags` 빈 배열 | 노트 재참조 후 기본 카테고리 태그 삽입 |
 | 컴포넌트 import 누락 | `components/mdx/components.tsx`에 추가 |

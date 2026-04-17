@@ -8,6 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface KeywordLinkProps {
   href: string
@@ -15,6 +16,7 @@ interface KeywordLinkProps {
 }
 
 export function KeywordLink({ href, children }: KeywordLinkProps) {
+  const { lang } = useTranslation()
   const slug = href.replace(/^\/posts\//, '')
   const entry = SLUG_TO_ENTRY.get(slug)
 
@@ -38,10 +40,10 @@ export function KeywordLink({ href, children }: KeywordLinkProps) {
               className="w-[320px] p-4"
             >
               <p className="text-[length:var(--text-body)] font-semibold leading-tight text-foreground">
-                {entry.title}
+                {entry.title[lang]}
               </p>
               <p className="mt-2 line-clamp-3 text-[length:var(--text-body-sm)] leading-relaxed text-muted-foreground">
-                {entry.summary}
+                {entry.summary[lang]}
               </p>
             </PopoverContent>
           )}

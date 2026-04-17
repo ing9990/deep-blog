@@ -3,8 +3,8 @@ import type { CategoryId } from '@/lib/categories'
 
 export interface ClientPost {
   slug: string
-  title: string
-  summary: string
+  title: { ko: string; en: string }
+  summary: { ko: string; en: string }
   tags: string[]
   keywords: string[]
   plainBody: string

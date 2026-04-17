@@ -9,12 +9,18 @@ describe('velite build output', () => {
   it('first post has all required frontmatter fields', () => {
     const post = posts[0]
     expect(post).toMatchObject({
-      title: expect.any(String),
+      title: {
+        ko: expect.any(String),
+        en: expect.any(String),
+      },
       slug: expect.any(String),
       date: expect.any(String),
       tags: expect.any(Array),
       keywords: expect.any(Array),
-      summary: expect.any(String),
+      summary: {
+        ko: expect.any(String),
+        en: expect.any(String),
+      },
     })
     expect(post.tags.length).toBeGreaterThan(0)
     expect(post.keywords.length).toBeGreaterThan(0)

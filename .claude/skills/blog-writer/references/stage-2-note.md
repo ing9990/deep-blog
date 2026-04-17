@@ -285,7 +285,9 @@ type 정의:
 Stage 3 Frontmatter 생성의 기초 자료. 기존 태그/키워드와 충돌 체크는 Stage 3에서 수행하지만, 여기서 초안을 만들어 둔다.
 
 ```yaml
-title: "<주제 — 핵심 내용이 드러나는 제목>"
+title:
+  ko: "<한글 제목>"
+  en: "<English Title>"
 slug: "<소문자-하이픈-영문>"
 tags:
   - Backend
@@ -294,8 +296,27 @@ tags:
 keywords:
   - <이 글이 권위를 가지는 용어>
   - <동의어 또는 영문/한글 쌍>
-summary: "<1~2문장 — 이 글을 읽으면 무엇을 이해하게 되는가>"
+summary:
+  ko: "<1~2문장 — 이 글을 읽으면 무엇을 이해하게 되는가 (10~300자)>"
+  en: "<1~2 sentences — what the reader will understand (10~300 chars)>"
 ```
+
+---
+
+## 제목 (`title.ko` / `title.en`)
+
+- `title.en`: English-First. 기술 용어, 제품명, 학술 고유명사는 영문 그대로.
+- `title.ko`: 선택 원칙
+  - 통용 한글 번역 있음 → 한글 (예: "멱등성", "카디널리티", "퀵 정렬", "데이터베이스 인덱스")
+  - 기술/학술 고유명사 → 영어 유지 (예: "B-Tree", "Full Table Scan", "Claude Code")
+  - 학술 고유명사 + 맥락 필요 → 영어 + 한글 suffix (예: "Two Generals' Problem 소개")
+
+## 요약 (`summary.ko` / `summary.en`)
+
+- 동일 핵심 메시지를 각 언어로 자연스럽게 작성. 축약 재작성이 아니라 의미 보존 번역.
+- 길이 10~300자 (양쪽 모두).
+- em-dash `—` (U+2014) 사용 금지. `:` 또는 쉼표 또는 괄호로 대체.
+- 한글 요약에서 영문 표기는 원문 보존 ("Full Table Scan", "B+Tree" 등).
 
 ---
 

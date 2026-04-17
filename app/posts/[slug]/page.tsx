@@ -8,6 +8,7 @@ import { RecentPostsSection } from '@/components/blog/RecentPostsSection'
 import { flattenToc, type VeliteTocEntry } from '@/lib/toc'
 import { getRecentPosts } from '@/lib/related-posts'
 import { DocShell } from '@/components/layout/DocShell'
+import { PostTitle } from '@/components/blog/PostTitle'
 
 export function generateStaticParams() {
   return getAllSlugs().map((slug) => ({ slug }))
@@ -25,20 +26,20 @@ export async function generateMetadata({
   const url = `https://ing9990.com/posts/${post.slug}`
 
   return {
-    title: post.title,
-    description: post.summary,
+    title: post.title.ko,
+    description: post.summary.ko,
     keywords: post.tags,
     openGraph: {
       type: 'article',
-      title: post.title,
-      description: post.summary,
+      title: post.title.ko,
+      description: post.summary.ko,
       url,
       publishedTime: post.date,
     },
     twitter: {
       card: 'summary',
-      title: post.title,
-      description: post.summary,
+      title: post.title.ko,
+      description: post.summary.ko,
     },
     alternates: {
       canonical: url,
@@ -69,9 +70,7 @@ export default async function PostPage({
 
       <article className="min-w-0">
         <PostMeta tags={post.tags} date={post.date} readingTime={post.readingTime} />
-        <h1 className="mt-4 text-[length:var(--text-h1)] font-bold leading-[var(--leading-snug)] tracking-[var(--tracking-tighter)]">
-          {post.title}
-        </h1>
+        <PostTitle title={post.title} />
         <hr className="my-8 border-border" />
         <div className="prose-kr min-w-0">
           <MDXContent code={post.body} />

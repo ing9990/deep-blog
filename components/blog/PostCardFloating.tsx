@@ -47,12 +47,12 @@ export function PostCardFloating({ post }: { post: Post }) {
 
         {/* Title */}
         <h2 className="text-[length:var(--text-h4)] font-semibold leading-[var(--leading-snug)] tracking-[var(--tracking-tighter)] text-foreground transition-colors group-hover:text-primary">
-          {post.title}
+          {post.title[lang]}
         </h2>
 
         {/* Summary */}
         <p className="mt-[5px] line-clamp-2 text-[length:var(--text-body-sm)] leading-[var(--leading-normal)] text-muted-foreground">
-          {post.summary}
+          {post.summary[lang]}
         </p>
 
         {/* Tags */}

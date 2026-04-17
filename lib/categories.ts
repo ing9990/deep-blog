@@ -1,3 +1,5 @@
+import type { Language } from '@/components/providers/SettingsProvider'
+
 export const CATEGORY_IDS = [
   'computer-science',
   'data-structure',
@@ -81,8 +83,9 @@ export interface CategoryGroup<T> {
   posts: T[]
 }
 
-export function groupPostsByCategory<T extends { category: CategoryId; date: string; title: string }>(
+export function groupPostsByCategory<T extends { category: CategoryId; date: string; title: { ko: string; en: string } }>(
   posts: readonly T[],
+  lang: Language,
 ): CategoryGroup<T>[] {
   const buckets = new Map<CategoryId, T[]>()
   for (const post of posts) {
@@ -91,12 +94,14 @@ export function groupPostsByCategory<T extends { category: CategoryId; date: str
     buckets.set(post.category, list)
   }
 
+  const collator = new Intl.Collator(lang, { sensitivity: 'base' })
+
   return CATEGORIES.flatMap((category) => {
     const list = buckets.get(category.id)
     if (!list || list.length === 0) return []
     const sorted = list.slice().sort((a, b) => {
       if (a.date !== b.date) return a.date < b.date ? 1 : -1
-      return a.title.localeCompare(b.title, 'ko')
+      return collator.compare(a.title[lang], b.title[lang])
     })
     return [{ category, posts: sorted }]
   })
