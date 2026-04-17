@@ -15,7 +15,7 @@ describe('translate()', () => {
     expect(translate('post.reading.time', 'en', { n: 3 })).toBe('3 min read')
   })
 
-  it('supports multi-param interpolation', () => {
+  it('interpolates params on a different key', () => {
     expect(translate('index.total.count', 'ko', { n: 12 })).toBe('전체 12개 글')
     expect(translate('index.total.count', 'en', { n: 12 })).toBe('12 posts total')
   })
