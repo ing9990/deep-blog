@@ -11,8 +11,8 @@ function post(partial: Partial<ScannedPost> & { slug: string; keywords: string[]
   return {
     file: `content/posts/${partial.slug}.mdx`,
     slug: partial.slug,
-    title: partial.title ?? `Title ${partial.slug}`,
-    summary: partial.summary ?? `Summary ${partial.slug}`,
+    title: partial.title ?? { ko: `제목 ${partial.slug}`, en: `Title ${partial.slug}` },
+    summary: partial.summary ?? { ko: `요약 ${partial.slug}`, en: `Summary ${partial.slug}` },
     keywords: partial.keywords,
   }
 }
@@ -64,14 +64,19 @@ describe('buildMap', () => {
     expect(conflicts[0].files).toHaveLength(3)
   })
 
-  it('preserves title and summary on entries', () => {
+  it('preserves bilingual title and summary on entries', () => {
     const { map } = buildMap([
-      post({ slug: 'p1', keywords: ['B-Tree'], title: 'B-Tree 구조', summary: '자료구조 설명' }),
+      post({
+        slug: 'p1',
+        keywords: ['B-Tree'],
+        title: { ko: 'B-Tree 구조', en: 'B-Tree Structure' },
+        summary: { ko: '자료구조 설명', en: 'Data structure explanation' },
+      }),
     ])
     expect(map.get('b-tree')).toEqual({
       slug: 'p1',
-      title: 'B-Tree 구조',
-      summary: '자료구조 설명',
+      title: { ko: 'B-Tree 구조', en: 'B-Tree Structure' },
+      summary: { ko: '자료구조 설명', en: 'Data structure explanation' },
     })
   })
 
@@ -105,22 +110,32 @@ describe('formatConflictError', () => {
 })
 
 describe('serializeMap', () => {
-  it('emits KEYWORD_MAP, KEYWORDS_BY_LENGTH, SLUG_TO_ENTRY', () => {
+  it('emits KEYWORD_MAP, KEYWORDS_BY_LENGTH, SLUG_TO_ENTRY, BilingualText', () => {
     const map = new Map([
-      ['B-Tree', { slug: 'b-tree', title: 'T1', summary: 'S1' }],
-      ['Kafka Consumer Group', { slug: 'kcg', title: 'T2', summary: 'S2' }],
+      ['B-Tree', { slug: 'b-tree', title: { ko: 'T1', en: 'T1e' }, summary: { ko: 'S1', en: 'S1e' } }],
+      ['Kafka Consumer Group', { slug: 'kcg', title: { ko: 'T2', en: 'T2e' }, summary: { ko: 'S2', en: 'S2e' } }],
     ])
     const out = serializeMap(map)
     expect(out).toContain('export const KEYWORD_MAP')
     expect(out).toContain('export const KEYWORDS_BY_LENGTH')
     expect(out).toContain('export const SLUG_TO_ENTRY')
+    expect(out).toContain('export interface BilingualText')
+  })
+
+  it('emits ko and en fields in each entry', () => {
+    const map = new Map([
+      ['B-Tree', { slug: 'b-tree', title: { ko: 'T1', en: 'T1e' }, summary: { ko: 'S1', en: 'S1e' } }],
+    ])
+    const out = serializeMap(map)
+    expect(out).toMatch(/title: \{ ko: "T1", en: "T1e" \}/)
+    expect(out).toMatch(/summary: \{ ko: "S1", en: "S1e" \}/)
   })
 
   it('sorts KEYWORDS_BY_LENGTH longest first', () => {
     const map = new Map([
-      ['B-Tree', { slug: 'b-tree', title: 'T1', summary: 'S1' }],
-      ['Kafka Consumer Group', { slug: 'kcg', title: 'T2', summary: 'S2' }],
-      ['Kafka', { slug: 'kafka', title: 'T3', summary: 'S3' }],
+      ['B-Tree', { slug: 'b-tree', title: { ko: 'T1', en: 'T1' }, summary: { ko: 'S1', en: 'S1' } }],
+      ['Kafka Consumer Group', { slug: 'kcg', title: { ko: 'T2', en: 'T2' }, summary: { ko: 'S2', en: 'S2' } }],
+      ['Kafka', { slug: 'kafka', title: { ko: 'T3', en: 'T3' }, summary: { ko: 'S3', en: 'S3' } }],
     ])
     const out = serializeMap(map)
     const byLengthBlock = out.slice(out.indexOf('KEYWORDS_BY_LENGTH'))
