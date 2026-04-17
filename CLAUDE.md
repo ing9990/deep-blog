@@ -18,7 +18,7 @@
 
 ## 2. 스택
 
-Next.js 15 App Router · TypeScript strict · Velite (MDX → type-safe) · Tailwind v4 + shadcn/ui · Shiki · KaTeX · Vitest · pnpm 9.15.4 (corepack pinned, Node 23.5 keyid 버그 회피용).
+Next.js 15 App Router · TypeScript strict · Velite (MDX → type-safe) · Tailwind v4 + shadcn/ui · Shiki · KaTeX · Vitest · **Stylelint**(CSS 토큰 강제) · ESLint `no-restricted-syntax`(className 토큰 강제) · pnpm 9.15.4 (corepack pinned, Node 23.5 keyid 버그 회피용).
 
 ## 3. 디렉토리 (top-level)
 
@@ -38,7 +38,8 @@ velite.config.ts      # Zod 스키마 + 파이프라인
 pnpm dev                   # predev: 키워드 맵 자동 재생성
 pnpm build                 # prebuild: 키워드 맵 + Velite
 pnpm type-check            # tsc --noEmit
-pnpm lint                  # next lint
+pnpm lint                  # next lint + stylelint (토큰 강제 포함)
+pnpm lint:fix              # 자동 수정 (next lint --fix + stylelint --fix)
 pnpm test                  # velite + vitest
 pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 ```
@@ -58,7 +59,15 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 6. `content/posts/*.mdx` 직접 `Write` 금지 — blog-writer 스킬로.
 7. 동작/상태 변화가 핵심인 개념을 텍스트만으로 설명 금지 (시각화 필수).
 8. 파괴적 git 명령(`push --force`, `reset --hard`, `clean -f`) + `--no-verify` 훅 우회 금지.
-9. **Typography 하드코딩 금지** — `text-[Npx]` / `text-xs|sm|base|lg|xl|2xl|3xl|4xl` / CSS `font-size: Npx` 직접 사용 금지. `app/globals.css`의 semantic 토큰(`--text-body`, `--text-menu`, `--text-h*`, `--text-callout-*`, `--text-button`, `--text-badge`, `--text-meta`, `--text-caption`, `--text-hint`, `--text-nav-*`, `--text-search-*`, `--text-code-*`, `--text-settings-*`) 사용. Tailwind에서는 `text-[length:var(--text-*)]` 구문. 예외: `components/visualizations/{BTreeInsert,QuickSort,...}` SVG 내부 로직 상수, `em`/`%` 상대 단위, primitive 정의 블록 (`@theme inline`, `:root`, `[data-theme="dark"]`, `html[data-font-size="..."]`).
+9. **Style 하드코딩 금지** — ESLint + Stylelint가 차단:
+   - Typography: `text-[Npx]` / `text-xs|sm|base|lg|xl|2xl|3xl|4xl` / CSS `font-size: Npx` → `--text-*` 토큰
+   - Letter-spacing/line-height: `tracking-[Nem]` / `leading-[N]` arbitrary → `--tracking-*` / `--leading-*` 토큰
+   - Layout 상수: `w-[288px]` / `w-[224px]` / `w-[300px]` / `top-20` 등 → `--layout-*` 토큰
+   - Z-index: `z-[N]` / `z-10|20|40|50|60|100` → `--z-*` 토큰
+   - Radius: `rounded-[Npx]` → `--radius-chip|card|panel|overlay` (Tailwind named `rounded-md|lg|xl|2xl|full`는 허용)
+   - Hex color: `bg-[#...]` / `text-[#...]` / `border-[#...]` / CSS `color: #...` → shadcn semantic 또는 `--keyword`/`--callout-*`/`--code-*`/`--viz-*`
+   - Shadow: `shadow-[0_...rgba...]` → `--shadow-card|card-hover|fab`
+   예외 (자동 whitelist): `components/visualizations/{BTreeInsert,QuickSort,...}` SVG 로직 상수, `em`/`%` 상대 단위, primitive 정의 블록(`@theme inline`, `:root`, `[data-theme="dark"]`, `html[data-font-size="..."]`), 아이콘 픽셀 크기(`h-[22px] w-[22px]`), 단일 사용 리터럴(HeroIntro radial gradient 등). 토큰 전체 목록: `docs/design-tokens.md`.
 
 ## 6. 변경 금지 결정 (비자명 불변식)
 
@@ -77,7 +86,7 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 - **`CategoryNav` 모든 `<details>`는 기본 `open`**. 현재 글 카테고리만 여는 동작 폐기.
 - **Hero Intro (`components/blog/HeroIntro.tsx`)**: 세션 1회(`sessionStorage['deep-hero-seen']`), 4단계 progressive highlight, **재진입 경로 없음(단방향)**. 트랙패드 내성 `createBurstDetector` (`IDLE_GAP=120 / COMMIT_DELTA=220 / COOLDOWN=420`). **Dismiss 타이머는 `dismissScheduledRef` 가드 + 이펙트 deps `[stage, show]`만**. `dismissing`을 deps에 넣으면 cleanup이 `clearTimeout`으로 `setShow(false)`를 영구 취소 → **body scroll 영구 잠금 회귀**.
 - **폰트 3-way split**: `--font-sans` = Paperlogy(9 weights TTF) / `.prose-kr`만 `--font-pretendard` 오버라이드 / `--font-mono` = JetBrains Mono. `app/layout.tsx`가 세 `next/font/local` 선언 동시 보유. 통합/제거 금지.
-- **Typography 토큰 시스템 (PR1)**: `app/globals.css`에 2-tier 토큰 — (1) `@theme inline` primitives(`--text-2xs`~`--text-3xl`, `--leading-*`, `--weight-*`, 모두 `calc(Npx * var(--text-scale, 1))` 래핑) (2) `:root` semantic aliases(25개, role 기반). 반응형은 `@media (min-width: 768px) :root { }`에서 semantic 재선언으로만 처리(사용처는 분기 없음). **사용자 조정 가능 font-scale**: `html[data-font-size="small|normal|large"]`가 `--text-scale`을 `0.92 / 1 / 1.10`으로 오버라이드 → primitive 전체가 동시 스케일. `SettingsProvider`의 `fontSize` 필드가 `document.documentElement.dataset.fontSize`에 effect로 동기화, 초기 FOUC는 `app/layout.tsx`의 `next/script strategy="beforeInteractive"`로 차단. 기본값 `normal`. 새 토큰 추가 시 primitive → semantic alias 순서, 반응형 필요 시 media 블록에도 재선언 필수.
+- **Style 토큰 시스템 (PR1–PR4)**: `app/globals.css`에 2-tier — (1) `@theme inline` primitives (typography `--text-*` scale + `--leading-*` + `--weight-*` + `--tracking-*` + shadcn `--radius-*`) (2) `:root` semantic aliases. 반응형은 `@media (min-width: 768px) :root { }`에서 semantic 재선언. **카테고리**: typography, layout(`--layout-nav-width/toc-width/sticky-offset/...`), z-index(`--z-header/fab/panel/popover/hero/...`), radius semantic(`--radius-chip/card/panel/overlay`), shadow(`--shadow-card/card-hover/fab`), colors(shadcn + `--callout-*` + `--keyword` + `--code-*` + `--viz-*`). **사용자 조정 font-scale**: `html[data-font-size="small|normal|large"]`가 `--text-scale`을 `0.92 / 1 / 1.10`로 오버라이드. `SettingsProvider`의 `fontSize` 필드 → `document.documentElement.dataset.fontSize` effect 동기화, FOUC 차단은 `app/layout.tsx`의 `next/script strategy="beforeInteractive"`. 기본값 `normal`. **강제**: `.eslintrc.json`의 `no-restricted-syntax` (7 regex)  + `.stylelintrc.json`의 `declaration-property-value-disallowed-list`가 `pnpm lint`에서 위반 차단. 새 토큰 프로토콜: primitive → semantic alias → `docs/design-tokens.md` 표 업데이트 → 필요 시 CLAUDE.md §6에 불변식 추가. 전체 참조: `docs/design-tokens.md`.
 - **Category 아이콘은 `lib/category-icons.ts`에 분리**. `lib/categories.ts`에 `lucide-react` import 금지 (velite가 로드하는 서버 번들 오염).
 - shadcn 토큰(`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--ring`, `--accent`) + 확장(`--keyword`, `--keyword-bg`, `--code-inline-fg`, `--border-strong`, `--viz-*`). 다크모드는 `next-themes` `attribute="data-theme"` 고정 + Tailwind `darkMode: ['selector', '[data-theme="dark"]']`.
 - **인라인 요소 3색 체계**: 일반 링크=blue(`--primary`) / 키워드 링크=indigo(`--keyword` + `.keyword-link` 클래스) / 인라인 코드=teal(`--code-inline-fg` 텍스트 + 10% 틴트 배경). 세 색상 영역 혼용 금지.

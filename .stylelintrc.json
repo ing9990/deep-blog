@@ -1,0 +1,48 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "rules": {
+    "declaration-property-value-disallowed-list": [
+      {
+        "font-size": ["/^\\d+px$/", "/^\\d+rem$/", "/^\\d+\\.\\d+rem$/"],
+        "line-height": ["/^[\\d.]+$/"],
+        "color": ["/^#[0-9a-fA-F]+$/"],
+        "background-color": ["/^#[0-9a-fA-F]+$/"],
+        "border-color": ["/^#[0-9a-fA-F]+$/"],
+        "z-index": ["/^\\d+$/"]
+      },
+      {
+        "severity": "error"
+      }
+    ],
+    "at-rule-no-unknown": [
+      true,
+      {
+        "ignoreAtRules": ["theme", "plugin", "import", "layer", "apply", "tailwind"]
+      }
+    ],
+    "selector-class-pattern": null,
+    "no-descending-specificity": null,
+    "custom-property-pattern": null,
+    "color-function-notation": null,
+    "color-function-alias-notation": null,
+    "alpha-value-notation": null,
+    "media-feature-range-notation": null,
+    "rule-empty-line-before": null,
+    "declaration-block-no-redundant-longhand-properties": null,
+    "declaration-block-single-line-max-declarations": null,
+    "comment-empty-line-before": null,
+    "import-notation": null,
+    "custom-property-empty-line-before": null,
+    "at-rule-empty-line-before": null,
+    "value-keyword-case": null,
+    "color-hex-length": null
+  },
+  "overrides": [
+    {
+      "files": ["app/globals.css"],
+      "rules": {
+        "declaration-property-value-disallowed-list": null
+      }
+    }
+  ]
+}

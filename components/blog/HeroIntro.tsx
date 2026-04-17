@@ -221,13 +221,13 @@ export function HeroIntro() {
       />
 
       <div className="relative mx-auto max-w-4xl text-center">
-        <p className="hero-fade-1 mb-7 inline-flex items-center gap-3 text-[length:var(--text-caption)] font-medium uppercase tracking-[0.3em] text-white/55">
+        <p className="hero-fade-1 mb-7 inline-flex items-center gap-3 text-[length:var(--text-caption)] font-medium uppercase tracking-[var(--tracking-widest)] text-white/55">
           <span className="h-px w-8 bg-white/30" aria-hidden="true" />
           Deep Understanding
           <span className="h-px w-8 bg-white/30" aria-hidden="true" />
         </p>
 
-        <h1 className="flex flex-col gap-3 text-balance text-[length:var(--text-h1)] font-bold leading-[1.25] tracking-[-0.02em]">
+        <h1 className="flex flex-col gap-3 text-balance text-[length:var(--text-h1)] font-bold leading-tight tracking-[var(--tracking-tightest)]">
           <HeroLine stage={stage} index={1} mountClass="hero-rise-1">
             기술의 작동 원리부터
           </HeroLine>
@@ -235,7 +235,7 @@ export function HeroIntro() {
             왜 필요한지까지,
           </HeroLine>
           <HeroLine stage={stage} index={3} mountClass="hero-rise-3">
-            <span className="font-extrabold tracking-[0.02em]">쉽게 이해</span>
+            <span className="font-extrabold tracking-wide">쉽게 이해</span>
             할 수 있도록.
           </HeroLine>
         </h1>
@@ -258,7 +258,7 @@ export function HeroIntro() {
           />
           <span
             className={cn(
-              'text-[length:var(--text-h1)] font-extrabold tracking-[0.35em] transition-colors duration-500',
+              'text-[length:var(--text-h1)] font-extrabold tracking-[var(--tracking-display)] transition-colors duration-500',
               stage === 4 ? 'text-white' : 'text-white/80',
             )}
           >
@@ -275,7 +275,7 @@ export function HeroIntro() {
       </div>
 
       <div className="hero-fade-2 absolute bottom-10 left-1/2 flex -translate-x-1/2 flex-col items-center gap-3 text-white/55">
-        <span className="text-[length:var(--text-caption)] font-medium uppercase tracking-[0.3em]">
+        <span className="text-[length:var(--text-caption)] font-medium uppercase tracking-[var(--tracking-widest)]">
           {stage === 0 && 'Scroll'}
           {stage >= 1 && stage <= STAGE_TOTAL && `${stage} / ${STAGE_TOTAL}`}
           {stage > STAGE_TOTAL && 'Enter'}
