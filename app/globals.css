@@ -603,9 +603,16 @@ body {
 }
 
 @media (min-width: 768px) {
-  .prose-kr { font-size: 17px; }
-  .prose-kr h2 { font-size: 24px; }
-  .prose-kr h3 { font-size: 19px; }
+  :root {
+    /* Responsive semantic re-declarations. Primitives already pick up
+       --text-scale; these aliases swap to the larger size at md+. */
+    --text-body:       var(--text-lg);
+    --text-h1:         calc(32px * var(--text-scale, 1));
+    --text-h2:         var(--text-3xl);
+    --text-h3:         var(--text-xl);
+    --text-code-block: calc(14px * var(--text-scale, 1));
+  }
+
   .prose-kr table { font-size: 15px; }
   .prose-kr table th,
   .prose-kr table td { padding: 14px 18px; }
