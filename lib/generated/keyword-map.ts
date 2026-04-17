@@ -13,6 +13,8 @@ export interface KeywordEntry {
 }
 
 export const KEYWORD_MAP: ReadonlyMap<string, KeywordEntry> = new Map([
+  ["두 장군 문제", { slug: "two-generals-problem", title: { ko: "Two Generals' Problem 소개", en: "Two Generals' Problem" }, summary: { ko: "비신뢰 채널 위에서 두 당사자가 확정적 합의에 도달하는 것이 왜 불가능한지 이해하고, 현대 분산 시스템이 이 불가능성과 어떻게 타협하는지 구분할 수 있습니다. At-least-once와 멱등성이 표준이 된 근본 이유를 설명합니다.", en: "Why two parties cannot reach certain agreement over an unreliable channel, and how modern distributed systems live with that impossibility. Explains the foundational reason at-least-once delivery and idempotency became the norm." } }],
+  ["멱등성", { slug: "idempotency", title: { ko: "멱등성", en: "Idempotency" }, summary: { ko: "같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 멱등성이 왜 필요하고 어떻게 구현되는지 이해합니다. HTTP 메서드 의미론부터 Idempotency-Key 패턴, 자연 멱등 설계까지의 내부 동작을 정리합니다.", en: "Why idempotency matters and how it is implemented: delivering the same request N times should leave the system in the same final state as a single delivery. Covers HTTP method semantics, the Idempotency-Key pattern, and naturally idempotent design." } }],
   ["복합 인덱스", { slug: "database-index-deep-dive", title: { ko: "데이터베이스 인덱스", en: "Database Index" }, summary: { ko: "B+Tree 기반 인덱스의 내부 동작 원리를 이해하고, 복합 인덱스의 리프 노드 배치부터 등호 먼저·정렬 마지막 원칙, 인덱스 개수 결정까지 실전 설계 기준을 얻습니다.", en: "How B+Tree-based indexes work under the hood, from composite-index leaf layout to the equality-first/sort-last rule and deciding how many indexes to add." } }],
   ["카디널리티", { slug: "cardinality", title: { ko: "카디널리티", en: "Cardinality" }, summary: { ko: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다.", en: "What cardinality means, and how high vs low cardinality shapes decisions across indexing, caching, and partitioning." } }],
   ["퀵 정렬", { slug: "quick-sort", title: { ko: "퀵 정렬", en: "Quick Sort" }, summary: { ko: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다.", en: "Quick Sort, the classic divide-and-conquer comparison sort, covered end to end: mechanics, implementation, time complexity, and pitfalls. Doubles as the MDX syntax style guide for this blog." } }],
@@ -22,31 +24,43 @@ export const KEYWORD_MAP: ReadonlyMap<string, KeywordEntry> = new Map([
   ["cardinality", { slug: "cardinality", title: { ko: "카디널리티", en: "Cardinality" }, summary: { ko: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다.", en: "What cardinality means, and how high vs low cardinality shapes decisions across indexing, caching, and partitioning." } }],
   ["claude cli", { slug: "claude-code-primer", title: { ko: "Claude Code", en: "Claude Code" }, summary: { ko: "Claude Code가 일반 챗봇과 무엇이 다른지 이해하고, 네 가지 확장 축(CLAUDE.md·Skills·Agents·Plugins)의 설계 원리와 트레이드오프를 구분할 수 있습니다. 설치부터 실무 시나리오까지 한 글로 정리합니다.", en: "What sets Claude Code apart from a general chatbot, and how its four extension surfaces (CLAUDE.md, Skills, Agents, Plugins) trade off. Covers setup through real-world scenarios in one post." } }],
   ["claude code", { slug: "claude-code-primer", title: { ko: "Claude Code", en: "Claude Code" }, summary: { ko: "Claude Code가 일반 챗봇과 무엇이 다른지 이해하고, 네 가지 확장 축(CLAUDE.md·Skills·Agents·Plugins)의 설계 원리와 트레이드오프를 구분할 수 있습니다. 설치부터 실무 시나리오까지 한 글로 정리합니다.", en: "What sets Claude Code apart from a general chatbot, and how its four extension surfaces (CLAUDE.md, Skills, Agents, Plugins) trade off. Covers setup through real-world scenarios in one post." } }],
+  ["common knowledge", { slug: "two-generals-problem", title: { ko: "Two Generals' Problem 소개", en: "Two Generals' Problem" }, summary: { ko: "비신뢰 채널 위에서 두 당사자가 확정적 합의에 도달하는 것이 왜 불가능한지 이해하고, 현대 분산 시스템이 이 불가능성과 어떻게 타협하는지 구분할 수 있습니다. At-least-once와 멱등성이 표준이 된 근본 이유를 설명합니다.", en: "Why two parties cannot reach certain agreement over an unreliable channel, and how modern distributed systems live with that impossibility. Explains the foundational reason at-least-once delivery and idempotency became the norm." } }],
   ["consumer group", { slug: "kafka-consumer-group", title: { ko: "Kafka 컨슈머 그룹", en: "Kafka Consumer Group" }, summary: { ko: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다.", en: "How Kafka Consumer Group distributes partitions across members and rebalances them." } }],
   ["full table scan", { slug: "full-table-scan", title: { ko: "Full Table Scan", en: "Full Table Scan" }, summary: { ko: "Full Table Scan이 언제 문제이고 언제 정상인지 구분할 수 있습니다. 옵티마이저가 인덱스 대신 Full Table Scan을 선택하는 이유와 Sequential I/O vs Random I/O 트레이드오프를 이해합니다.", en: "When a full table scan is a problem and when it is not. Why the optimizer sometimes prefers a scan over an index, and how Sequential I/O vs Random I/O drives that choice." } }],
   ["garbage collection", { slug: "jvm-gc-intro", title: { ko: "JVM 가비지 컬렉션", en: "JVM Garbage Collection" }, summary: { ko: "JVM GC가 왜 필요하고, 힙 구조와 세대별 수거가 어떻게 동작하며, 알고리즘별 트레이드오프를 판단하는 기준을 얻습니다.", en: "Why JVM GC exists, how the heap is structured, how generational collection works, and the tradeoffs between the major algorithms." } }],
+  ["idempotency", { slug: "idempotency", title: { ko: "멱등성", en: "Idempotency" }, summary: { ko: "같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 멱등성이 왜 필요하고 어떻게 구현되는지 이해합니다. HTTP 메서드 의미론부터 Idempotency-Key 패턴, 자연 멱등 설계까지의 내부 동작을 정리합니다.", en: "Why idempotency matters and how it is implemented: delivering the same request N times should leave the system in the same final state as a single delivery. Covers HTTP method semantics, the Idempotency-Key pattern, and naturally idempotent design." } }],
+  ["idempotency-key", { slug: "idempotency", title: { ko: "멱등성", en: "Idempotency" }, summary: { ko: "같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 멱등성이 왜 필요하고 어떻게 구현되는지 이해합니다. HTTP 메서드 의미론부터 Idempotency-Key 패턴, 자연 멱등 설계까지의 내부 동작을 정리합니다.", en: "Why idempotency matters and how it is implemented: delivering the same request N times should leave the system in the same final state as a single delivery. Covers HTTP method semantics, the Idempotency-Key pattern, and naturally idempotent design." } }],
   ["quick sort", { slug: "quick-sort", title: { ko: "퀵 정렬", en: "Quick Sort" }, summary: { ko: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다.", en: "Quick Sort, the classic divide-and-conquer comparison sort, covered end to end: mechanics, implementation, time complexity, and pitfalls. Doubles as the MDX syntax style guide for this blog." } }],
+  ["two generals' problem", { slug: "two-generals-problem", title: { ko: "Two Generals' Problem 소개", en: "Two Generals' Problem" }, summary: { ko: "비신뢰 채널 위에서 두 당사자가 확정적 합의에 도달하는 것이 왜 불가능한지 이해하고, 현대 분산 시스템이 이 불가능성과 어떻게 타협하는지 구분할 수 있습니다. At-least-once와 멱등성이 표준이 된 근본 이유를 설명합니다.", en: "Why two parties cannot reach certain agreement over an unreliable channel, and how modern distributed systems live with that impossibility. Explains the foundational reason at-least-once delivery and idempotency became the norm." } }],
 ])
 
 
 export const KEYWORDS_BY_LENGTH: readonly string[] = [
+  "two generals' problem",
   "garbage collection",
+  "common knowledge",
   "full table scan",
+  "idempotency-key",
   "consumer group",
   "cardinality",
   "claude code",
+  "idempotency",
   "claude cli",
   "quick sort",
   "풀 테이블 스캔",
+  "두 장군 문제",
   "복합 인덱스",
   "클로드 코드",
   "b-tree",
   "카디널리티",
   "퀵 정렬",
+  "멱등성",
 ]
 
 
 export const SLUG_TO_ENTRY: ReadonlyMap<string, KeywordEntry> = new Map([
+  ["two-generals-problem", { slug: "two-generals-problem", title: { ko: "Two Generals' Problem 소개", en: "Two Generals' Problem" }, summary: { ko: "비신뢰 채널 위에서 두 당사자가 확정적 합의에 도달하는 것이 왜 불가능한지 이해하고, 현대 분산 시스템이 이 불가능성과 어떻게 타협하는지 구분할 수 있습니다. At-least-once와 멱등성이 표준이 된 근본 이유를 설명합니다.", en: "Why two parties cannot reach certain agreement over an unreliable channel, and how modern distributed systems live with that impossibility. Explains the foundational reason at-least-once delivery and idempotency became the norm." } }],
+  ["idempotency", { slug: "idempotency", title: { ko: "멱등성", en: "Idempotency" }, summary: { ko: "같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 멱등성이 왜 필요하고 어떻게 구현되는지 이해합니다. HTTP 메서드 의미론부터 Idempotency-Key 패턴, 자연 멱등 설계까지의 내부 동작을 정리합니다.", en: "Why idempotency matters and how it is implemented: delivering the same request N times should leave the system in the same final state as a single delivery. Covers HTTP method semantics, the Idempotency-Key pattern, and naturally idempotent design." } }],
   ["database-index-deep-dive", { slug: "database-index-deep-dive", title: { ko: "데이터베이스 인덱스", en: "Database Index" }, summary: { ko: "B+Tree 기반 인덱스의 내부 동작 원리를 이해하고, 복합 인덱스의 리프 노드 배치부터 등호 먼저·정렬 마지막 원칙, 인덱스 개수 결정까지 실전 설계 기준을 얻습니다.", en: "How B+Tree-based indexes work under the hood, from composite-index leaf layout to the equality-first/sort-last rule and deciding how many indexes to add." } }],
   ["cardinality", { slug: "cardinality", title: { ko: "카디널리티", en: "Cardinality" }, summary: { ko: "카디널리티가 무엇인지 이해하고, 높은/낮은 카디널리티가 인덱스·캐시·파티셔닝 등 다양한 영역에서 어떤 영향을 주는지 판단하는 기준을 얻습니다.", en: "What cardinality means, and how high vs low cardinality shapes decisions across indexing, caching, and partitioning." } }],
   ["quick-sort", { slug: "quick-sort", title: { ko: "퀵 정렬", en: "Quick Sort" }, summary: { ko: "분할 정복 기반의 대표적인 비교 정렬 알고리즘인 Quick Sort의 동작 원리, 구현, 시간 복잡도, 주의사항을 한 페이지에 정리합니다. 이 글은 Backend Notes의 모든 MDX 문법 스타일 가이드를 겸합니다.", en: "Quick Sort, the classic divide-and-conquer comparison sort, covered end to end: mechanics, implementation, time complexity, and pitfalls. Doubles as the MDX syntax style guide for this blog." } }],
