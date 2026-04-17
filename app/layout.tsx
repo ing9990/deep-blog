@@ -8,6 +8,7 @@ import { Header } from '@/components/blog/Header'
 import { Footer } from '@/components/blog/Footer'
 import { MobileOverlays } from '@/components/blog/MobileOverlays'
 import { SettingsFab } from '@/components/layout/SettingsFab'
+import { HydrationGate } from '@/components/layout/HydrationGate'
 import { getAllPosts } from '@/lib/posts'
 import { toClientPost } from '@/lib/client-post'
 import { Analytics } from '@vercel/analytics/react'
@@ -88,13 +89,15 @@ export default function RootLayout({
         <ThemeProvider>
           <MobileUIProvider posts={clientPosts}>
             <SettingsProvider>
-              <div className="flex min-h-screen flex-col">
-                <Header />
-                <main className="flex-1">{children}</main>
-                <Footer />
-              </div>
-              <MobileOverlays />
-              <SettingsFab />
+              <HydrationGate>
+                <div className="flex min-h-screen flex-col">
+                  <Header />
+                  <main className="flex-1">{children}</main>
+                  <Footer />
+                </div>
+                <MobileOverlays />
+                <SettingsFab />
+              </HydrationGate>
             </SettingsProvider>
           </MobileUIProvider>
         </ThemeProvider>

@@ -30,11 +30,13 @@ const STORAGE_KEY = 'deep-settings'
 interface SettingsContextValue {
   settings: Settings
   updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void
+  hydrated: boolean
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
   settings: DEFAULT_SETTINGS,
   updateSetting: () => {},
+  hydrated: false,
 })
 
 export function useSettings(): SettingsContextValue {
@@ -82,9 +84,11 @@ function saveSettings(settings: Settings): void {
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     setSettings(loadSettings())
+    setHydrated(true)
   }, [])
 
   useEffect(() => {
@@ -102,7 +106,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const contextValue: SettingsContextValue = { settings, updateSetting }
+  const contextValue: SettingsContextValue = { settings, updateSetting, hydrated }
 
   return (
     <SettingsContext.Provider value={contextValue}>
