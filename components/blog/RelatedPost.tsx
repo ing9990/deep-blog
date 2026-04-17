@@ -70,13 +70,13 @@ export function RelatedPost({ slug, type = 'deep-dive', label }: RelatedPostProp
         aria-hidden="true"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="text-[length:var(--text-caption)] font-semibold uppercase tracking-wider text-muted-foreground">
           {displayLabel}
         </p>
-        <p className="mt-1.5 text-[15px] font-semibold text-foreground transition-colors group-hover:text-primary">
+        <p className="mt-1.5 text-[length:var(--text-h4)] font-semibold text-foreground transition-colors group-hover:text-primary">
           {entry.title}
         </p>
-        <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+        <p className="mt-1 line-clamp-2 text-[length:var(--text-body-sm)] leading-relaxed text-muted-foreground">
           {entry.summary}
         </p>
       </div>
