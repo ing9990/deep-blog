@@ -10,8 +10,8 @@ import {
 
 type TestPost = {
   slug: string
-  title: string
-  summary: string
+  title: { ko: string; en: string }
+  summary: { ko: string; en: string }
   tags: string[]
   keywords: string[]
   date: string
@@ -21,8 +21,8 @@ type TestPost = {
 function makePost(partial: Partial<TestPost> & { slug: string }): TestPost {
   return {
     slug: partial.slug,
-    title: partial.title ?? `Title ${partial.slug}`,
-    summary: partial.summary ?? `Summary ${partial.slug}`,
+    title: partial.title ?? { ko: `제목 ${partial.slug}`, en: `Title ${partial.slug}` },
+    summary: partial.summary ?? { ko: `요약 ${partial.slug}`, en: `Summary ${partial.slug}` },
     tags: partial.tags ?? [],
     keywords: partial.keywords ?? [],
     date: partial.date ?? '2026-01-01',
@@ -33,24 +33,24 @@ function makePost(partial: Partial<TestPost> & { slug: string }): TestPost {
 const sample: TestPost[] = [
   makePost({
     slug: 'p1',
-    title: '데이터베이스 인덱스의 동작 원리',
-    summary: 'DB 인덱스가 빠른 이유',
+    title: { ko: '데이터베이스 인덱스의 동작 원리', en: 'How Database Index Works' },
+    summary: { ko: 'DB 인덱스가 빠른 이유', en: 'Why DB indexes are fast' },
     tags: ['Database', 'Index'],
     keywords: ['B-Tree', '인덱스'],
     date: '2026-04-10',
   }),
   makePost({
     slug: 'p2',
-    title: 'Kafka Consumer Group 리밸런싱',
-    summary: '컨슈머 그룹 리밸런싱 전략',
+    title: { ko: 'Kafka Consumer Group 리밸런싱', en: 'Kafka Consumer Group Rebalancing' },
+    summary: { ko: '컨슈머 그룹 리밸런싱 전략', en: 'Consumer group rebalancing strategies' },
     tags: ['Kafka', 'Backend'],
     keywords: ['Consumer Group'],
     date: '2026-04-08',
   }),
   makePost({
     slug: 'p3',
-    title: 'JVM GC 소개',
-    summary: 'Garbage Collection basics',
+    title: { ko: 'JVM GC 소개', en: 'JVM GC Intro' },
+    summary: { ko: 'Garbage Collection 기초', en: 'Garbage Collection basics' },
     tags: ['JVM', 'Backend'],
     keywords: ['G1', 'Mark-Sweep'],
     date: '2026-04-01',
@@ -61,17 +61,12 @@ describe('filterByTag', () => {
   it('returns all when tag is undefined', () => {
     expect(filterByTag(sample, undefined)).toHaveLength(3)
   })
-
   it('filters by exact tag match', () => {
-    const result = filterByTag(sample, 'Database')
-    expect(result.map((p) => p.slug)).toEqual(['p1'])
+    expect(filterByTag(sample, 'Database').map((p) => p.slug)).toEqual(['p1'])
   })
-
   it('is case-insensitive', () => {
-    const result = filterByTag(sample, 'database')
-    expect(result.map((p) => p.slug)).toEqual(['p1'])
+    expect(filterByTag(sample, 'database').map((p) => p.slug)).toEqual(['p1'])
   })
-
   it('returns empty array when no match', () => {
     expect(filterByTag(sample, 'NoSuchTag')).toEqual([])
   })
@@ -83,86 +78,64 @@ describe('searchPosts', () => {
     expect(searchPosts(sample, '')).toHaveLength(3)
     expect(searchPosts(sample, '   ')).toHaveLength(3)
   })
-
-  it('matches partial title', () => {
-    const result = searchPosts(sample, '인덱스')
-    expect(result.map((p) => p.slug)).toEqual(['p1'])
+  it('matches Korean title', () => {
+    expect(searchPosts(sample, '인덱스').map((p) => p.slug)).toEqual(['p1'])
   })
-
-  it('matches partial summary', () => {
-    const result = searchPosts(sample, '리밸런싱 전략')
-    expect(result.map((p) => p.slug)).toEqual(['p2'])
+  it('matches English title', () => {
+    expect(searchPosts(sample, 'Database Index').map((p) => p.slug)).toEqual(['p1'])
   })
-
+  it('matches Korean summary', () => {
+    expect(searchPosts(sample, '리밸런싱 전략').map((p) => p.slug)).toEqual(['p2'])
+  })
+  it('matches English summary', () => {
+    expect(searchPosts(sample, 'rebalancing strategies').map((p) => p.slug)).toEqual(['p2'])
+  })
   it('matches tag', () => {
-    const result = searchPosts(sample, 'JVM')
-    expect(result.map((p) => p.slug)).toEqual(['p3'])
+    expect(searchPosts(sample, 'JVM').map((p) => p.slug)).toEqual(['p3'])
   })
-
   it('matches keyword', () => {
-    const result = searchPosts(sample, 'b-tree')
-    expect(result.map((p) => p.slug)).toEqual(['p1'])
+    expect(searchPosts(sample, 'b-tree').map((p) => p.slug)).toEqual(['p1'])
   })
-
   it('is case-insensitive for Latin', () => {
-    const result = searchPosts(sample, 'KAFKA')
-    expect(result.map((p) => p.slug)).toEqual(['p2'])
+    expect(searchPosts(sample, 'KAFKA').map((p) => p.slug)).toEqual(['p2'])
   })
-
   it('matches plainBody content when the field is present', () => {
     const withBody: TestPost[] = [
       makePost({
         slug: 'bodymatch',
-        title: '아주 다른 제목',
-        summary: '본문에만 있는 단어',
+        title: { ko: '다른 제목', en: 'Other Title' },
+        summary: { ko: '본문 검색', en: 'Body-only match' },
         plainBody: '실제 본문 어딘가에 쿼리 토큰이 등장합니다.',
       }),
       makePost({ slug: 'nomatch', plainBody: '전혀 관련 없는 본문' }),
     ]
-    const result = searchPosts(withBody, '쿼리 토큰')
-    expect(result.map((p) => p.slug)).toEqual(['bodymatch'])
-  })
-
-  it('ignores plainBody when the field is absent', () => {
-    // Posts without plainBody should still match via frontmatter fields.
-    const result = searchPosts(sample, '인덱스')
-    expect(result.map((p) => p.slug)).toEqual(['p1'])
+    expect(searchPosts(withBody, '쿼리 토큰').map((p) => p.slug)).toEqual(['bodymatch'])
   })
 })
 
 describe('sortPosts', () => {
-  it('defaults to latest (date descending)', () => {
-    const result = sortPosts(sample, undefined)
-    expect(result.map((p) => p.slug)).toEqual(['p1', 'p2', 'p3'])
+  it('defaults to latest (date descending) under any lang', () => {
+    expect(sortPosts(sample, undefined, 'ko').map((p) => p.slug)).toEqual(['p1', 'p2', 'p3'])
   })
-
   it('sorts oldest first', () => {
-    const result = sortPosts(sample, 'oldest')
-    expect(result.map((p) => p.slug)).toEqual(['p3', 'p2', 'p1'])
+    expect(sortPosts(sample, 'oldest', 'ko').map((p) => p.slug)).toEqual(['p3', 'p2', 'p1'])
   })
-
-  it('sorts by title Korean-aware', () => {
-    const result = sortPosts(sample, 'title')
-    // NOTE: Actual Intl.Collator('ko') order in this Node.js environment:
-    // Hangul '데'(데이터베이스) comes BEFORE Latin 'J'(JVM GC) and 'K'(Kafka).
-    // Observed order: p1 (데이터베이스…) → p3 (JVM GC…) → p2 (Kafka…)
-    expect(result.map((p) => p.slug)).toEqual(['p1', 'p3', 'p2'])
+  it('sorts by title using ko collator when lang=ko', () => {
+    expect(sortPosts(sample, 'title', 'ko').map((p) => p.slug)).toEqual(['p1', 'p3', 'p2'])
   })
-
+  it('sorts by title using en collator when lang=en', () => {
+    expect(sortPosts(sample, 'title', 'en').map((p) => p.slug)).toEqual(['p1', 'p3', 'p2'])
+  })
   it('does not mutate input', () => {
     const copy = sample.slice()
-    sortPosts(sample, 'oldest')
+    sortPosts(sample, 'oldest', 'ko')
     expect(sample).toEqual(copy)
   })
 })
 
 describe('applyFilters', () => {
   it('applies tag then search then sort', () => {
-    const result = applyFilters(sample, {
-      tag: 'Backend',
-      query: 'Consumer',
-      sort: 'latest',
-    })
+    const result = applyFilters(sample, { tag: 'Backend', query: 'Consumer', sort: 'latest' }, 'ko')
     expect(result.map((p) => p.slug)).toEqual(['p2'])
   })
 })
