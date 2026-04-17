@@ -5,6 +5,7 @@ export const CATEGORY_IDS = [
   'database',
   'frameworks',
   'library',
+  'ai',
   'knowledge',
   'etc',
 ] as const
@@ -47,6 +48,11 @@ export const CATEGORIES: readonly CategoryMeta[] = [
     id: 'library',
     label: 'Library',
     description: 'Querydsl, JPA',
+  },
+  {
+    id: 'ai',
+    label: 'AI',
+    description: 'LLM, 머신러닝, AI 엔지니어링',
   },
   {
     id: 'knowledge',

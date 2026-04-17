@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   BookOpen,
   Boxes,
+  Brain,
   Code2,
   Cpu,
   Database,
@@ -18,6 +19,7 @@ export const CATEGORY_ICONS: Record<CategoryId, LucideIcon> = {
   database: Database,
   frameworks: Boxes,
   library: BookOpen,
+  ai: Brain,
   knowledge: Lightbulb,
   etc: Sparkles,
 }
