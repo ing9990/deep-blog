@@ -50,11 +50,15 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, onClose])
 
-  // Outside click close
+  // Outside click close. The SettingsFab wrapper is excluded so clicking
+  // the FAB while the panel is open lets the button's onClick run as a
+  // genuine toggle instead of being pre-closed by this handler.
   useEffect(() => {
     if (!open) return
     function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      const target = e.target as Element | null
+      if (panelRef.current && !panelRef.current.contains(target)) {
+        if (target?.closest('[data-settings-fab-wrapper]')) return
         onClose()
       }
     }
@@ -74,7 +78,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       ref={panelRef}
       role="dialog"
       aria-label={t('settings.title')}
-      className="fixed bottom-20 right-6 z-[var(--z-panel)] w-[var(--layout-panel-width)] origin-bottom-right animate-[panel-in_0.25s_cubic-bezier(0.22,1,0.36,1)_both] rounded-2xl border border-border bg-background shadow-xl"
+      className="fixed bottom-24 right-6 z-[var(--z-panel)] w-[var(--layout-panel-width)] origin-bottom-right animate-[panel-in_0.25s_cubic-bezier(0.22,1,0.36,1)_both] rounded-2xl border border-border bg-background shadow-xl"
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-5 pb-3 pt-4">

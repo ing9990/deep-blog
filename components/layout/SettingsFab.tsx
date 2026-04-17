@@ -16,7 +16,10 @@ export function SettingsFab() {
   return (
     <>
       <SettingsPanel open={open} onClose={handleClose} />
-      <div className="fixed bottom-6 right-6 z-[var(--z-fab)] h-12 w-12">
+      <div
+        data-settings-fab-wrapper
+        className="fixed bottom-6 right-6 z-[var(--z-fab)] h-12 w-12"
+      >
         <button
           type="button"
           onClick={handleToggle}
