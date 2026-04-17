@@ -43,12 +43,12 @@ export function PostCardEditorial({ post }: { post: Post }) {
 
       {/* Title */}
       <h2 className="text-[17px] font-semibold leading-[1.45] tracking-[-0.015em] text-foreground transition-colors group-hover:text-primary">
-        {post.title}
+        {post.title[lang]}
       </h2>
 
       {/* Summary */}
       <p className="mt-1.5 line-clamp-2 text-[14px] leading-[1.65] text-muted-foreground">
-        {post.summary}
+        {post.summary[lang]}
       </p>
 
       {/* Tags */}

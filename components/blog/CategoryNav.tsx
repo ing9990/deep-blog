@@ -16,7 +16,7 @@ interface CategoryNavProps {
 export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProps) {
   const { lang } = useTranslation()
   if (!Array.isArray(posts) || posts.length === 0) return null
-  const groups = groupPostsByCategory(posts)
+  const groups = groupPostsByCategory(posts, lang)
 
   return (
     <nav aria-label="카테고리" className="flex flex-col gap-1">
@@ -50,7 +50,7 @@ export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProp
                           : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                       )}
                     >
-                      {post.title}
+                      {post.title[lang]}
                     </Link>
                   </li>
                 )

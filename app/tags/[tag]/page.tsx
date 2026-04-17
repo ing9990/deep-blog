@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getAllPosts } from '@/lib/posts'
 import { extractAllTags, filterByTag, sortPosts } from '@/lib/filters'
+import type { Language } from '@/components/providers/SettingsProvider'
 import { PostList } from '@/components/blog/PostList'
 import { TagPageHeader } from '@/components/blog/TagPageHeader'
 import { DocShell } from '@/components/layout/DocShell'
@@ -19,7 +20,7 @@ export default async function TagPage({
 }) {
   const { tag: rawTag } = await params
   const tag = decodeURIComponent(rawTag)
-  const posts = sortPosts(filterByTag(getAllPosts(), tag), 'latest')
+  const posts = sortPosts(filterByTag(getAllPosts(), tag), 'latest', 'ko' as Language)
   if (posts.length === 0) notFound()
 
   return (

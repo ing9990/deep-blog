@@ -7,6 +7,7 @@ import { useMobileUI } from '@/components/providers/MobileUIProvider'
 import { CategoryNav } from './CategoryNav'
 import { TableOfContents } from './TableOfContents'
 import { searchPosts } from '@/lib/filters'
+import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function MobileOverlays() {
   return (
@@ -86,6 +87,7 @@ function TocDrawer() {
 
 function SearchDialog() {
   const { searchOpen, closeSearch, posts } = useMobileUI()
+  const { lang } = useTranslation()
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const ref = useDialogEffect(searchOpen, closeSearch)
@@ -187,10 +189,10 @@ function SearchDialog() {
                   className="block rounded-md px-3 py-3 transition-colors hover:bg-muted active:bg-muted"
                 >
                   <div className="text-sm font-medium text-foreground">
-                    {post.title}
+                    {post.title[lang]}
                   </div>
                   <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                    {post.summary}
+                    {post.summary[lang]}
                   </div>
                 </Link>
               </li>

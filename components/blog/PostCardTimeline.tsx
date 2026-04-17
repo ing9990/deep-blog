@@ -70,12 +70,12 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
 
         {/* Title */}
         <h2 className="text-[16.5px] font-semibold leading-[1.45] tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary">
-          {post.title}
+          {post.title[lang]}
         </h2>
 
         {/* Summary */}
         <p className="mt-[5px] line-clamp-2 text-[14px] leading-[1.6] text-muted-foreground">
-          {post.summary}
+          {post.summary[lang]}
         </p>
 
         {/* Tags */}
