@@ -201,7 +201,7 @@ export function HeroIntro() {
       aria-modal="true"
       aria-label="DEEP 소개"
       className={cn(
-        'fixed inset-0 z-[100] flex touch-none flex-col items-center justify-center overflow-hidden overscroll-contain bg-black px-6 text-white',
+        'fixed inset-0 z-[var(--z-hero)] flex touch-none flex-col items-center justify-center overflow-hidden overscroll-contain bg-black px-6 text-white',
         'transition-opacity duration-500',
         dismissing ? 'pointer-events-none opacity-0' : 'opacity-100',
       )}
