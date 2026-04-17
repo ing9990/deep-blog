@@ -10,13 +10,16 @@ import {
 } from 'react'
 
 export type CardLayout = 'editorial' | 'timeline' | 'floating'
+export type Language = 'en' | 'ko'
 
 export interface Settings {
   cardLayout: CardLayout
+  language: Language
 }
 
 const DEFAULT_SETTINGS: Settings = {
   cardLayout: 'timeline',
+  language: 'en',
 }
 
 const STORAGE_KEY = 'deep-settings'
@@ -35,12 +38,25 @@ export function useSettings(): SettingsContextValue {
   return useContext(SettingsContext)
 }
 
+function normalizeLanguage(value: unknown): Language {
+  return value === 'ko' || value === 'en' ? value : 'en'
+}
+
+function normalizeCardLayout(value: unknown): CardLayout {
+  return value === 'editorial' || value === 'timeline' || value === 'floating'
+    ? value
+    : 'timeline'
+}
+
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULT_SETTINGS
-    const parsed = JSON.parse(raw) as Partial<Settings>
-    return { ...DEFAULT_SETTINGS, ...parsed }
+    const parsed = JSON.parse(raw) as Partial<Record<keyof Settings, unknown>>
+    return {
+      cardLayout: normalizeCardLayout(parsed.cardLayout),
+      language: normalizeLanguage(parsed.language),
+    }
   } catch {
     return DEFAULT_SETTINGS
   }
@@ -76,7 +92,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const contextValue: SettingsContextValue = { settings, updateSetting }
 
-  // hydrated 전에도 children을 렌더링 (default 값으로). Flash 최소화.
   return (
     <SettingsContext.Provider value={contextValue}>
       {children}
