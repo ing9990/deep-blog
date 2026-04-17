@@ -19,7 +19,7 @@ export interface Settings {
 
 const DEFAULT_SETTINGS: Settings = {
   cardLayout: 'timeline',
-  language: 'en',
+  language: 'ko',
 }
 
 const STORAGE_KEY = 'deep-settings'
@@ -39,7 +39,7 @@ export function useSettings(): SettingsContextValue {
 }
 
 function normalizeLanguage(value: unknown): Language {
-  return value === 'ko' || value === 'en' ? value : 'en'
+  return value === 'ko' || value === 'en' ? value : 'ko'
 }
 
 function normalizeCardLayout(value: unknown): CardLayout {
