@@ -6,6 +6,7 @@ import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { categoryStyle } from '@/lib/category-colors'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { EN_MONTHS } from '@/lib/utils'
 
 interface PostCardTimelineProps {
   post: Post
@@ -14,22 +15,17 @@ interface PostCardTimelineProps {
   showDate?: boolean
 }
 
-const MONTH_LABELS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-]
-
 export function PostCardTimeline({ post, isFirst = false, isLast = false, showDate = true }: PostCardTimelineProps) {
   const { lang } = useTranslation()
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
   const d = new Date(post.date)
   const day = String(d.getUTCDate()).padStart(2, '0')
-  const month = MONTH_LABELS[d.getUTCMonth()]
+  const month = EN_MONTHS[d.getUTCMonth()]
 
   return (
     <div className="group flex gap-0" style={categoryStyle(post.category)} data-cat-tinted="">
-      {/* Timeline column — node center is always at 42px from top */}
+      {/* Timeline column: node center is always at 42px from top */}
       <div className="relative flex w-[72px] shrink-0 flex-col items-center pt-[22px]">
         {/* Line from previous card → node */}
         {!isFirst && (

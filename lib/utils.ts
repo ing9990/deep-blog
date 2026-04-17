@@ -21,7 +21,7 @@ export function buildPostsUrl(params: {
   return qs ? `/?${qs}` : '/'
 }
 
-const EN_MONTHS = [
+export const EN_MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
