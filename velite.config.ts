@@ -24,7 +24,10 @@ const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 // Uses a plain regex for slug so the exported schema is unit-testable without
 // a Velite build context (s.slug() requires meta.config at parse time).
 const postFrontmatterShape = s.object({
-  title: s.string().min(1).max(120),
+  title: s.object({
+    ko: s.string().min(1).max(120),
+    en: s.string().min(1).max(120),
+  }),
   slug: s.string().min(3).max(200).regex(slugRegex, 'slug must be lowercase (a-z, 0-9, hyphens only)'),
   date: s.isodate(),
   updatedAt: s.isodate().optional(),
@@ -38,7 +41,10 @@ const postFrontmatterShape = s.object({
     .min(1)
     .max(5),
   keywords: s.array(s.string().min(1)).min(1),
-  summary: s.string().min(10).max(300),
+  summary: s.object({
+    ko: s.string().min(10).max(300),
+    en: s.string().min(10).max(300),
+  }),
   category: s.enum(CATEGORY_IDS),
   series: s.string().optional(),
   seriesOrder: s.number().int().positive().optional(),
