@@ -239,6 +239,20 @@
   --layout-content-max:    46rem;      /* reading width cap */
   --layout-panel-width:    300px;      /* SettingsPanel width */
   --layout-popover-width:  18rem;      /* popover/KeywordLink default */
+
+  /* ------------------------------------------------------------------
+     Z-index tokens — named layers for overlapping UI. Replaces
+     scattered z-10/z-20/z-50/z-[100] hardcodes.
+     ------------------------------------------------------------------ */
+  --z-sticky:  20;      /* TOC, sticky header inner rails */
+  --z-header:  50;      /* page-level sticky header */
+  --z-nav:     10;      /* in-card badges, timeline bullet points */
+  --z-overlay: 40;      /* MobileOverlays search/menu */
+  --z-fab:     50;      /* SettingsFab floating button */
+  --z-panel:   50;      /* SettingsPanel (sibling of fab) */
+  --z-popover: 50;      /* shadcn popover/select content */
+  --z-hero:    100;     /* HeroIntro session-once overlay (top of stack) */
+  --z-toast:   60;      /* reserved for future toasts */
 }
 
 [data-theme="dark"] {
