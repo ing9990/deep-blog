@@ -87,6 +87,10 @@
 }
 
 :root {
+  /* Font-scale multiplier — overridden by html[data-font-size="small"|"large"].
+     Default 1 ("normal") is the reference scale. */
+  --text-scale: 1;
+
   --background: #FFFFFF;
   --foreground: #09090B;
   --muted: #F4F4F5;
@@ -179,6 +183,45 @@
   --viz-highlight-border: #8B5CF6;
   --viz-highlight-bg:     #EDE9FE;
   --viz-highlight-fg:     #4C1D95;
+
+  /* ------------------------------------------------------------------
+     Typography semantic aliases — role-driven names. Consumers reference
+     these (e.g., text-[length:var(--text-body)]) so primitive shifts and
+     responsive overrides propagate without touching call sites.
+
+     Responsive values (--text-body, --text-h1, --text-h2, --text-h3,
+     --text-code-block) are re-declared in the @media (min-width: 768px)
+     block below. Non-responsive aliases appear only once here.
+     ------------------------------------------------------------------ */
+  --text-body:            var(--text-base);
+  --text-body-sm:         var(--text-md);
+  --text-meta:            var(--text-sm);
+  --text-caption:         var(--text-xs);
+  --text-hint:            var(--text-2xs);
+
+  --text-h1:              calc(28px * var(--text-scale, 1));
+  --text-h2:              var(--text-2xl);
+  --text-h3:              calc(18px * var(--text-scale, 1));
+  --text-h4:              var(--text-lg);
+
+  --text-menu:            var(--text-lg);
+  --text-nav-item:        var(--text-md);
+  --text-nav-header:      var(--text-xs);
+
+  --text-search-input:    var(--text-base);
+  --text-search-title:    var(--text-md);
+  --text-search-summary:  var(--text-sm);
+
+  --text-callout-body:    var(--text-base);
+  --text-callout-label:   var(--text-sm);
+
+  --text-code-block:      calc(13px * var(--text-scale, 1));
+  --text-code-inline:     0.9em;  /* ratio exception — stays relative to parent */
+
+  --text-button:          var(--text-md);
+  --text-badge:           var(--text-xs);
+  --text-settings-title:  var(--text-base);
+  --text-settings-header: 11.5px;  /* one-off exception: uppercase section label */
 }
 
 [data-theme="dark"] {
