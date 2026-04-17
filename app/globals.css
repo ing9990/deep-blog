@@ -312,6 +312,21 @@
   --viz-highlight-fg:     #E9D5FF;
 }
 
+/* ------------------------------------------------------------------
+   Font-scale overrides — user preference via Settings > 폰트 크기.
+   Written to html[data-font-size] by the SettingsProvider sync effect
+   (Task 9) and a pre-hydration script in app/layout.tsx (Task 10,
+   for FOUC prevention).
+
+   "normal" is the default (1.0). Small shrinks by 8 %, large grows by
+   10 %. The multiplier propagates through every primitive declared in
+   @theme inline (see Task 1) and every responsive literal in the
+   :root / @media blocks (Tasks 2 & 4) that uses calc(Npx * scale).
+   ------------------------------------------------------------------ */
+html[data-font-size="small"]  { --text-scale: 0.92; }
+html[data-font-size="normal"] { --text-scale: 1; }
+html[data-font-size="large"]  { --text-scale: 1.10; }
+
 html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
