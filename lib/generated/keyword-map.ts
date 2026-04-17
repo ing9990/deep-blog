@@ -20,7 +20,7 @@ export const KEYWORD_MAP: ReadonlyMap<string, KeywordEntry> = new Map([
   ["claude cli", { slug: "claude-code-primer", title: "", summary: "" }],
   ["claude code", { slug: "claude-code-primer", title: "", summary: "" }],
   ["common knowledge", { slug: "two-generals-problem", title: "", summary: "" }],
-  ["consumer group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
+  ["consumer group", { slug: "kafka-consumer-group", title: "", summary: "" }],
   ["full table scan", { slug: "full-table-scan", title: "", summary: "" }],
   ["garbage collection", { slug: "jvm-gc-intro", title: "", summary: "" }],
   ["idempotency", { slug: "idempotency", title: "", summary: "" }],
@@ -62,6 +62,6 @@ export const SLUG_TO_ENTRY: ReadonlyMap<string, KeywordEntry> = new Map([
   ["claude-code-primer", { slug: "claude-code-primer", title: "", summary: "" }],
   ["full-table-scan", { slug: "full-table-scan", title: "", summary: "" }],
   ["b-tree-structure", { slug: "b-tree-structure", title: "", summary: "" }],
-  ["kafka-consumer-group", { slug: "kafka-consumer-group", title: "Kafka Consumer Group", summary: "Kafka Consumer Group이 파티션을 분배하고 리밸런싱하는 방식을 설명합니다." }],
+  ["kafka-consumer-group", { slug: "kafka-consumer-group", title: "", summary: "" }],
   ["jvm-gc-intro", { slug: "jvm-gc-intro", title: "", summary: "" }],
 ])
