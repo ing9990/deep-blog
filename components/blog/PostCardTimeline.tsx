@@ -41,7 +41,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
             <div className="relative z-[var(--z-nav)] flex h-10 w-10 items-center justify-center rounded-full border-2 border-border bg-background text-[length:var(--text-meta)] font-bold text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
               {day}
             </div>
-            <span className="relative z-[var(--z-nav)] mt-1 bg-background px-1 text-[length:var(--text-meta)] font-medium uppercase tracking-widest text-muted-foreground">
+            <span className="relative z-[var(--z-nav)] mt-3 bg-background px-1 text-[length:var(--text-meta)] font-medium uppercase tracking-widest text-muted-foreground">
               {month}
             </span>
           </>
