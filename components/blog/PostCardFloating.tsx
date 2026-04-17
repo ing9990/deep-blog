@@ -16,7 +16,7 @@ export function PostCardFloating({ post }: { post: Post }) {
   return (
     <Link
       href={`/posts/${post.slug}`}
-      className="group grid grid-cols-[44px_1fr] items-start gap-4 rounded-[var(--radius-panel)] border border-border bg-background p-5 transition-all hover:border-border-strong hover:shadow-[0_4px_16px_rgba(0,0,0,0.05)]"
+      className="group grid grid-cols-[44px_1fr] items-start gap-4 rounded-[var(--radius-panel)] border border-border bg-background p-5 transition-all hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
       style={categoryStyle(post.category)}
       data-cat-tinted=""
     >

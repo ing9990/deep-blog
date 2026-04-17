@@ -16,7 +16,7 @@ export function PostCardEditorial({ post }: { post: Post }) {
   return (
     <Link
       href={`/posts/${post.slug}`}
-      className="group relative block overflow-hidden rounded-xl border border-border bg-background px-6 py-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
+      className="group relative block overflow-hidden rounded-xl border border-border bg-background px-6 py-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card)]"
       style={categoryStyle(post.category)}
       data-cat-tinted=""
     >
