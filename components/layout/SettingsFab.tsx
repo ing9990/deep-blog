@@ -18,7 +18,7 @@ export function SettingsFab() {
       <button
         type="button"
         onClick={handleToggle}
-        className="fixed bottom-6 right-6 z-[var(--z-fab)] flex h-12 w-12 items-center justify-center rounded-xl bg-foreground text-background shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-transform hover:scale-105"
+        className="fixed bottom-6 right-6 z-[var(--z-fab)] flex h-12 w-12 items-center justify-center rounded-xl bg-foreground text-background shadow-[var(--shadow-fab)] transition-transform hover:scale-105"
         aria-label={t('settings.open')}
       >
         <Settings
