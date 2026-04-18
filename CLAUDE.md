@@ -10,7 +10,7 @@
 
 ## 1. 정체성 · 모토
 
-- **DEEP** (구 "Backend Notes") — 개인 기술 블로그. `package.json` name과 디렉토리 경로는 구명 유지.
+- **DEEP** — 개인 기술 블로그. 로컬 디렉토리/리포 모두 `deep-blog`.
 - **모토**: *"기술 주제를 최대한 이해하기 쉽게 정리"*. 이해를 위해 내부적 작동, 기술이 필요한 이유, 트레이드오프 비교를 다룬다.
 - **배포 도메인**: `https://ing9990.com` (Vercel). SEO 메타데이터·sitemap·robots.txt·Open Graph 활성화됨.
 - **신규 글 작성은 `blog-writer` 스킬로만**. 사용자가 "블로그 써줘" / "포스트 만들어줘" 계열 요청을 하면 즉시 스킬로 전환. `content/posts/*.mdx` 직접 `Write` 금지.

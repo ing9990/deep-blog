@@ -1,0 +1,318 @@
+---
+title:
+  ko: "Cache Stampede"
+  en: "Cache Stampede"
+slug: "cache-stampede"
+date: 2026-04-18
+tags:
+  - Backend
+  - CS
+  - Distributed Systems
+  - Cache
+keywords:
+  - "Cache Stampede"
+  - "캐시 스탬피드"
+  - "Thundering Herd"
+  - "PER"
+  - "Stale-While-Revalidate"
+summary:
+  ko: "캐시 만료가 동시성과 만나 DB 부하가 폭주하는 Cache Stampede 문제의 근본 원인을 이해하고, Mutex Lock, Single Flight, Probabilistic Early Expiration, Stale-While-Revalidate 4가지 방어 패턴의 트레이드오프를 비교해 상황에 맞는 해법을 선택하는 기준을 얻습니다."
+  en: "Why cache expiration combined with concurrency overwhelms the database, and how to compare the four mitigation patterns (Mutex Lock, Single Flight, Probabilistic Early Expiration, Stale-While-Revalidate) to choose the right defense for your context."
+category: knowledge
+draft: false
+---
+
+Cache Stampede는 구현 버그가 아닙니다. TTL 만료 시점에 동일 키로 몰린 동시 요청이 모두 캐시 미스를 겪으면서, 같은 무거운 쿼리를 N번 동시에 DB로 던지는 현상입니다. 이 글에서는 왜 "TTL을 길게 잡으면 된다"가 해법이 아닌지, 그리고 4가지 방어 패턴이 같은 문제에 대한 어떤 다른 조정 전략인지 살펴봅니다.
+
+<Callout type="info" title="이 글의 학습 목표">
+  1. Cache Stampede가 어떻게 DB 장애를 일으키는지 이해한다
+  2. 4가지 방어 패턴(Mutex Lock, Single Flight, PER, SWR)의 구조적 차이를 구분할 수 있다
+  3. 자신의 시스템에 맞는 방어 전략을 선택하는 기준을 얻는다
+</Callout>
+
+## Cache Stampede
+
+Cache Stampede는 캐시 만료 직후 동일 키로 몰린 동시 요청이 모두 캐시 미스를 겪고, 그 N개 요청이 동일한 무거운 쿼리를 동시에 DB로 던지는 현상입니다. 별칭으로 Dog-piling, Thundering Herd(TTL 동기화 변형), Cache Avalanche(다수 키 동시 만료) 등이 있으며 모두 같은 메커니즘의 변형입니다.
+
+가장 단순한 발생 조건은 다음 세 가지의 동시 충족입니다.
+
+| 조건 | 의미 |
+|---|---|
+| 높은 동시성 | 같은 키에 N개 동시 요청 |
+| 캐시 미스의 동시 감지 | TTL 만료 또는 콜드 캐시 |
+| 비싼 재계산 | DB 쿼리, 외부 API 호출, 집계 연산 |
+
+셋 중 하나라도 빠지면 Stampede는 발생하지 않습니다. 동시성이 낮으면 미스가 순차 처리되고, 캐시가 항상 채워져 있으면 미스 자체가 없으며, 재계산이 1ms로 충분히 빠르면 N개 동시 fetch가 와도 부담 없이 끝납니다. 셋이 동시에 충족되는 순간이 위험 지대입니다.
+
+## 왜 위험한가
+
+캐시는 보통 DB 부하를 N분의 1로 줄이기 위해 도입합니다. 그런데 캐시 만료라는 단순한 기능이 특정 조건에서는 DB를 오히려 더 위험하게 만듭니다. 캐시 만료 직후 누적된 트래픽이 한 시점에 폭발하면, 평시 부하보다도 훨씬 큰 spike가 DB를 칩니다.
+
+<Callout type="warning" title="흔한 오해 두 가지">
+  **"TTL을 길게 잡으면 안전하다"** — 오히려 TTL이 길수록 만료 시점에 누적된 트래픽이 커서 폭발 반경이 확대됩니다.
+
+  **"캐시를 안 쓰면 된다"** — 캐시를 안 쓰면 평시 부하 자체가 N배라 더 빨리 무너집니다. Stampede는 캐시의 부작용이 아니라 만료 정책과 동시성의 구조적 문제입니다.
+</Callout>
+
+이 주제를 모르면 트래픽 급증 이벤트 직후 DB가 갑자기 죽는 장애의 원인을 설명할 수 없습니다. 다수의 서비스 장애 포스트모템에서 "이벤트 직후 DB CPU 100%"의 주범이 Cache Stampede로 밝혀집니다.
+
+## 어디서 발생하나
+
+세 가지 시나리오에서 주로 등장합니다.
+
+### 1. 콜드 캐시
+
+신규 서비스 오픈, 마케팅 캠페인, 인플루언서 언급으로 트래픽이 급증한 시점에 모든 캐시 키가 비어 있는 상태입니다. 첫 요청이 DB에서 데이터를 가져와 캐시를 채우기 전까지, 같은 키를 요구한 수백~수천 개 요청이 모두 DB로 직행합니다. 2016년 Pokémon GO 출시 직후 추천 쿼리 캐시 미스로 인한 DB 과부하, 2019년 Netflix 오리지널 공개 직후 추천 캐시 동시 만료 등이 잘 알려진 사례입니다.
+
+### 2. TTL 동기화 (Thundering Herd)
+
+`setex(key, 3600, value)`처럼 같은 코드 경로로 캐시를 채우면 그 코드가 실행된 시각으로부터 정확히 3600초 뒤에 일제히 만료됩니다. 정각/정시 배치 직후가 대표적입니다. 다수의 서로 다른 키가 동시에 만료될 때를 특히 Cache Avalanche라고 부르며, 같은 메커니즘의 더 큰 버전입니다.
+
+### 3. 배포 직후 콜드 인스턴스
+
+인메모리 로컬 캐시(Caffeine, Guava Cache)를 사용하는 서비스가 새 인스턴스로 배포되면 그 인스턴스의 캐시는 비어 있습니다. 트래픽이 라우팅되기 시작하는 순간이 사실상 콜드 캐시 시나리오의 mini 버전입니다. 분산 캐시(Redis)를 쓰면 이 문제는 완화되지만, Redis 자체를 재시작하면 모든 인스턴스가 동시에 콜드 상태가 됩니다.
+
+## 근본 원인
+
+진짜 root cause는 **Read-Through 모델의 본질적 한계**입니다. 표준 캐시 패턴은 "미스가 발생하면 그 요청자가 직접 원본에서 가져와 캐시를 채운다"입니다. 이 모델에는 *"누가 채울 책임을 지는가"*에 대한 조정(coordination)이 없습니다. N개 요청이 동시에 미스를 감지하면 N개 모두 자신이 책임자라고 판단하고 동시에 fetch를 시작합니다.
+
+이는 분산 시스템의 보편 문제와 같은 결을 가집니다. 두 노드가 메시지 교환 없이 "누가 무엇을 할지"를 합의하는 것은 일반적으로 불가능합니다. Cache Stampede는 이 합의 부재가 만들어내는 자연스러운 귀결입니다.
+
+<RelatedPost slug="two-generals-problem" type="parallel" />
+
+<Callout type="error" title="핵심 통찰: 만료가 아니라 조정 부재가 문제다">
+  TTL을 늘려도 만료 시점은 미뤄질 뿐 사라지지 않으며, 늘릴수록 stale data 시간이 늘어 정확성을 잃습니다. 캐시가 존재하는 한 만료는 일어나고, 만료가 일어나는 한 그 시점의 동시 요청은 항상 가능합니다. 따라서 모든 방어책의 본질은 *"만료 시점의 동시성을 어떻게 조정할 것인가"*의 답입니다.
+</Callout>
+
+이 분석에서 중요한 결론이 따라 나옵니다. 4가지 방어 패턴(Mutex Lock, Single Flight, PER, SWR)은 같은 문제에 대한 4가지 다른 조정 전략입니다. Mutex Lock은 외부 락으로 직접 조정하고, Single Flight는 in-process 큐로 조정하며, PER은 만료 시점을 확률적으로 분산시켜 동시성 자체를 줄이고, SWR은 미스 자체를 발생시키지 않습니다.
+
+## 방어 패턴 4가지
+
+방어 패턴은 **"어디서 조정을 수행하는가"**로 4가지로 나뉩니다. Mutex Lock과 Single Flight는 "동시성을 막는다" 그룹이고, PER과 SWR은 "동시성이 발생하는 시점을 비켜간다" 그룹입니다.
+
+| 패턴 | 조정 방식 | 동시 fetch 수 | 응답 latency | staleness | 복잡도 |
+|---|---|---|---|---|---|
+| **Mutex Lock** | 외부 락 (Redis `SETNX`) | 1 | 대기 발생 | 0 | 중 |
+| **Single Flight** | in-process 그룹화 | 인스턴스 수 만큼 | 대기 발생 | 0 | 하 |
+| **PER** | 만료 시점 확률 분산 | 평균 1 | 정상 | 0 | 하 |
+| **SWR** | stale 즉시 반환 + 백그라운드 갱신 | 평균 1 | 정상 | 1 갱신 주기 | 중 |
+
+각 패턴이 시간축 위에서 어떻게 다르게 작동하는지 단계별로 비교해 봅시다.
+
+<CacheStampedeDefenseTimeline />
+
+각 패턴의 핵심을 짧게 정리합니다.
+
+### Mutex Lock
+
+Redis `SETNX`로 락을 잡고, 락 보유자만 DB fetch를 수행합니다. 나머지 요청은 락이 풀릴 때까지 spin하거나 stale 값을 반환합니다.
+
+```python title="mutex-lock.py"
+def get_with_lock(key):
+    value = cache.get(key)
+    if value is not None:
+        return value
+
+    lock_key = f"lock:{key}"
+    if cache.set(lock_key, "1", nx=True, ex=10):  # SETNX  // [!code highlight]
+        try:
+            value = db.fetch(key)
+            cache.setex(key, 3600, value)
+        finally:
+            cache.delete(lock_key)
+        return value
+    else:
+        time.sleep(0.05)
+        return get_with_lock(key)  # 재시도
+```
+
+장점은 동시 fetch 수가 정확히 1로 보장된다는 점입니다. 단점은 락 운영 부담(좀비 락, lock convoy, SPOF)과 락 대기 동안 응답 latency가 증가한다는 점입니다.
+
+### Single Flight
+
+같은 프로세스 안에서 동일 키에 대한 동시 미스 요청을 하나의 fetch로 통합합니다. Go의 `golang.org/x/sync/singleflight`가 표준 라이브러리입니다.
+
+```go title="singleflight.go"
+import "golang.org/x/sync/singleflight"
+
+var group singleflight.Group
+
+func GetUser(id string) (*User, error) {
+    v, err, _ := group.Do(id, func() (interface{}, error) {  // [!code highlight]
+        return fetchUserFromDB(id)
+    })
+    return v.(*User), err
+}
+```
+
+같은 키에 동시에 들어온 N개 요청은 모두 같은 fetch 결과를 받습니다. 구현이 매우 단순하지만 **분산 환경에서는 인스턴스 수만큼 fetch가 발생**한다는 한계가 있습니다. 인스턴스가 10개면 10개 fetch가 동시에 일어나므로, 단일 인스턴스 또는 sticky routing 환경에서 가장 효과적입니다.
+
+### Probabilistic Early Expiration (PER)
+
+만료 임박 시점에 GET하는 요청들이 확률적으로 조기 갱신을 트리거합니다. 다음 섹션에서 상세히 다룹니다.
+
+### Stale-While-Revalidate (SWR)
+
+만료된 stale 값을 즉시 반환하고, 백그라운드로 비동기 갱신을 수행합니다. HTTP `Cache-Control` 헤더 표준에도 등재된 패턴입니다.
+
+```python title="swr.py"
+def get_swr(key):
+    value, expires_at = cache.get_with_meta(key)
+    if value is None:
+        return fetch_and_cache(key)  # 콜드 캐시는 별도
+
+    if time.time() > expires_at:
+        # stale: 즉시 반환 + 백그라운드 갱신
+        background_refresh(key)  // [!code highlight]
+        return value
+    return value
+```
+
+응답 latency가 정상이고 동시 fetch 수도 평균 1입니다. 대신 **데이터가 1 갱신 주기만큼 stale**할 수 있어서 정합성이 strict한 영역(잔액, 재고)에는 부적합합니다.
+
+### Jitter는 어디 속하는가
+
+TTL Jitter는 캐시 SET 시 TTL을 무작위 변동시키는 보조 기법으로, 분류상 PER과 같은 가족이지만 작동 방식이 다릅니다.
+
+| 축 | PER | TTL Jitter |
+|---|---|---|
+| 분산 시점 | **읽기 시점** 확률적 조기 갱신 | **쓰기 시점** TTL 무작위 변동 |
+| 같은 키 | 만료 직전 매 GET마다 확률 계산 | 한 번 SET되면 그 만료 시점은 고정 |
+| 방어 대상 | 단일 키 Stampede | 다수 키 동시 만료 (Cache Avalanche) |
+
+Jitter는 단일 핫 키 Stampede를 막지 못하지만(같은 키는 어차피 한 만료 시점에 몰림) 비용이 거의 0이라 모든 캐시의 1번째 위생 조치로 권장됩니다. 본 패턴들과 조합해서 씁니다.
+
+## PER 상세
+
+PER의 직관은 단순합니다. **캐시를 GET할 때마다, 만료가 임박한 정도에 비례하는 확률로 미리 갱신을 트리거하라**. 만료까지 1시간 남았으면 거의 트리거하지 않고, 10초 남았으면 가끔 트리거하고, 1초 남았으면 자주 트리거합니다. 모든 요청이 독립적으로 이 판단을 하므로 별도 조정(락)이 필요 없습니다. 평균적으로 만료 직전 단 한 요청만이 갱신을 트리거합니다.
+
+이를 수식으로 정확히 표현한 것이 2015년 Vattani 등이 제안한 **XFetch 알고리즘**입니다.
+
+$$\text{now} - \delta \cdot \beta \cdot \ln(\text{random()}) \geq \text{expiration\_time}$$
+
+각 변수의 의미:
+
+| 변수 | 의미 |
+|---|---|
+| $\text{expiration\_time}$ | 캐시 만료 시각 (절대 시각) |
+| $\delta$ | 데이터 재계산에 걸리는 평균 시간 (예: 100ms). SET 시 함께 저장 |
+| $\beta$ | 조기 갱신 적극성. 기본값 1.0. 클수록 더 일찍 트리거 |
+| $\text{random()}$ | $[0, 1)$ 균등 난수. 요청마다 새로 뽑음 |
+
+부등식 좌변에서 $-\delta \cdot \beta \cdot \ln(\text{random()})$은 **항상 양수**이고($\ln$은 음수, 앞에 $-$가 있어 양수), $\text{random()}$이 작을수록 큰 값입니다. 이 양수가 *"갱신을 얼마나 일찍 트리거할지"*의 시간 폭이 됩니다. 평균값은 $\delta \cdot \beta$이고, 그 분포는 지수분포를 따릅니다.
+
+```python title="xfetch.py"
+import math, random, time
+
+def x_fetch(key, beta=1.0):
+    value, delta, expiration_time = cache.get_with_meta(key)
+
+    now = time.time()
+    if value is None or now - delta * beta * math.log(random.random()) >= expiration_time:  // [!code highlight]
+        start = time.time()
+        value = db.fetch(key)
+        new_delta = (delta + (time.time() - start)) / 2  # EWMA 갱신
+        cache.setex_with_meta(key, value, new_delta, ttl=3600)
+
+    return value
+```
+
+이 식이 우아한 이유는 **$\delta$라는 물리량을 자연스럽게 흡수**한다는 점입니다. 갱신은 "데이터를 가져오는 데 걸리는 시간($\delta$)" 동안 진행됩니다. 그동안 다른 요청이 미스를 보지 않으려면 만료보다 최소 $\delta$만큼은 일찍 갱신을 시작해야 합니다. XFetch는 이 $\delta$를 단순한 안전 마진이 아니라 **확률적 트리거 시점의 자연스러운 스케일**로 사용합니다.
+
+$\beta$ 값에 따라 트리거 시점 분포가 어떻게 변하는지 직접 조절해 봅시다.
+
+<PERBetaSlider />
+
+$\beta$를 키우면 분포가 만료보다 더 일찍 좌측으로 이동하고, $\beta$를 줄이면 만료에 더 가까워지지만 만료 후 트리거(이상치)가 늘어납니다. 일반적으로 $\beta = 1$이 균형 잡힌 기본값이며, 갱신 비용이 매우 큰 경우(예: 분산 집계)에 한해 $\beta = 2~3$으로 더 보수적으로 갱신합니다.
+
+## 분산 락의 함정
+
+Mutex Lock은 직관적이고 강한 보장을 제공하지만, **분산 환경에서는 락의 가정 자체가 깨질 수 있다**는 함정이 있습니다. 락의 핵심 가정은 *"락 보유자가 살아있고, 통신 가능하며, 작업이 락 TTL 안에 끝난다"*입니다. 이 세 가정이 깨지는 두 가지 대표 시나리오가 있습니다.
+
+**네트워크 파티션**. 락 보유자는 멀쩡히 살아있지만 다른 노드와의 통신이 끊겼습니다. 다른 노드들이 봤을 땐 락 TTL이 만료되었으므로 새 락을 획득합니다. 결과적으로 두 노드가 동시에 fetch & SET을 수행합니다.
+
+**GC stop-the-world 또는 OS 프리징**. 락 보유자가 GC 중단으로 5초간 멈춘 사이 락 TTL이 만료되고, 다른 노드가 락을 획득합니다. GC가 끝나고 보유자가 깨어나면 자기는 여전히 락을 가지고 있다고 믿고 SET을 수행합니다.
+
+<RelatedPost slug="jvm-gc-intro" type="parallel" />
+
+구체적인 실패 시나리오를 단계별로 보면 다음과 같습니다.
+
+```text title="failure-scenario.txt"
+t=0s    노드 A: 락 획득 (TTL 3s), DB fetch 시작
+t=0.5s  노드 A: GC stop-the-world 진입 (5s 정지)
+t=3s    Redis: 락 TTL 자연 만료
+t=3.1s  노드 B: 락 획득, 자기 fetch 시작
+t=4s    노드 B: fetch 완료, cache.setex(key, ...)
+t=5.5s  노드 A: GC 재개, fetch 완료, cache.setex(key, ...)  ← B의 값 덮어씀
+```
+
+결과: "락 보유자만 SET" 가정이 깨졌고, 두 fetch 결과가 다를 경우(예: 정확히 그 사이에 DB가 갱신됨) 캐시에 잘못된 값이 남습니다. 이는 분산 시스템에서 **절대적 상호 배제는 일반적으로 보장 불가능**하다는 보편 사실의 한 인스턴스입니다.
+
+대응 방법은 세 갈래입니다.
+
+| 대응 | 핵심 아이디어 |
+|---|---|
+| **Fencing Token** | 락 획득 시 단조 증가 토큰 발급, 캐시 SET 시 토큰 검증으로 오래된 SET 거부 |
+| **Best-effort 인식 + fallback** | "락은 안전 보장이 아닌 best-effort"로 인식, timeout 시 stale 반환 또는 SWR 위임 |
+| **PER / SWR로 전환** | 락 자체를 사용하지 않으면 분실 시나리오가 사라짐 |
+
+부가적으로, Redis 단일 인스턴스 락은 **SPOF**(Redis 다운 시 모든 캐시 fetch 차단)이므로 운영에서는 항상 fallback 경로를 준비해야 합니다. Redis 다중 인스턴스 락(Redlock)은 시계 동기 가정 위반 등으로 Martin Kleppmann이 강하게 비판했으며, 학술적으로도 안전성이 완전히 입증되지 않았습니다.
+
+## 실무 함정
+
+운영에서 자주 마주치는 함정 6가지를 정리합니다.
+
+### 1. TTL Jitter 미적용
+
+Jitter 없이 동일한 TTL로 캐시를 채우면 매 정시(0분)마다 모든 키가 일제히 만료되어 Cache Avalanche가 정기적으로 발생합니다. 권장 jitter 범위는 ±10~20%입니다. 너무 작으면 분산 효과가 미미하고, 너무 크면 데이터 신선도가 들쭉날쭉해져 디버깅이 어려워집니다.
+
+```python title="jitter.py"
+import random
+
+def setex_with_jitter(key, value, base_ttl=3600):
+    jitter = random.randint(-base_ttl // 10, base_ttl // 10)  # ±10%  // [!code highlight]
+    cache.setex(key, base_ttl + jitter, value)
+```
+
+도입 비용이 거의 0이라 모든 캐시의 1번째 위생 조치로 권장됩니다.
+
+### 2. 콜드 캐시와 Negative Caching
+
+PER, SWR, Mutex Lock 모두 *"캐시가 한 번이라도 채워진 적 있다"*를 전제로 동작합니다. 배포 직후나 Redis 재시작 직후의 콜드 캐시 상태에서는 모두 무력화됩니다. 대응은 두 가지입니다.
+
+- **캐시 워밍**: 배포 hook이나 별도 워밍 잡으로 핫 키를 미리 채우거나, 블루/그린 배포 시 그린 환경에 트래픽을 점진적으로 라우팅합니다.
+- **Negative Caching**: DB에 없는 데이터에 대한 미스를 막기 위해 "없음"을 짧은 TTL로 캐시합니다. 존재하지 않는 user_id를 노린 무효 요청이 반복되면 매번 DB로 향하므로, `null` 자체를 60초 정도 캐시해 미스 폭증을 차단합니다.
+
+### 3. PER의 delta 측정
+
+$\delta$를 잘못 잡으면 PER이 무력화됩니다. 너무 작으면 트리거가 늦어 만료 후 미스가 발생하고, 너무 크면 평시에도 너무 자주 갱신합니다. 권장은 EWMA(지수 이동 평균)로 매 fetch마다 적응형 갱신, 첫 fetch는 보수적으로 큰 값(예: 1초)에서 시작하는 것입니다.
+
+### 4. 캐시 키 카디널리티 폭증
+
+`cache:user:{id}:profile`처럼 사용자별 캐시는 키 수가 사용자 수만큼 증가합니다. 메모리 예측과 evict 정책이 달라지며, 키 수 자체가 운영 부담이 됩니다.
+
+<RelatedPost slug="cardinality" type="parallel" />
+
+### 5. Lock Convoy
+
+Mutex Lock 대기 큐가 길어져 락 자체가 병목이 되는 현상입니다. Stampede를 막으려고 도입한 락이 새로운 병목으로 변하는 경우가 자주 있습니다. 대응은 락 timeout과 fallback(stale 반환)을 반드시 함께 설계하는 것입니다. 락 획득 실패 시 무한 재시도가 아니라 graceful degradation을 선택해야 합니다.
+
+### 6. SWR 백그라운드 갱신 실패
+
+백그라운드 갱신이 조용히 실패하면 stale 값이 계속 반환됩니다. 외부에서는 정상 응답으로 보이지만 데이터는 점점 오래되어 갑니다. 대응은 갱신 실패 메트릭과 알림을 필수로 구성하고, 실패가 N회 누적되면 강제 동기 갱신으로 폴백하는 안전장치를 두는 것입니다.
+
+## 마무리
+
+Cache Stampede는 캐시 자체의 결함이 아니라 *"누가 채울 책임을 지는가"*에 대한 조정 부재가 만들어내는 구조적 문제입니다. TTL을 늘리는 것은 만료 시점을 미루는 임시방편이며, 진짜 해법은 만료 시점의 동시성을 어떻게 조정하느냐의 문제로 귀결됩니다.
+
+4가지 방어 패턴(Mutex Lock, Single Flight, PER, SWR)은 같은 문제에 대한 4가지 다른 조정 전략입니다. 강한 정합성이 필수이면 Mutex Lock(단, 분산 환경의 락 분실 함정 인지), 단일 인스턴스나 sticky routing이면 Single Flight, 만료 시점 분산이 충분하고 단순함을 원하면 PER, stale을 허용할 수 있고 latency가 최우선이면 SWR입니다. 실무에서는 한 가지만 쓰지 않고 `Jitter + PER`, `Single Flight + Mutex Lock`처럼 조합하는 경우가 더 흔합니다.
+
+이 글에서 가장 기억해야 할 한 문장: **"캐시 만료는 시간 문제가 아니라 조정 문제다"**. 이 관점을 가지면 새로운 캐시 패턴이나 라이브러리를 만났을 때 *"이건 어떤 조정 전략이지?"*라는 질문 하나로 본질을 파악할 수 있습니다.
+
+## 참고 자료
+
+- [Optimal Probabilistic Cache Stampede Prevention (Vattani et al., VLDB 2015)](https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf)
+- [How to do distributed locking — Martin Kleppmann](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)
+- [Stale-While-Revalidate (RFC 5861)](https://datatracker.ietf.org/doc/html/rfc5861)
+- [Go singleflight package](https://pkg.go.dev/golang.org/x/sync/singleflight)
+- [Caching at Reddit: Cache Stampedes](https://redditblog.com/2017/01/17/caching-at-reddit/)

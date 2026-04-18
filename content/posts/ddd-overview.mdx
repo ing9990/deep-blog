@@ -1,0 +1,223 @@
+---
+title:
+  ko: "DDD"
+  en: "Domain-Driven Design"
+slug: "ddd-overview"
+date: 2026-04-18
+tags:
+  - Backend
+  - Architecture
+keywords:
+  - DDD
+  - Domain-Driven Design
+  - Bounded Context
+  - Ubiquitous Language
+  - Aggregate
+summary:
+  ko: "DDD가 왜 복잡한 비즈니스 로직을 Service 분기로 푸는 방식의 대안으로 등장했는지 이해하고, Bounded Context · Aggregate · Ubiquitous Language 같은 핵심 용어가 각각 어떤 문제를 해결하는 도구인지 구분할 수 있습니다."
+  en: "Why DDD emerged as an alternative to tangled Service-layer branches in complex business logic, and how to distinguish what problem each core term (Bounded Context, Aggregate, Ubiquitous Language) solves."
+category: knowledge
+draft: false
+---
+
+DDD는 "어디에 쓰는가"보다 "왜 이런 용어들이 만들어졌는가"를 먼저 이해해야 진짜 가치를 발휘하는 방법론입니다. 이 글은 Bounded Context, Aggregate, Ubiquitous Language 같은 핵심 용어가 각각 어떤 실전 문제를 해결하려고 등장했는지 가볍게 정리합니다. DDD의 이원 구조를 먼저 잡으면, 이후 개별 용어들이 제자리를 찾습니다.
+
+<Callout type="info" title="이 글의 학습 목표">
+  1. DDD가 어떤 종류의 문제를 해결하려고 등장했는지 이해합니다.
+  2. Strategic Design과 Tactical Design의 역할 차이를 구분할 수 있습니다.
+  3. 어떤 프로젝트가 DDD 도입에 적합한지 판단하는 기준을 얻습니다.
+</Callout>
+
+## DDD란
+
+DDD (Domain-Driven Design)는 Eric Evans가 2003년 책 *Domain-Driven Design: Tackling Complexity in the Heart of Software*에서 정리한 **소프트웨어 설계 방법론**입니다. 핵심 아이디어는 단순합니다. 소프트웨어가 풀려는 "도메인"의 용어와 규칙을 설계와 코드의 중심에 두자는 것. 여기서 도메인은 소프트웨어가 해결하려는 문제 영역을 뜻합니다. 은행이라면 계좌 · 이체 · 이자, 쇼핑몰이라면 상품 · 주문 · 배송이 도메인입니다.
+
+DDD는 방법론이지 프레임워크가 아닙니다. Spring, Axon, NestJS 같은 특정 라이브러리에 종속되지 않고 언어 · 스택에 상관없이 적용됩니다. 반대로 말하면 "DDD를 적용한다"는 고정된 체크리스트가 있는 게 아니라, **도메인을 코드로 어떻게 표현할지에 대한 사고방식**에 가깝습니다. 그래서 같은 DDD 프로젝트라도 Java/Spring 팀과 Go 팀의 코드 모양은 다를 수 있습니다.
+
+Evans는 DDD를 두 층위로 나눕니다. **Strategic Design**은 큰 그림을 다룹니다. 도메인을 어떻게 나누고 팀을 어떻게 구성하는가. **Tactical Design**은 코드 레벨을 다룹니다. 한 도메인 안에서 객체들을 어떻게 모델링하는가. 이 이원 구조를 먼저 잡고 가면, 이후 등장하는 용어들이 각자 어느 층에 속하는지 명확해집니다.
+
+## 왜 필요한가
+
+소프트웨어가 복잡해지는 이유는 기술보다 **도메인 자체가 복잡하기 때문**인 경우가 많습니다. 은행 이자 계산에는 상품 종류, 세금, 중도 해지, 만기 연장 등 수십 개 조건이 얽힙니다. 이걸 어떻게 코드로 옮기느냐가 품질을 좌우하는데, DDD가 없을 때 현장에서 반복되는 실패가 세 가지 있습니다.
+
+### 1. 용어 혼선
+
+같은 "주문"이라는 단어가 결제팀에서는 "결제 대기 중인 장바구니", 물류팀에서는 "포장 단위", CS팀에서는 "환불 가능한 거래"를 가리킵니다. 회의에서 모두 "주문"을 말하지만 서로 다른 걸 떠올리고, 이게 코드에 반영되면 `OrderService`가 세 팀의 요구를 동시에 처리하려다 분기 로직으로 부풀어 오릅니다.
+
+<DDDTermConfusion />
+
+### 2. 비즈니스 로직이 기술 스택에 녹음
+
+흔한 Spring/JPA 프로젝트를 보면 도메인 규칙이 `@Service`의 `if`문에 흩어지고, `@Entity`는 getter/setter만 있는 빈 껍데기가 됩니다. "주문 취소 조건"을 파악하려면 Service 여러 개를 전부 읽어야 합니다. 도메인 규칙이 한 곳에 모이지 않으면 비즈니스 변경 한 번에 수십 군데를 고쳐야 합니다.
+
+### 3. 도메인 전문가와 개발자 사이 번역 손실
+
+기획자가 "VIP는 무료 반품"이라고 말하면 개발자가 "VIP 기준이 뭔가요?"를 다시 물어야 하고, 이 번역에서 뉘앙스가 사라져 나중에 버그가 됩니다.
+
+DDD는 이 세 가지를 각각 다른 도구로 공략합니다. 아래는 문제와 도구의 매핑입니다.
+
+| 문제 | DDD가 제시하는 도구 |
+|---|---|
+| 용어 혼선 | **Ubiquitous Language** |
+| 비즈니스 로직 산개 | **도메인 모델** (Entity/Aggregate/Value Object) |
+| 팀 간 맥락 충돌 | **Bounded Context** |
+
+뒤에 나오는 용어들은 장식이 아니라 각자 구체적인 문제를 해결하기 위한 도구라는 점을 기억하면, 이후 설명이 훨씬 선명하게 들어옵니다.
+
+## 전략적 설계
+
+<Callout type="warning" title="이 용어들을 이해하는 핵심">
+  Strategic Design의 용어들은 **경계를 긋는 도구**입니다. 큰 도메인을 한 덩어리로 모델링하면 용어 충돌이 누적되므로, 맥락별로 독립된 모델을 유지하는 규율이 핵심입니다.
+</Callout>
+
+Strategic Design은 "도메인을 어떻게 나누고 팀을 어떻게 조직할 것인가"를 다룹니다. 코드 한 줄 쓰기 전에 먼저 결정되어야 하는 것들입니다. 가장 먼저 알아야 할 용어 네 가지를 정리합니다.
+
+### Bounded Context
+
+**특정 모델이 유효한 영역**을 명시적으로 그어놓는 개념입니다. 쇼핑몰에서 "주문"은 결제 컨텍스트에서는 `{결제수단, 총액, 승인상태}`를 가진 객체이고, 배송 컨텍스트에서는 `{수취인, 주소, 운송장번호}`를 가진 다른 객체입니다. 같은 이름이지만 서로 다른 모델이며, 두 컨텍스트는 독립적으로 진화합니다. 교환이 필요한 최소 정보(예: `OrderId`)만 서로 공유합니다.
+
+<DDDBoundedContext />
+
+### Ubiquitous Language
+
+Bounded Context 내부에서 **모두가 같은 의미로 쓰는 언어**입니다. 기획자가 "카트에 담는다"고 말하면, 개발자도 코드에 `cart.add()`로 쓰고 DB 스키마도 `cart_items`로 만듭니다. 회의 · 코드 · 문서가 하나의 언어로 정렬됩니다. 핵심은 **언어가 바뀌면 양쪽이 함께 바뀐다**는 것. 기획자가 새로운 용어를 쓰기 시작하면 코드도 따라가고, 코드 리팩토링으로 이름이 바뀌면 기획 회의에서도 새 이름을 씁니다.
+
+### Context Map
+
+여러 Bounded Context 사이의 **관계를 그린 지도**입니다. 누가 누구에게 의존하는지, 두 컨텍스트의 경계에서 모델을 어떻게 번역하는지를 명시합니다. 대표적인 관계 유형으로는 상하 관계(Upstream/Downstream), 대등 협력(Partnership), 공유 커널(Shared Kernel) 등이 있지만, 소개 수준에서는 "컨텍스트 간 관계를 모호하게 두지 않고 도식화한다"는 원칙만 기억하면 충분합니다.
+
+### Subdomain
+
+도메인을 세 유형으로 분류해 **투자 전략의 기준**을 제공합니다.
+
+| 유형 | 성격 | 투자 전략 |
+|---|---|---|
+| **Core** | 비즈니스 경쟁력의 원천 | 내부 팀이 집중 개발, 최고 품질 유지 |
+| **Supporting** | 필요하지만 차별화 아님 | 팀 내부에서 해결하되 Core보다 간소하게 |
+| **Generic** | 표준화된 영역 | 외부 솔루션 · SaaS · 오픈소스 활용 |
+
+예를 들어 결제는 대부분의 서비스에서 Generic이지만, 쇼핑몰의 추천 알고리즘은 Core일 수 있습니다. 두 영역에 같은 강도의 투자를 쏟지 말자는 판단의 근거가 됩니다.
+
+## 전술적 설계
+
+<Callout type="error" title="핵심 통찰: DDD 용어는 문제-도구 쌍이다">
+  Tactical Design의 각 용어는 "객체를 어떻게 부르느냐"의 이름표가 아닙니다. Entity는 "정체성 보존", Value Object는 "불변성과 교체 가능성", Aggregate는 "트랜잭션 일관성"이라는 구체적인 문제를 풀기 위해 도입된 도구입니다. 용어 이름이 아니라 **각 도구가 보장하는 속성**을 기억하면 설계가 따라옵니다.
+</Callout>
+
+Tactical Design은 "도메인 모델을 코드로 어떻게 표현할 것인가"를 다룹니다. Bounded Context 내부의 객체 구성 규약이라고 봐도 좋습니다.
+
+### Entity와 Value Object
+
+가장 먼저 구분해야 할 두 개념입니다.
+
+| 구분 | Entity | Value Object |
+|---|---|---|
+| **동일성 기준** | ID로 구분 | 값(모든 필드)으로 구분 |
+| **가변성** | 상태 변화 가능 | 불변 |
+| **대체 가능성** | 교체 불가 (정체성 유지) | 같은 값이면 교체 가능 |
+| **저장 방식** | DB에 독립 행 | 주로 Entity의 속성으로 임베드 |
+| **예시** | `Customer`, `Order`, `Account` | `Money`, `Address`, `DateRange` |
+
+같은 이름과 생일의 두 고객이라도 `customerId`가 다르면 다른 사람입니다. 반면 "10,000원"이라는 `Money` 객체 두 개는 서로 같은 값이고 교체 가능합니다.
+
+```kotlin title="Entity.kt"
+class Customer(
+    val id: CustomerId,            // [!code highlight]
+    var name: String,
+    var email: Email,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is Customer && id == other.id   // [!code highlight]
+}
+```
+
+```kotlin title="ValueObject.kt"
+data class Money(                   // [!code highlight]
+    val amount: BigDecimal,
+    val currency: Currency,
+) {
+    operator fun plus(other: Money): Money {
+        require(currency == other.currency)
+        return Money(amount + other.amount, currency)
+    }
+}
+```
+
+Kotlin에서는 `data class`가 값 기반 equals/hashCode를 자동 생성해 Value Object 표현에 자연스럽습니다.
+
+### Aggregate와 Aggregate Root
+
+DDD에서 가장 독특한 개념입니다. 여러 Entity와 Value Object가 **트랜잭션 일관성 단위**로 묶인 덩어리를 말합니다. Order와 OrderLine은 항상 함께 저장되고 함께 수정되어야 합니다. 주문이 5개 라인을 갖는데 결제 승인이 3개 라인에만 반영되면 불일치가 생기기 때문입니다. 이 묶음이 Aggregate이며, 외부는 내부 Entity에 직접 접근하지 않고 대표 Entity인 **Aggregate Root**를 통해서만 들어옵니다.
+
+<DDDAggregate />
+
+Aggregate Root가 존재하는 이유는 **불변식(invariant) 검증의 관문**이 필요하기 때문입니다. 예를 들어 "모든 라인 수량의 합 = 총액"이라는 규칙은 `Order`가 자기 안쪽에서 검증해야 일관성이 유지됩니다. 외부가 `OrderLine`을 직접 수정하게 두면 이 규칙이 깨질 수 있습니다.
+
+Aggregate 경계를 결정하는 것은 DDD 설계의 핵심 기술로 꼽힙니다. 넓게 잡으면 동시성과 성능 문제가 생기고, 좁게 잡으면 일관성이 깨집니다. 경험적으로 "동시에 수정되어야 하는 최소 단위"를 기준으로 삼습니다.
+
+### 조연 용어들
+
+나머지 용어는 위 세 개념을 받쳐줍니다.
+
+| 용어 | 역할 |
+|---|---|
+| **Repository** | Aggregate를 저장·조회하는 인터페이스. DB 구현을 감춘다 (`orderRepository.save`, `findById`) |
+| **Domain Service** | 특정 Entity에 속하지 않는 로직. 환율 계산, 여러 Aggregate를 조합하는 연산 |
+| **Domain Event** | 의미 있는 상태 변화 알림 (`OrderPlaced`, `PaymentCompleted`). 다른 Bounded Context로 전파 |
+| **Factory** | 복잡한 객체 생성 로직 캡슐화. 생성자가 비대해질 때 분리 |
+
+## 언제 써야 하는가
+
+DDD는 "모든 프로젝트에 써야 할 기법"이 아닙니다. 적용 비용이 상당하므로 득보다 실이 큰 상황이 명확히 존재합니다. 판단 기준은 하나의 질문으로 압축됩니다.
+
+> **이 프로젝트의 복잡성은 주로 도메인에서 오는가, 기술에서 오는가?**
+
+도메인에서 온다면 DDD가 유효하고, 기술에서 온다면 굳이 DDD를 얹을 필요가 없습니다.
+
+| 상황 | 적합성 | 이유 |
+|---|---|---|
+| 금융 · 물류 · 보험 · 의료 같이 도메인 규칙이 수십 개 이상 얽힌 영역 | 적합 | 도메인 모델 없이 Service 분기로는 감당 불가 |
+| 도메인 전문가와 정기 소통 가능한 환경 | 적합 | Ubiquitous Language 전제 |
+| 장기 유지보수되는 시스템 | 적합 | 설계 투자 회수 가능 |
+| 순수 CRUD 앱 (사내 게시판, 간단한 관리 도구) | 부적합 | 용어 체계가 코드량만 늘림 |
+| 프로토타입 · 기술 탐색 단계 | 부적합 | 버릴 코드에 설계 투자 불가 |
+| 도메인 전문가 부재 · 접근 불가 | 부적합 | Ubiquitous Language 거짓화, 구조만 남고 의도 없음 |
+
+요약하면 **"도메인이 복잡하고, 장수할 시스템이고, 전문가와 소통 가능할 때"** DDD를 고려합니다.
+
+## 트레이드오프
+
+DDD 도입의 대가는 크게 세 영역입니다.
+
+### 1. 학습 곡선
+
+팀 전체가 Aggregate · Bounded Context · Ubiquitous Language 같은 용어를 공유해야 효과가 나타납니다. 한두 명만 이해하고 코드를 쓰면 리뷰어는 "왜 이렇게 복잡하냐"는 반응만 남기고, 의도가 전파되지 않은 구조는 오히려 유지보수를 방해합니다.
+
+### 2. 초기 설계 부담
+
+Bounded Context 경계와 Aggregate 경계는 한 번 잘못 그으면 되돌리기 어려운 결정입니다. 너무 넓게 잡으면 성능 문제, 너무 좁게 잡으면 일관성 문제가 생기는 식으로 초기 실패 패턴이 공통적으로 반복됩니다.
+
+### 3. 과도한 추상화 (cargo cult DDD)
+
+가장 주의할 함정입니다. 책에서 본 용어를 조건 없이 적용해 단순 CRUD에도 Aggregate · Repository · Factory를 얹는 상황입니다. 이름과 이메일만 있는 `User`에 비즈니스 규칙이 하나도 없는데 `UserAggregate`, `UserRepository`, `UserFactory`, `UserDomainService`를 다 만든 코드베이스가 전형적입니다. 코드량은 몇 배로 늘고 새 기능 추가는 느려집니다. Evans 본인도 *"DDD는 복잡한 도메인에만 의미가 있다"*고 강조한 이유가 여기 있습니다.
+
+<Callout type="warning" title="용어는 문제의 그림자다">
+  DDD 용어를 도입했다면 항상 자문해야 합니다. "이 `Repository`는 어떤 문제를 해결하는가?" "이 `Aggregate` 경계는 어떤 불변식을 지키는가?" 답이 없으면 그 용어는 비용만 남기는 장식입니다.
+</Callout>
+
+실무에서 만나는 숨은 비용이 두 가지 더 있습니다.
+
+**프레임워크와의 긴장**. Spring Data JPA나 Hibernate 같은 ORM은 public getter/setter와 기본 생성자를 요구하지만, DDD는 Aggregate Root의 외부 노출을 최소화합니다. 이 긴장을 해소하기 위해 `@Access(FIELD)`, private 생성자 + factory method, JPA 전용 DTO 같은 기법을 동원해야 합니다.
+
+**퍼포먼스 비용**. Aggregate는 일관성 단위이므로 전체를 한 번에 로드 · 저장하는 경향이 있어, 라인 수백 개짜리 Order를 수정할 때 필요 없는 라인까지 모두 꺼내는 상황이 생깁니다. 이를 회피하려면 Aggregate 경계를 다시 쪼개거나 CQRS(Command Query Responsibility Segregation) 같은 보완 패턴을 얹어야 합니다.
+
+## 마무리
+
+DDD의 핵심은 용어 체계가 아니라 **용어가 해결하는 문제**입니다. Bounded Context는 팀 간 맥락 충돌을, Ubiquitous Language는 용어 혼선을, Aggregate는 트랜잭션 일관성을 지킵니다. 각 도구의 존재 이유를 잊지 않으면 용어가 장식으로 남는 cargo cult를 피할 수 있고, 도입 여부를 판단하는 기준도 자연스럽게 생깁니다. "이 프로젝트의 복잡성은 도메인에서 오는가"라는 한 질문이 DDD의 시작이자 끝입니다.
+
+## 참고 자료
+
+- [Domain-Driven Design: Tackling Complexity in the Heart of Software — Eric Evans](https://www.domainlanguage.com/ddd/)
+- [Implementing Domain-Driven Design — Vaughn Vernon](https://www.informit.com/store/implementing-domain-driven-design-9780321834577)
+- [Bounded Context — Martin Fowler](https://martinfowler.com/bliki/BoundedContext.html)
+- [DDD Reference — Eric Evans (PDF)](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf)

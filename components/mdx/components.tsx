@@ -9,18 +9,26 @@ import { KeywordLink } from '@/components/blog/KeywordLink'
 import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
 import { Tab, Tabs } from '@/components/mdx/Tabs'
+import { CacheStampedeDefenseTimeline } from '@/components/visualizations/CacheStampedeDefenseTimeline'
 import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpectrum'
 import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
 import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
+import { DDDAggregate } from '@/components/visualizations/DDDAggregate'
+import { DDDBoundedContext } from '@/components/visualizations/DDDBoundedContext'
+import { DDDTermConfusion } from '@/components/visualizations/DDDTermConfusion'
 import { GCCycle } from '@/components/visualizations/GCCycle'
 import { IdempotencyCausalityChain } from '@/components/visualizations/IdempotencyCausalityChain'
 import { IdempotencyKeyFlow } from '@/components/visualizations/IdempotencyKeyFlow'
+import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline'
+import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
 import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
 import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndexLookup'
 import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
+import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
+import { TrieDeleteSnapshot } from '@/components/visualizations/TrieDeleteSnapshot'
 import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
@@ -69,13 +77,19 @@ export const mdxComponents: MDXComponents = {
   th: (props: HTMLAttributes<HTMLTableCellElement>) => <th {...props} />,
   td: (props: HTMLAttributes<HTMLTableCellElement>) => <td {...props} />,
   BTreeInsert,
+  CacheStampedeDefenseTimeline,
   Callout,
   GCCycle,
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,
+  DDDAggregate,
+  DDDBoundedContext,
+  DDDTermConfusion,
   IdempotencyCausalityChain,
   IdempotencyKeyFlow,
+  OptimizerPipeline,
+  PERBetaSlider,
   QuickSort,
   QuickSortPivot,
   RelatedPost,
@@ -83,6 +97,8 @@ export const mdxComponents: MDXComponents = {
   SecondaryIndexLookup,
   SequentialVsRandomIO,
   Tab,
+  TrieBuilder,
+  TrieDeleteSnapshot,
   TwoGeneralsMessenger,
   Tabs,
 }

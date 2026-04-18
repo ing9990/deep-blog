@@ -1,0 +1,255 @@
+---
+title:
+  ko: "InnoDB EXPLAIN"
+  en: "InnoDB EXPLAIN"
+slug: "innodb-explain-reading"
+date: 2026-04-18
+tags:
+  - Database
+  - Backend
+keywords:
+  - EXPLAIN
+  - Query Plan
+  - Execution Plan
+  - 쿼리 실행 계획
+summary:
+  ko: "InnoDB EXPLAIN의 12개 컬럼이 무엇을 의미하는지 이해하고, type/key/Extra를 중심으로 슬로우 쿼리의 원인을 진단하는 기준을 얻습니다."
+  en: "Understand what each of InnoDB EXPLAIN's 12 columns means, and learn to diagnose slow queries by reading the type, key, and Extra columns."
+category: database
+draft: false
+---
+
+EXPLAIN은 슬로우 쿼리 디버깅의 출발점이지만, 12개 컬럼이 처음에는 비슷해 보여 어디부터 봐야 할지 막막합니다. 이 글은 EXPLAIN이 옵티마이저 내부에서 어떻게 만들어지는지부터 시작해, 컬럼별 의미와 자주 마주치는 함정까지 진단의 기준을 정리합니다.
+
+<Callout type="info" title="이 글의 학습 목표">
+  1. EXPLAIN의 12개 컬럼이 옵티마이저 내부에서 어떻게 만들어지는지 이해한다
+  2. `type`, `key`, `Extra` 신호를 중심으로 슬로우 쿼리 원인을 진단하는 우선순위를 구분할 수 있다
+  3. `type=ALL`이나 `Using where`처럼 헷갈리는 신호를 잘못 해석하지 않는 기준을 얻는다
+</Callout>
+
+## EXPLAIN이란
+
+EXPLAIN은 MySQL 옵티마이저가 만든 **실행 계획(execution plan)을 가시화하는 명령어**입니다. 쿼리 앞에 `EXPLAIN`을 붙이면 그 쿼리는 실제로 실행되지 않고, 옵티마이저가 결정한 "어떤 인덱스를 쓸지, 어떤 순서로 조인할지, 어떤 접근 방법으로 행을 가져올지"의 결과만 출력됩니다. 즉 실행 도구가 아니라 **결정 설명 도구**입니다.
+
+```sql title="기본 사용법"
+EXPLAIN
+SELECT id, status, amount
+FROM orders
+WHERE user_id = 1042 AND status = 'PAID';
+```
+
+출력 형식은 세 가지를 지원합니다.
+
+| 형식 | 명령 | 특징 |
+|---|---|---|
+| Tabular (기본) | `EXPLAIN <query>` | 12개 컬럼의 표 형태. 가장 많이 쓰임. |
+| JSON | `EXPLAIN FORMAT=JSON <query>` | 비용(`cost_info`)과 nested loop 구조까지 상세하게 트리로 표현. |
+| TREE | `EXPLAIN FORMAT=TREE <query>` | 사람이 읽기 좋은 들여쓰기 트리 (MySQL 8.0.16+). |
+
+각 행은 처리 단위 1개에 대응합니다. 단순 SELECT는 1행, JOIN N개 테이블은 N행, UNION/Subquery가 있으면 별도의 행이 추가됩니다.
+
+<Callout type="info" title="EXPLAIN ANALYZE가 따로 있다">
+  MySQL 8.0.18부터 `EXPLAIN ANALYZE`가 추가되었습니다. 일반 EXPLAIN이 옵티마이저의 결정만 출력한다면, `EXPLAIN ANALYZE`는 쿼리를 **실제로 실행**하면서 행 단위 시간과 반복 횟수를 측정해 출력합니다. 추정치가 아닌 실측치를 보고 싶다면 ANALYZE를 사용합니다.
+</Callout>
+
+## 왜 필요한가
+
+### 1. 옵티마이저 결정의 가시화
+
+옵티마이저는 cost-based입니다. 인덱스를 만들었어도 옵티마이저가 비용 계산 끝에 무시할 수 있습니다. 통계상 카디널리티가 매우 낮은 컬럼이라면 인덱스 탐색 + 랜덤 I/O보다 Full Table Scan + 순차 I/O가 더 싸다고 판단해 인덱스를 거르는 식입니다. EXPLAIN은 그 결정을 사용자에게 가시화하는 **유일한 공식 채널**입니다. EXPLAIN 없이는 "내가 만든 인덱스가 실제로 쓰이는가"를 확인할 방법이 없습니다.
+
+### 2. 슬로우 쿼리 진단의 출발점
+
+슬로우 쿼리 로그는 "이 쿼리가 N초 걸렸다"는 사실만 기록합니다. 원인이 인덱스 미사용인지, 비효율적인 조인 순서인지, 정렬 단계의 Filesort인지, 임시 테이블 사용인지를 짚으려면 그 쿼리에 EXPLAIN을 걸어야 합니다. 실전 진단의 1차 신호는 `type`, `key`, `Extra` 세 컬럼에 집중되어 있고, 이 글의 §컬럼별 해석에서 자세히 다룹니다.
+
+### 3. 인덱스/스키마 변경의 사전 검증
+
+새 인덱스를 만들기 전에 EXPLAIN으로 옵티마이저가 그 인덱스를 선택할지, 다른 쿼리에 회귀가 없는지 미리 점검할 수 있습니다. `ANALYZE TABLE`로 통계를 갱신한 후 EXPLAIN을 다시 보면 통계 변화가 실행 계획에 어떤 영향을 주는지도 확인됩니다. 운영 DB에 직접 인덱스를 만들기 전에 영향 반경을 가늠하는 도구입니다.
+
+## 내부 동작
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  EXPLAIN의 12개 컬럼은 동등하게 중요하지 않습니다. 진단의 출발점은 항상 `type` → `key` → `Extra` 순서이며, 이 3개의 신호를 정확히 읽으면 슬로우 쿼리 원인의 대부분이 드러납니다.
+</Callout>
+
+<Callout type="error" title="핵심 통찰: EXPLAIN은 실측이 아닌 추정이다">
+  EXPLAIN이 보여주는 `rows`와 비용은 옵티마이저가 통계 데이터로 추정한 값입니다. 실제 실행 시 몇 행을 읽었고 얼마나 걸렸는지가 아니라, "옵티마이저는 이렇게 추정해서 이 plan을 골랐다"의 기록입니다. 통계가 노화되면 추정이 어긋나고 실행 계획도 어긋납니다. 실측이 필요하면 `EXPLAIN ANALYZE` (8.0.18+)로 Executor까지 실행해야 합니다.
+</Callout>
+
+### 1. 쿼리 처리 파이프라인
+
+MySQL의 쿼리 처리는 Parser → **Optimizer** → Executor 3단계로 흐릅니다. EXPLAIN의 본질은 Optimizer 단계에서 멈춰서 결정만 출력하는 것입니다. 아래 다이어그램이 흐름과 EXPLAIN/EXPLAIN ANALYZE의 정지 지점을 보여줍니다.
+
+<OptimizerPipeline />
+
+Optimizer는 cost-based optimizer (CBO)입니다. 가능한 실행 계획 후보들에 대해 I/O 비용 + CPU 비용을 합산한 추정 비용을 비교하고, 가장 싼 plan을 선택합니다. 비용은 단위 없는 추상값입니다. `SHOW STATUS LIKE 'Last_query_cost'`로 직전 쿼리 비용을 확인할 수 있고, 절대값보다는 plan 간 상대 비교에 의미가 있습니다.
+
+### 2. 통계 시스템
+
+비용 추정의 토대는 **통계 데이터**입니다. InnoDB는 `innodb_stats_persistent=ON` (8.0 기본)으로 다음 두 테이블에 통계를 영속화합니다.
+
+```sql title="InnoDB가 영속화하는 통계 테이블"
+SELECT * FROM mysql.innodb_table_stats WHERE table_name = 'orders';
+SELECT * FROM mysql.innodb_index_stats WHERE table_name = 'orders';
+```
+
+옵티마이저가 핵심으로 보는 수치는 다음 세 가지입니다.
+
+| 수치 | 의미 |
+|---|---|
+| `n_rows` | 테이블의 추정 행 수 |
+| `cardinality` | 각 인덱스의 distinct value 추정 |
+| `clustered_index_size` / `sum_of_other_index_sizes` | 페이지당 평균 행 수 산정 기반 |
+
+통계는 `ANALYZE TABLE orders;`로 명시 갱신하거나, `innodb_stats_auto_recalc=ON`이면 테이블의 약 10%가 변경될 때 자동 갱신됩니다. 통계가 부정확하면 옵티마이저의 결정도 어긋나며, 이게 EXPLAIN `rows`와 실제 행 수의 괴리가 생기는 1차 원인입니다.
+
+<RelatedPost slug="cardinality" type="parallel" />
+
+### 3. Index Dive
+
+EXPLAIN의 `rows` 컬럼이 어떻게 만들어지는지가 진단의 핵심입니다.
+
+- 단순 `=` 조건이면 인덱스 통계의 카디널리티에서 추정합니다 ($rows \approx total\_rows / cardinality$).
+- 범위 조건(`BETWEEN`, `<`, `>`, `IN`)에서는 **index dive**를 수행합니다. B+Tree에서 시작 위치와 끝 위치를 실제로 탐색해 그 사이의 페이지 수를 세어 행 수를 추정하는 방식입니다.
+
+dive 자체가 I/O 비용을 발생시키기 때문에 `eq_range_index_dive_limit` (기본 200)을 넘는 IN 절에서는 dive를 끄고 통계 기반 추정만 사용합니다. 이때 정확도가 떨어질 수 있습니다.
+
+<Callout type="warning" title="긴 IN 절은 추정 정확도가 떨어진다">
+  `WHERE id IN (1, 2, ..., 500)`처럼 200개 이상의 항목이 들어 있는 IN 절에서는 옵티마이저가 index dive를 포기하고 통계만 사용합니다. EXPLAIN의 `rows`가 비현실적으로 보이거나 다른 쿼리와 일관성이 없다면, IN 절 길이와 `eq_range_index_dive_limit` 설정을 점검할 가치가 있습니다.
+</Callout>
+
+<RelatedPost slug="b-tree-structure" type="parallel" />
+
+### 4. Plan Enumeration
+
+JOIN의 N개 테이블에 대해 가능한 조인 순서는 $N!$입니다. MySQL은 이 후보를 **greedy 탐색 + pruning**으로 줄여서 plan을 정합니다. 관련 변수는 `optimizer_search_depth`(탐색 깊이)와 `optimizer_prune_level`(가지치기 강도)이며, EXPLAIN의 행 순서가 옵티마이저가 결정한 조인 순서를 그대로 반영합니다.
+
+## 컬럼별 해석
+
+EXPLAIN의 12개 컬럼은 의미상 세 그룹으로 나뉩니다. 진단 우선순위는 G2의 `type` → `key`, G3의 `Extra` 순입니다.
+
+### G1. 쿼리 구조
+
+| 컬럼 | 의미 |
+|---|---|
+| `id` | SELECT 단위 식별자. 같은 id는 같은 SELECT 내 JOIN, 다른 id는 독립 SELECT. |
+| `select_type` | 그 SELECT의 역할 분류 (SIMPLE / PRIMARY / SUBQUERY / DEPENDENT SUBQUERY / DERIVED / MATERIALIZED / UNION 등). |
+| `table` | 처리 중인 테이블 이름. derived는 `<derivedN>`, union은 `<unionM,N>` 형태. |
+| `partitions` | 파티션 prune 후 실제로 접근할 파티션 목록. 파티션 테이블이 아니면 NULL. |
+
+`id`는 같은 값이면 같은 SELECT 내 JOIN으로 위에서 아래 순서로 실행되고, 다른 값이면 독립 SELECT로 id 큰 것부터 실행됩니다. UNION 결과를 합치는 가상 단계는 id가 NULL로 표시됩니다.
+
+`select_type`에서 가장 큰 함정은 **DEPENDENT SUBQUERY**입니다.
+
+<Callout type="warning" title="DEPENDENT SUBQUERY의 N×M 폭발">
+  DEPENDENT SUBQUERY는 외부 컬럼을 참조하는 서브쿼리로, 외부 행마다 서브쿼리가 다시 실행됩니다. 외부 N행 × 서브쿼리 M행 = $N \times M$ 비용으로 폭발하는 패턴입니다. 가능한 한 JOIN으로 재작성하는 것이 정석이며, EXPLAIN 출력에서 `select_type: DEPENDENT SUBQUERY`가 보이면 1차 점검 대상입니다.
+</Callout>
+
+`partitions`에서 모든 파티션이 다 나열되면 prune이 실패한 것입니다. 원인은 보통 WHERE에 파티션 키가 없거나, `YEAR(created_at)`처럼 파티션 키에 함수가 적용된 경우입니다.
+
+### G2. 접근 방법
+
+`type`은 EXPLAIN에서 가장 중요한 컬럼입니다. 접근 방법을 보여주며 효율 ranking이 있습니다.
+
+| 순위 | type | 의미 |
+|---|---|---|
+| 1 (best) | `system` | 테이블에 행이 1개. 특수 케이스. |
+| 2 | `const` | PK 또는 UNIQUE 인덱스로 1행 매칭 (상수). |
+| 3 | `eq_ref` | JOIN에서 PK/UNIQUE로 매번 1행이 보장. 가장 효율적인 JOIN 형태. |
+| 4 | `ref` | 비유니크 인덱스 lookup. 여러 행 매칭 가능. |
+| 5 | `range` | 인덱스 범위 스캔. BETWEEN, `<`, `>`, IN, OR(같은 컬럼) 포함. |
+| 6 | `index` | 인덱스 전체 스캔 (Full Index Scan). 탐색이 아님. |
+| 7 (worst) | `ALL` | 테이블 전체 스캔 (Full Table Scan). |
+
+핵심 분기점은 두 가지입니다.
+
+1. **인덱스 탐색 vs 풀 스캔**: `range` 이상은 인덱스로 일부만 읽고, `index`/`ALL`은 전체를 읽습니다.
+2. **1행 보장 vs 여러 행 가능**: `system`/`const`/`eq_ref`는 1행 보장, `ref`/`range`는 여러 행 매칭 가능.
+
+#### type에서 자주 헷갈리는 차이
+
+**`type=index`는 인덱스 탐색이 아니다.** 인덱스를 처음부터 끝까지 스캔하는 것입니다. 인덱스가 테이블보다 작아서 ALL보다 빠를 뿐, 본질은 풀 스캔입니다. covering index 사용 의도라면 좋은 신호이지만, 의도하지 않은 `index`는 인덱스 설계가 잘못된 신호일 수 있습니다.
+
+**`eq_ref` vs `ref`**: 둘 다 인덱스 lookup이지만 `eq_ref`는 JOIN에서 PK/UNIQUE로 매번 1행이 보장되는 가장 효율적인 형태이고, `ref`는 비유니크 인덱스라 여러 행 매칭 가능입니다.
+
+**`range`의 적용 범위**: BETWEEN, `<`, `>`, IN, 같은 컬럼의 OR이 모두 `range`로 분류됩니다. 앞서 본 `eq_range_index_dive_limit` 초과 시 추정 정확도 저하 함정이 여기에 적용됩니다.
+
+**`type=ALL`이 항상 나쁘지 않다**: 작은 테이블이거나 결과 비율이 매우 높으면 옵티마이저가 의도적으로 풀 스캔을 선택합니다. 풀 스캔이 정상인 상황에 대한 자세한 기준은 별도 글에서 다룹니다.
+
+<RelatedPost slug="full-table-scan" type="deep-dive" />
+
+#### possible_keys / key / key_len / ref
+
+`possible_keys`는 옵티마이저가 검토한 인덱스 후보 전체이고, `key`는 실제 선택한 인덱스입니다. `possible_keys`에 있는데 `key`에 없으면 옵티마이저가 비용상 무시한 것이고, `possible_keys`가 NULL이면 사용 가능한 인덱스 자체가 없다는 뜻입니다.
+
+`key_len`은 사용한 키의 바이트 길이입니다. **복합 인덱스에서 어디까지 사용했는지 역산할 수 있는 핵심 진단 도구**입니다. 계산식은 다음과 같습니다.
+
+| 컬럼 타입 | 바이트 |
+|---|---|
+| `INT` | 4 |
+| `BIGINT` | 8 |
+| `VARCHAR(N)` (utf8mb4) | $N \times 4 + 2$ |
+| nullable 컬럼 | +1 |
+
+예: `idx (a INT, b VARCHAR(20) utf8mb4, c INT)` 인덱스에서 `key_len=4`면 `a`만 사용한 것이고, `key_len = 4 + (20 \times 4 + 2) = 86`이면 `a, b`까지 사용한 것입니다. leftmost prefix가 어디서 끊겼는지 한눈에 보이며, 인덱스 설계의 검증 도구로 쓰입니다.
+
+<RelatedPost slug="database-index-deep-dive" type="deep-dive" />
+
+`ref`는 인덱스 lookup 시 비교 대상을 보여줍니다.
+
+| ref 값 | 의미 |
+|---|---|
+| `const` | 상수 비교 (`WHERE col = 5`) |
+| `<db>.<table>.<col>` | JOIN의 다른 테이블 컬럼 |
+| `func` | 함수 결과 (인덱스 사용 가능성 저하) |
+
+### G3. 추정과 부가 동작
+
+`rows`는 옵티마이저가 추정한 스캔 행 수입니다 (통계 + index dive 기반). JOIN의 경우 각 행의 `rows`를 곱한 값이 대략 총 스캔 비용입니다. `rows`가 비현실적으로 크면 통계 노화나 카디널리티 추정 오차가 원인이므로 `ANALYZE TABLE`로 갱신을 시도합니다.
+
+`filtered`는 WHERE 적용 후 남는 비율 추정값입니다 (단위는 %, MySQL 5.7+에서 정확도 향상). JOIN에서 `rows × filtered/100`이 다음 단계로 넘어가는 행 수 추정입니다. `filtered=100`이면 옵티마이저가 추정을 못 했거나 WHERE가 인덱스에서 모두 처리된 것이고, **`filtered`가 매우 낮은데 `type`이 비효율적이면 인덱스로 더 일찍 필터할 여지가 있다는 신호**입니다.
+
+`Extra`는 가장 다양한 신호를 담는 컬럼입니다. 의미별로 좋음/중립/위험 3-tier로 정리합니다.
+
+| 분류 | 신호 | 의미 |
+|---|---|---|
+| 좋음 | `Using index` | covering index, 인덱스 자체에서 모든 데이터 충족 (테이블 lookup 불필요). |
+| 좋음 | `Using index condition` | ICP (Index Condition Pushdown), WHERE 일부를 storage engine에 푸시다운 (5.6+). |
+| 중립 | `Using where` | storage engine 결과에 WHERE 적용 표시. 좋고 나쁨 자체가 아님. |
+| 위험 | `Using filesort` | ORDER BY를 인덱스로 처리 못해 별도 정렬. 메모리 정렬도 포함. |
+| 위험 | `Using temporary` | 중간 결과를 임시 테이블에 저장. GROUP BY ≠ ORDER BY, DISTINCT, UNION에서. |
+| 위험 | `Using join buffer (BNL)` | 인덱스 없는 JOIN, $N \times M$ 비용 폭발. |
+| 위험 | `Using join buffer (hash join)` | 8.0.18+ hash join. BNL보다는 빠르지만 인덱스 사용보다는 느림. |
+| 위험 | `Range checked for each record` | 매 외부 행마다 range 재평가. DEPENDENT 패턴과 함께. |
+
+<Callout type="warning" title="Using where는 위험 신호가 아니다">
+  많은 가이드가 `Using where`를 "WHERE가 비효율적"이라는 의미로 잘못 설명합니다. 실제로는 단순히 storage engine이 돌려준 행에 WHERE가 적용된다는 표시일 뿐이고, 좋고 나쁨의 판단이 아닙니다. 이 신호 하나만 보고 진단을 시작하면 오진의 출발점이 됩니다. 위험은 `Using filesort`, `Using temporary`, `Using join buffer`에서 시작합니다.
+</Callout>
+
+#### 위험 조합 패턴
+
+`Extra`의 위험 신호는 단독 등장보다 조합 등장이 더 위험한 경우가 많습니다.
+
+| 조합 | 의미 |
+|---|---|
+| `Using filesort` + `Using temporary` | GROUP BY가 ORDER BY와 다르고 인덱스 정렬도 안 되는 케이스. 가장 위험한 패턴. |
+| `Using index` + `Using where` | covering index인데 WHERE 일부가 인덱스 외 컬럼이라 covering이 깨진 형태. |
+| `Using index condition` + `Using where` | ICP가 일부만 적용된 형태. WHERE 전체가 인덱스로 처리되지 못함. |
+
+#### `Using filesort`의 오해
+
+`Using filesort`라는 이름은 "파일 정렬"을 떠올리게 하지만, 실제로는 **메모리 정렬도 포함**합니다. `sort_buffer_size` 안에서 끝나면 메모리 정렬, 초과하면 디스크 정렬로 fallback합니다. 즉 `Using filesort`만 봐서는 디스크 I/O가 발생했는지 알 수 없고, 진짜 디스크 정렬 여부는 `Sort_merge_passes` 상태 변수나 `EXPLAIN ANALYZE`의 실측치로 확인해야 합니다.
+
+## 마무리
+
+EXPLAIN은 옵티마이저가 무엇을 결정했는지 보여주지, 실제 무엇을 했는지 보여주지 않습니다. `rows`는 통계 기반 추정치이고, 통계가 어긋나면 EXPLAIN의 결정도 어긋납니다. 실측이 필요하면 `EXPLAIN ANALYZE`로 Executor까지 실행합니다.
+
+12개 컬럼이 처음에는 비슷해 보이지만, 진단의 출발점은 항상 `type` → `key` → `Extra` 세 컬럼입니다. `type=index`가 인덱스 탐색이 아니라는 점, `Using where`가 위험 신호가 아니라는 점, `type=ALL`이 항상 나쁘지 않다는 점을 구분할 수 있다면 슬로우 쿼리 진단의 대부분이 풀립니다.
+
+## 참고 자료
+
+- [MySQL Reference Manual: Optimizing Queries with EXPLAIN](https://dev.mysql.com/doc/refman/8.0/en/using-explain.html)
+- [MySQL Reference Manual: EXPLAIN Output Format](https://dev.mysql.com/doc/refman/8.0/en/explain-output.html)
+- [MySQL Reference Manual: Obtaining Execution Plan Information for a Named Connection](https://dev.mysql.com/doc/refman/8.0/en/performance-schema-statement-tables.html)
+- [InnoDB Persistent Statistics](https://dev.mysql.com/doc/refman/8.0/en/innodb-persistent-stats.html)
+- [Index Condition Pushdown Optimization](https://dev.mysql.com/doc/refman/8.0/en/index-condition-pushdown-optimization.html)
