@@ -45,7 +45,7 @@ draft: false
 - Blocking: 작업이 끝나야 함수가 리턴한다. 그동안 호출 스레드는 sleeping 상태로 멈춘다.
 - Non-Blocking: 즉시 리턴한다. 결과가 없으면 "아직 없음"(`EAGAIN`)이라고 답하고 바로 돌려보낸다.
 
-두 축은 **직교(orthogonal)**이므로 4가지 조합이 실제로 존재합니다. 각 조합이 어떤 모습인지는 추상적인 정의보다 음식점에서 음식이 손님 손에 도달하는 과정으로 보면 한눈에 잡힙니다.
+두 축은 **직교**(orthogonal)이므로 4가지 조합이 실제로 존재합니다. 각 조합이 어떤 모습인지는 추상적인 정의보다 음식점에서 음식이 손님 손에 도달하는 과정으로 보면 한눈에 잡힙니다.
 
 ## 음식점으로 보는 4가지 조합
 
@@ -58,7 +58,7 @@ draft: false
 
 같은 4명이 등장하지만, "손님이 어떻게 음식을 받는가"의 시나리오만 4가지로 갈립니다. 아래 시각화에서 탭을 눌러 각 시나리오의 단계를 비교해보세요.
 
-<RestaurantIOModel />
+<RestaurantIOSequence />
 
 ### Sync + Blocking
 
@@ -278,7 +278,7 @@ Async 모델의 진짜 비용은 코드 바깥에 있습니다.
 
 **ThreadLocal 단절**: MDC 로그 컨텍스트, security context가 suspension 경계에서 사라집니다. `ThreadContextElement`, `MDCContext`로 명시적 전파가 필요합니다.
 
-**백프레셔(backpressure)**: 생산자가 소비자보다 빠르면 이벤트가 쌓여 OOM으로 이어집니다. Reactor는 `Flux.onBackpressureBuffer()`로 명시 관리해야 하지만, blocking 모델은 자연스러운 흐름 제어로 이 문제가 아예 없습니다.
+**백프레셔**(backpressure): 생산자가 소비자보다 빠르면 이벤트가 쌓여 OOM으로 이어집니다. Reactor는 `Flux.onBackpressureBuffer()`로 명시 관리해야 하지만, blocking 모델은 자연스러운 흐름 제어로 이 문제가 아예 없습니다.
 
 **디버깅 환경**: 브레이크포인트가 suspension point에서 이상하게 동작하고, IDE 스텝 디버깅이 예상 흐름과 다릅니다.
 

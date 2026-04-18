@@ -29,7 +29,7 @@ import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
 import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
-import { RestaurantIOModel } from '@/components/visualizations/RestaurantIOModel'
+import { RestaurantIOSequence } from '@/components/visualizations/RestaurantIOSequence'
 import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndexLookup'
 import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
 import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
@@ -103,7 +103,7 @@ export const mdxComponents: MDXComponents = {
   QuickSortPivot,
   RelatedPost,
   RemoteCallOutcomes,
-  RestaurantIOModel,
+  RestaurantIOSequence,
   SecondaryIndexLookup,
   SequentialVsRandomIO,
   Tab,
