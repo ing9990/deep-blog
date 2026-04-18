@@ -17,7 +17,9 @@ import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
 import { DDDAggregate } from '@/components/visualizations/DDDAggregate'
 import { DDDBoundedContext } from '@/components/visualizations/DDDBoundedContext'
 import { DDDTermConfusion } from '@/components/visualizations/DDDTermConfusion'
+import { GCAlgorithmMatrix } from '@/components/visualizations/GCAlgorithmMatrix'
 import { GCCycle } from '@/components/visualizations/GCCycle'
+import { GCHeapStructure } from '@/components/visualizations/GCHeapStructure'
 import { IdempotencyCausalityChain } from '@/components/visualizations/IdempotencyCausalityChain'
 import { IdempotencyKeyFlow } from '@/components/visualizations/IdempotencyKeyFlow'
 import { IOModelMatrix } from '@/components/visualizations/IOModelMatrix'
@@ -27,6 +29,7 @@ import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
 import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
+import { RestaurantIOModel } from '@/components/visualizations/RestaurantIOModel'
 import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndexLookup'
 import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
 import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
@@ -81,7 +84,9 @@ export const mdxComponents: MDXComponents = {
   BTreeInsert,
   CacheStampedeDefenseTimeline,
   Callout,
+  GCAlgorithmMatrix,
   GCCycle,
+  GCHeapStructure,
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,
@@ -98,6 +103,7 @@ export const mdxComponents: MDXComponents = {
   QuickSortPivot,
   RelatedPost,
   RemoteCallOutcomes,
+  RestaurantIOModel,
   SecondaryIndexLookup,
   SequentialVsRandomIO,
   Tab,

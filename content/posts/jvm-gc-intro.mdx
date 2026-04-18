@@ -63,17 +63,11 @@ GC는 이 두 문제를 **구조적으로 제거**합니다. 해제 책임을 �
 
 ### JVM 힙 구조
 
-JVM 힙은 **Young Generation**과 **Old Generation**으로 나뉩니다.
+JVM 힙은 **Young Generation**과 **Old Generation**으로 물리적으로 나뉘며, Young 내부는 다시 Eden과 두 개의 Survivor 버퍼로 쪼개집니다. 이 구조는 "대부분 객체가 금방 죽는다"는 관찰을 공간적으로 반영한 것입니다.
 
-Young Generation은 세 영역으로 구성됩니다.
+<GCHeapStructure />
 
-| 영역 | 역할 |
-|---|---|
-| Eden | 새 객체가 처음 할당되는 곳 |
-| Survivor 0 | Eden에서 살아남은 객체가 이동하는 버퍼 |
-| Survivor 1 | S0과 교대로 사용되는 버퍼 |
-
-Old Generation은 Young에서 오래 살아남은 객체가 **승격** (Promotion)되는 영역입니다.
+비유하면 Young은 **단기 체류 구역**, Old는 **장기 거주 구역**입니다. 새 객체는 무조건 Eden에 먼저 할당되고, Minor GC를 몇 번 견딘 객체만 Old로 이주합니다. Survivor가 두 개(S0/S1)인 이유는 다음 `세대별 수거`에서 이어집니다.
 
 ### 수거 3단계
 
@@ -130,25 +124,21 @@ GC 튜닝은 **안 해도 되면 안 하는 것**입니다. 대부분의 애플�
 
 GC 알고리즘의 역사는 하나의 축을 따라 진화했습니다. STW를 줄이되, 대가로 무엇을 지불하는가.
 
-| 알고리즘 | STW | 처리량 | 메모리 오버헤드 | 적합 워크로드 |
-|---|---|---|---|---|
-| Serial | 가장 김 | 보통 | 최소 | 소형 힙, 클라이언트 |
-| Parallel | 중간 | 최고 | 낮음 | 배치 (Java 8 기본) |
-| G1 | 목표 설정 가능 | 높음 | 중간 (5–10%) | 범용 서버 (Java 9+ 기본) |
-| ZGC | 1 ms 이하 | 약간 감소 | 높음 | 대형 힙, 저지연 |
-| Shenandoah | 수 ms 이하 | 약간 감소 | 중간–높음 | 저지연 |
+<GCAlgorithmMatrix />
+
+### 구형에서 신형으로: 각 알고리즘이 치르는 대가
 
 **Serial**은 싱글 스레드로 Mark-Sweep-Compact를 수행합니다. STW가 길지만 스레드 간 동기화 비용이 없어 작은 힙에서는 오히려 빠릅니다.
 
-**Parallel** (Throughput GC)은 Serial의 멀티스레드 버전입니다. 여러 GC 스레드가 병렬로 수거해 처리량이 극대화됩니다.
+**Parallel** (Throughput GC)은 Serial의 멀티스레드 버전입니다. 여러 GC 스레드가 병렬로 수거해 처리량이 극대화됩니다. Java 8의 기본 알고리즘이었습니다.
 
-**G1**은 힙을 수천 개의 Region (기본 1–32 MB)으로 나누고 가비지가 많은 Region부터 우선 수거합니다. `-XX:MaxGCPauseMillis` (기본 200 ms)로 STW 목표를 설정할 수 있지만, Region 관리를 위한 Remembered Set 유지에 메모리와 CPU를 사용합니다.
+**G1**은 힙을 수천 개의 Region (기본 1–32 MB)으로 나누고 가비지가 많은 Region부터 우선 수거합니다. `-XX:MaxGCPauseMillis` (기본 200 ms)로 STW 목표를 설정할 수 있지만, Region 관리를 위한 Remembered Set 유지에 메모리와 CPU를 사용합니다. Java 9+ 기본.
 
 **ZGC**는 거의 모든 작업을 애플리케이션 스레드와 동시에 수행합니다. STW는 GC Root 스캔에만 발생하며 힙 크기와 무관하게 1 ms 이하입니다. 대가는 Load Barrier입니다. 객체 참조를 읽을 때마다 추가 검사가 삽입되어 단일 스레드 처리량이 소폭 감소합니다.
 
 **Shenandoah**는 ZGC와 유사한 저지연 목표를 Brooks Pointer (포워딩 포인터)로 달성합니다. 포인터 자체에 메타데이터를 넣지 않아 호환성이 좋지만 간접 참조 비용이 있습니다.
 
-핵심은 **어디를 희생할 것인가**입니다. STW를 줄이려면 CPU나 메모리를 더 쓰고, 처리량을 높이려면 STW를 감수합니다.
+핵심은 **어디를 희생할 것인가**입니다. STW를 줄이려면 CPU나 메모리를 더 쓰고, 처리량을 높이려면 STW를 감수합니다. 위 매트릭스의 색상은 그 선택의 대가를 한눈에 보여줍니다.
 
 ## 마무리
 
