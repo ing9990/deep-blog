@@ -20,6 +20,8 @@ import { DDDTermConfusion } from '@/components/visualizations/DDDTermConfusion'
 import { GCCycle } from '@/components/visualizations/GCCycle'
 import { IdempotencyCausalityChain } from '@/components/visualizations/IdempotencyCausalityChain'
 import { IdempotencyKeyFlow } from '@/components/visualizations/IdempotencyKeyFlow'
+import { IOModelMatrix } from '@/components/visualizations/IOModelMatrix'
+import { IOModelTimeline } from '@/components/visualizations/IOModelTimeline'
 import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline'
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
@@ -88,6 +90,8 @@ export const mdxComponents: MDXComponents = {
   DDDTermConfusion,
   IdempotencyCausalityChain,
   IdempotencyKeyFlow,
+  IOModelMatrix,
+  IOModelTimeline,
   OptimizerPipeline,
   PERBetaSlider,
   QuickSort,
