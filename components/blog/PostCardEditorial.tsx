@@ -16,7 +16,7 @@ export function PostCardEditorial({ post }: { post: Post }) {
   return (
     <Link
       href={`/posts/${post.slug}`}
-      className="group relative block overflow-hidden rounded-xl border border-border bg-background px-6 py-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card)]"
+      className="group relative block overflow-hidden rounded-xl border border-border bg-background px-6 py-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
       style={categoryStyle(post.category)}
       data-cat-tinted=""
     >
@@ -57,7 +57,7 @@ export function PostCardEditorial({ post }: { post: Post }) {
           {post.tags.slice(0, 3).map((tag) => (
             <span
               key={tag}
-              className="rounded bg-muted px-2 py-[2px] text-[length:var(--text-badge)] font-medium text-muted-foreground transition-colors group-hover:bg-border group-hover:text-foreground"
+              className="rounded bg-muted px-2 py-0.5 text-[length:var(--text-badge)] font-medium text-muted-foreground transition-colors group-hover:bg-border group-hover:text-foreground"
             >
               #{tag}
             </span>
