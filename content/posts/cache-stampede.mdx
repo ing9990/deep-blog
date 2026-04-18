@@ -49,9 +49,9 @@ Cache Stampede는 캐시 만료 직후 동일 키로 몰린 동시 요청이 모
 캐시는 보통 DB 부하를 N분의 1로 줄이기 위해 도입합니다. 그런데 캐시 만료라는 단순한 기능이 특정 조건에서는 DB를 오히려 더 위험하게 만듭니다. 캐시 만료 직후 누적된 트래픽이 한 시점에 폭발하면, 평시 부하보다도 훨씬 큰 spike가 DB를 칩니다.
 
 <Callout type="warning" title="흔한 오해 두 가지">
-  **"TTL을 길게 잡으면 안전하다"** — 오히려 TTL이 길수록 만료 시점에 누적된 트래픽이 커서 폭발 반경이 확대됩니다.
+  **"TTL을 길게 잡으면 안전하다"** → 오히려 TTL이 길수록 만료 시점에 누적된 트래픽이 커서 폭발 반경이 확대됩니다.
 
-  **"캐시를 안 쓰면 된다"** — 캐시를 안 쓰면 평시 부하 자체가 N배라 더 빨리 무너집니다. Stampede는 캐시의 부작용이 아니라 만료 정책과 동시성의 구조적 문제입니다.
+  **"캐시를 안 쓰면 된다"** → 캐시를 안 쓰면 평시 부하 자체가 N배라 더 빨리 무너집니다. Stampede는 캐시의 부작용이 아니라 만료 정책과 동시성의 구조적 문제입니다.
 </Callout>
 
 이 주제를 모르면 트래픽 급증 이벤트 직후 DB가 갑자기 죽는 장애의 원인을 설명할 수 없습니다. 다수의 서비스 장애 포스트모템에서 "이벤트 직후 DB CPU 100%"의 주범이 Cache Stampede로 밝혀집니다.
@@ -312,7 +312,7 @@ Cache Stampede는 캐시 자체의 결함이 아니라 *"누가 채울 책임을
 ## 참고 자료
 
 - [Optimal Probabilistic Cache Stampede Prevention (Vattani et al., VLDB 2015)](https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf)
-- [How to do distributed locking — Martin Kleppmann](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)
+- [How to do distributed locking, Martin Kleppmann](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)
 - [Stale-While-Revalidate (RFC 5861)](https://datatracker.ietf.org/doc/html/rfc5861)
 - [Go singleflight package](https://pkg.go.dev/golang.org/x/sync/singleflight)
 - [Caching at Reddit: Cache Stampedes](https://redditblog.com/2017/01/17/caching-at-reddit/)
