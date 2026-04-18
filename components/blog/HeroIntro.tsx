@@ -85,6 +85,11 @@ export function HeroIntro() {
   // triggers a re-render which cancels the pending setShow(false) and leaves
   // body scroll locked forever.
   const dismissScheduledRef = useRef(false)
+  // Click/tap handler ref. The advance + cooldown logic lives inside the
+  // gesture useEffect; the JSX onClick reads from this ref so clicks share
+  // the same cooldown as wheel/touch (prevents double-advance when a swipe
+  // also produces a synthetic click).
+  const clickAdvanceRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -165,6 +170,10 @@ export function HeroIntro() {
       if (dir === 'down') advance()
     }
 
+    clickAdvanceRef.current = () => {
+      if (wheelDetector.emit('down', Date.now()) === 'down') advance()
+    }
+
     window.addEventListener('wheel', onWheel, { passive: false })
     window.addEventListener('keydown', onKey)
     window.addEventListener('touchstart', onTouchStart, { passive: true })
@@ -175,6 +184,7 @@ export function HeroIntro() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('touchstart', onTouchStart)
       window.removeEventListener('touchmove', onTouchMove)
+      clickAdvanceRef.current = null
     }
   }, [show, dismissing])
 
@@ -204,8 +214,9 @@ export function HeroIntro() {
       role="dialog"
       aria-modal="true"
       aria-label="DEEP 소개"
+      onClick={() => clickAdvanceRef.current?.()}
       className={cn(
-        'fixed inset-0 z-[var(--z-hero)] flex touch-none flex-col items-center justify-center overflow-hidden overscroll-contain bg-black px-6 text-white',
+        'fixed inset-0 z-[var(--z-hero)] flex touch-none cursor-pointer flex-col items-center justify-center overflow-hidden overscroll-contain bg-black px-6 text-white',
         'transition-opacity duration-500',
         dismissing ? 'pointer-events-none opacity-0' : 'opacity-100',
       )}
@@ -277,7 +288,7 @@ export function HeroIntro() {
 
       <div className="hero-fade-2 absolute bottom-10 left-1/2 flex -translate-x-1/2 flex-col items-center gap-3 text-white/55">
         <span className="text-[length:var(--text-caption)] font-medium uppercase tracking-[var(--tracking-widest)]">
-          {stage === 0 && 'Scroll'}
+          {stage === 0 && 'Tap or scroll'}
           {stage >= 1 && stage <= STAGE_TOTAL && `${stage} / ${STAGE_TOTAL}`}
           {stage > STAGE_TOTAL && 'Enter'}
         </span>
