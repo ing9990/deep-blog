@@ -35,13 +35,14 @@ velite.config.ts      # Zod 스키마 + 파이프라인
 ## 4. 명령어 · 검증
 
 ```bash
-pnpm dev                   # predev: 키워드 맵 자동 재생성
-pnpm build                 # prebuild: 키워드 맵 + Velite
+pnpm dev                   # predev: emphasis 가드 + 키워드 맵 자동 재생성
+pnpm build                 # prebuild: emphasis 가드 + 키워드 맵 + Velite
 pnpm type-check            # tsc --noEmit
 pnpm lint                  # next lint + stylelint (토큰 강제 포함)
 pnpm lint:fix              # 자동 수정 (next lint --fix + stylelint --fix)
-pnpm test                  # velite + vitest
+pnpm test                  # pretest: emphasis 가드 + 키워드 맵 → velite + vitest
 pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
+pnpm check-mdx-emphasis    # `**"…"**` / `**(…)**` 패턴 단일 실행 검사
 ```
 
 - **코드 수정 후**: `pnpm type-check` (필수) + `pnpm lint`. 변경 규모 크면 `pnpm build`.
@@ -68,6 +69,7 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
    - Hex color: `bg-[#...]` / `text-[#...]` / `border-[#...]` / CSS `color: #...` → shadcn semantic 또는 `--keyword`/`--callout-*`/`--code-*`/`--viz-*`
    - Shadow: `shadow-[0_...rgba...]` → `--shadow-card|card-hover|fab`
    예외 (자동 whitelist): `components/visualizations/{BTreeInsert,QuickSort,...}` SVG 로직 상수, `em`/`%` 상대 단위, primitive 정의 블록(`@theme inline`, `:root`, `[data-theme="dark"]`, `html[data-font-size="..."]`), 아이콘 픽셀 크기(`h-[22px] w-[22px]`), 단일 사용 리터럴(HeroIntro radial gradient 등). 토큰 전체 목록: `docs/design-tokens.md`.
+10. **MDX 본문 bold 안 구두점 금지** — `**"…"**` · `**(…)**` 패턴. `scripts/check-mdx-emphasis.ts`가 prebuild·predev·pretest에서 빌드 차단. 구두점·괄호를 bold 바깥으로 (`"**X**"`, `**X**(Y)`). Remark/Shiki 파이프라인에서 한글 조사와 결합 시 렌더링 불안정.
 
 ## 6. 변경 금지 결정 (비자명 불변식)
 
@@ -123,6 +125,7 @@ pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 ### Frontmatter / 포스트 데이터
 
 - **Frontmatter `title`/`summary`는 `{ ko, en }` nested object**. 사용처는 `post.title[lang]` / `post.summary[lang]` 접근. Server Component가 lang 없이 렌더하는 곳(`generateMetadata` 등)은 `.ko` 고정 (서버 언어 결정 인프라 없음, hreflang은 후속 PR).
+- **Frontmatter `tags`는 lowercase-hyphen**. `backend`, `data-structure`, `distributed-systems` 식. `Backend` / `Data Structure` / 공백 구분자 금지. `app/tags/[tag]/page.tsx`의 `generateStaticParams`가 frontmatter에서 직접 param을 생성하므로 casing 변경은 URL 변경(`/tags/Backend` → `/tags/backend` 404 발생). 2026-04-19 전역 정규화 완료.
 
 ## 7. 코드 컨벤션
 
