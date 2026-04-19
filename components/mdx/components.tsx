@@ -9,17 +9,11 @@ import { KeywordLink } from '@/components/blog/KeywordLink'
 import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
 import { Tab, Tabs } from '@/components/mdx/Tabs'
-import { AlphaFoldPipeline } from '@/components/visualizations/AlphaFoldPipeline'
 import { CacheStampedeDefenseTimeline } from '@/components/visualizations/CacheStampedeDefenseTimeline'
 import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpectrum'
 import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
-import { ClaimHierarchyTree } from '@/components/visualizations/ClaimHierarchyTree'
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
 import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
-import { EmbeddingArithmetic } from '@/components/visualizations/EmbeddingArithmetic'
-import { GridTransformerPair } from '@/components/visualizations/GridTransformerPair'
-import { NeuralNetTraining } from '@/components/visualizations/NeuralNetTraining'
-import { SelfAttentionFlow } from '@/components/visualizations/SelfAttentionFlow'
 import { DDDAggregate } from '@/components/visualizations/DDDAggregate'
 import { DDDBoundedContext } from '@/components/visualizations/DDDBoundedContext'
 import { DDDTermConfusion } from '@/components/visualizations/DDDTermConfusion'
@@ -91,16 +85,12 @@ export const mdxComponents: MDXComponents = {
   // numeric-column alignment without losing other attributes.
   th: (props: HTMLAttributes<HTMLTableCellElement>) => <th {...props} />,
   td: (props: HTMLAttributes<HTMLTableCellElement>) => <td {...props} />,
-  AlphaFoldPipeline,
   BTreeInsert,
   CacheStampedeDefenseTimeline,
   Callout,
-  ClaimHierarchyTree,
-  EmbeddingArithmetic,
   GCAlgorithmMatrix,
   GCCycle,
   GCHeapStructure,
-  GridTransformerPair,
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,
@@ -113,7 +103,6 @@ export const mdxComponents: MDXComponents = {
   IOModelTimeline,
   KafkaConsumerGroupScopes,
   KafkaPartitionStructure,
-  NeuralNetTraining,
   OptimizerPipeline,
   PERBetaSlider,
   QuickSort,
@@ -123,7 +112,6 @@ export const mdxComponents: MDXComponents = {
   RemoteCallOutcomes,
   RestaurantIOSequence,
   SecondaryIndexLookup,
-  SelfAttentionFlow,
   SequentialVsRandomIO,
   SoaVsKafkaTopology,
   Tab,
