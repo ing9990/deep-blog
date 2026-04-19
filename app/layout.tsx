@@ -7,6 +7,7 @@ import { SettingsProvider } from '@/components/providers/SettingsProvider'
 import { Header } from '@/components/blog/Header'
 import { Footer } from '@/components/blog/Footer'
 import { MobileOverlays } from '@/components/blog/MobileOverlays'
+import { MobilePostTocFab } from '@/components/blog/MobilePostTocFab'
 import { SettingsFab } from '@/components/layout/SettingsFab'
 import { HydrationGate } from '@/components/layout/HydrationGate'
 import { getAllPosts } from '@/lib/posts'
@@ -103,6 +104,7 @@ export default function RootLayout({
                   <Footer />
                 </div>
                 <MobileOverlays />
+                <MobilePostTocFab />
                 <SettingsFab />
               </HydrationGate>
             </SettingsProvider>

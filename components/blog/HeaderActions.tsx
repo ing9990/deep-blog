@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect } from 'react'
-import { AlignRight, Menu, Search } from 'lucide-react'
+import { Menu, Search } from 'lucide-react'
 import { GithubMark } from './GithubMark'
 import { useMobileUI } from '@/components/providers/MobileUIProvider'
 import { ThemeToggle } from './ThemeToggle'
@@ -14,8 +14,7 @@ export function HeaderActions() {
   const openSettings = useCallback(() => {
     window.dispatchEvent(new CustomEvent('deep-settings-open'))
   }, [])
-  const { openNav, openSearch, openToc, tocItems } = useMobileUI()
-  const hasToc = !!tocItems && tocItems.length > 0
+  const { openNav, openSearch } = useMobileUI()
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -66,16 +65,6 @@ export function HeaderActions() {
           aria-label={t('header.site.actions')}
           className="flex shrink-0 items-center gap-0.5"
         >
-          {hasToc && (
-            <button
-              type="button"
-              onClick={openToc}
-              aria-label={t('header.open.toc')}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
-            >
-              <AlignRight className="h-5 w-5" />
-            </button>
-          )}
           <a
             href="https://github.com/ing9990"
             target="_blank"
