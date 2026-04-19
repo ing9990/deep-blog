@@ -392,11 +392,20 @@ html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-size-adjust: 100%;
 }
 
+/* body.overflow-x: mobile safety net. Any descendant wider than the viewport
+   (long unbreakable tokens, URLs, inline code, embedded components) would
+   otherwise force the document wider than device-width and surface as
+   horizontal scroll under our locked viewport (initial-scale=1,
+   user-scalable=no). `clip` avoids creating a scroll container that would
+   trap touch; `hidden` is the fallback for iOS Safari < 16. */
 body {
   background-color: var(--background);
   color: var(--foreground);
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 ::selection {
@@ -419,6 +428,10 @@ body {
   font-size: var(--text-body);
   line-height: var(--leading-relaxed);
   color: var(--foreground);
+  /* Break long English tokens / URLs / inline code so they never force the
+     article wider than the viewport on mobile. `anywhere` also lets the
+     layout engine use a smaller min-content size for grid/flex tracks. */
+  overflow-wrap: anywhere;
 }
 
 .prose-kr h2 {
