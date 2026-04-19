@@ -393,6 +393,11 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-size-adjust: 100%;
+  /* iOS Safari ignores `body { overflow-x: clip }` when the locked
+     viewport (user-scalable=no) forces the document element to absorb
+     horizontal overflow. Clipping at html stops the drag-to-scroll. */
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* body.overflow-x: mobile safety net. Any descendant wider than the viewport
