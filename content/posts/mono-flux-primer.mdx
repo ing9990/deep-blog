@@ -1,0 +1,302 @@
+---
+title:
+  ko: "Mono/Flux"
+  en: "Mono/Flux"
+slug: "mono-flux-primer"
+date: 2026-04-20
+tags:
+  - backend
+  - concurrency
+  - reactive
+keywords:
+  - "Mono"
+  - "Flux"
+  - "Project Reactor"
+  - "Reactive Streams"
+  - "Publisher"
+summary:
+  ko: "Spring Reactive와 WebFlux를 처음 접하는 입문자를 위한 Mono/Flux 정리. Publisher 개념과 Cold/Lazy 실행 모델, 연산자 체인이 왜 CompletableFuture 체인보다 편한지, 그리고 입문자가 가장 자주 만드는 4가지 실수(구독 누락, 블로킹 호출 혼입, map/flatMap 혼동, 에러 처리 누락)까지 다룹니다."
+  en: "A beginner primer on Mono/Flux for newcomers to Spring Reactive/WebFlux. Covers the Publisher model, Cold/Lazy execution, why operator chains beat CompletableFuture, and the four most common beginner mistakes (missing subscribe, blocking calls, map vs flatMap, error handling)."
+category: language-backend
+draft: false
+---
+
+Spring WebFlux 코드를 처음 열면 `Mono<User>`, `Flux<Order>` 같은 리턴 타입에 당황하게 됩니다. 이 글은 Mono/Flux가 무엇이고 왜 이런 모양을 하고 있는지, 그리고 입문자가 가장 자주 부딪히는 네 가지 함정까지를 예제 중심으로 정리합니다. WebFlux 본편을 보기 전 반드시 알아야 할 개념만 담았습니다.
+
+<Callout type="info" title="이 글의 학습 목표">
+  1. Mono와 Flux가 각각 무엇이고 왜 필요한지 이해한다
+  2. Cold/Lazy 실행 모델과 구독 시점의 차이를 구분할 수 있다
+  3. 입문자가 자주 만드는 함정을 피하고 연산자 선택 기준을 얻는다
+</Callout>
+
+## Mono와 Flux란
+
+Mono와 Flux는 "**나중에 뱉어질 값을 담는 그릇**"입니다. 값을 지금 당장 담고 있는 게 아니라, 구독(subscribe) 하는 순간부터 값이 흘러나오는 비동기 데이터 스트림입니다. 둘의 차이는 단순합니다.
+
+| 타입 | 뱉는 값의 개수 | 대표 용도 |
+|---|---|---|
+| `Mono<T>` | 0개 또는 1개 | 단건 조회, 단건 작업 결과, HTTP 단일 응답 |
+| `Flux<T>` | 0개부터 N개 | 컬렉션 스트림, 이벤트 시퀀스, SSE |
+
+자바 표준 타입과 매핑하면 Mono는 `CompletableFuture<T>`와 `Optional<T>`의 비동기 버전에 가깝고, Flux는 `Stream<T>`의 비동기 버전에 가깝습니다. 차이는 **지연 실행 · 취소 가능 · 백프레셔가 내장**되어 있다는 점인데, 이건 내부 동작에서 다시 풀어갑니다.
+
+둘 다 Reactive Streams 스펙의 `Publisher<T>` 인터페이스를 구현합니다. 중요한 건 Reactor만의 규약이 아니라 JDK 9의 `java.util.concurrent.Flow`, RxJava 3, Akka Streams가 모두 같은 약속을 공유한다는 점입니다. Mono/Flux는 그 약속의 스프링·리액터 진영 구현체일 뿐입니다.
+
+<Callout type="info" title="Publisher란?">
+  Publisher는 Reactive Streams 스펙이 정의한 "값을 발행하는 쪽"의 최상위 인터페이스입니다. `subscribe(Subscriber)` 메서드 하나만 요구하며, Mono/Flux 모두 이를 구현합니다. 즉 "Publisher를 리턴한다"는 말은 "구독자가 붙으면 값을 뱉기 시작한다"는 약속입니다.
+</Callout>
+
+가장 중요한 첫 인상은 이것 하나입니다. 메서드 리턴 타입이 `Mono<User>`라면, 그건 **User가 아직 없다**는 뜻입니다. 구독해야 비로소 값이 흐릅니다. 이 지연 실행이 입문자가 가장 먼저 넘어져야 하는 개념입니다.
+
+## 왜 필요한가
+
+한 줄로 말하면, **여러 비동기 작업을 블로킹 없이 선언적으로 연결하려고** 태어났습니다. 동기/블로킹 코드가 왜 스레드 풀을 금방 고갈시키는지, 논블로킹이 이를 어떻게 해결하는지의 구조적 차이는 별도 글에서 깊이 다뤘습니다.
+
+<RelatedPost slug="sync-async-blocking-nonblocking" type="prerequisite" />
+
+같은 파이프라인을 두 방식으로 짜보면 Reactor가 무엇을 해결하는지 즉시 드러납니다. 사용자 한 명을 조회해서 그 사람의 주문 목록을 가져오고, 각 주문의 상품 정보를 외부 API로 받아오는 파이프라인을 생각해봅시다.
+
+<Tabs group="reactor-vs-future">
+  <Tab label="Reactor">
+    ```java title="WithReactor.java"
+    Flux<Product> result = userRepo.findById(id)              // Mono<User>
+        .flatMapMany(user -> orderRepo.findByUser(user.id())) // Flux<Order>
+        .flatMap(order -> productApi.fetch(order.productId()))// Flux<Product>
+        .take(10)                                             // 개수 제어
+        .onErrorResume(ex -> Flux.empty());                   // 지점별 에러
+    ```
+  </Tab>
+  <Tab label="CompletableFuture">
+    ```java title="WithCompletableFuture.java"
+    CompletableFuture<List<Product>> result =
+        userRepo.findByIdAsync(id)
+          .thenCompose(user -> orderRepo.findByUserAsync(user.id()))
+          .thenCompose(orders -> {
+              var futures = orders.stream()
+                  .map(o -> productApi.fetchAsync(o.productId()))
+                  .toList();
+              return CompletableFuture
+                  .allOf(futures.toArray(new CompletableFuture[0]))
+                  .thenApply(v -> futures.stream()
+                      .map(CompletableFuture::join).toList());
+          })
+          .exceptionally(ex -> List.of()); // 에러는 한 곳에서만
+    ```
+  </Tab>
+</Tabs>
+
+Reactor 쪽이 얻는 것은 세 가지입니다. **첫째**, 에러 처리를 `onErrorResume`으로 지점별로 분산할 수 있습니다. **둘째**, `zip`·`merge`·`concatMap` 같은 조합 연산자가 표준으로 갖춰져 있어 여러 Publisher를 합치는 코드가 깔끔해집니다. **셋째**, `take(10)` 같은 개수 제어가 스펙에 녹아 있어 "무한 스트림에서 앞 N개만"이 자연스럽게 표현됩니다.
+
+추가로 Reactive Streams 스펙의 **Backpressure**(소비자가 감당 가능한 만큼만 `request` 한다는 약속) 가 내장되어 있어, 생산자가 소비자보다 빠른 상황에서 자동으로 속도 조절이 가능합니다. 입문 단계에서는 "이런 장치가 있다" 정도로만 알고 넘어가도 충분합니다.
+
+코루틴과 목적은 같지만 모델이 다릅니다. 이 비교는 마지막 트레이드오프 섹션에서 다시 다룹니다.
+
+<RelatedPost slug="coroutine-primer" type="deep-dive" />
+
+## 내부 동작
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Mono/Flux의 모든 동작은 세 가지 원칙에서 파생됩니다. **구독해야 실행된다 (Cold/Lazy), 시그널은 3종뿐 (onNext / onError / onComplete), 연산자 체인은 설계도일 뿐이다.** 이 세 가지만 잡으면 나머지는 연산자 사전을 찾는 수준의 작업이 됩니다.
+</Callout>
+
+### 1. Cold / Lazy: 구독 전엔 아무 일도 안 일어난다
+
+`.map().filter()` 체인을 만들어도, `Mono.fromCallable(...)`로 작업을 정의해도, 그 자체로는 아무것도 실행되지 않습니다. 체인은 **파이프라인의 설계도**만 그립니다. `subscribe()`가 호출돼야 비로소 실제 작업이 시작됩니다.
+
+```java title="LazyDemo.java"
+Mono<String> mono = Mono.fromCallable(() -> {
+    System.out.println("실제 작업 실행!");
+    return "hello";
+});
+
+// 여기까지: 아무것도 찍히지 않음. 체인 설계도만 만들어진 상태.
+
+mono.subscribe(v -> System.out.println("받음: " + v));
+// 이제부터 찍힘 → "실제 작업 실행!" → "받음: hello"
+```
+
+<Callout type="error" title="핵심 통찰: Mono/Flux는 실행이 아니라 설계도다">
+  `.map().filter().flatMap()`을 아무리 예쁘게 이어붙여도 구독하지 않으면 DB 쿼리도, HTTP 호출도, 그 어떤 사이드 이펙트도 일어나지 않습니다. 이 지연 실행(Cold/Lazy) 모델이 Reactor의 나머지 모든 특성 즉 취소 · 백프레셔 · 조합 연산자를 가능하게 만드는 토대입니다.
+</Callout>
+
+### 2. 시그널 3종: 구독자가 받는 것은 이게 전부
+
+Reactive Streams 스펙상 구독자(Subscriber)는 정확히 세 종류의 시그널만 받습니다.
+
+| 시그널 | 의미 | 횟수 |
+|---|---|---|
+| `onNext(T)` | 값이 흘러나올 때 | Mono: 최대 1회, Flux: 0에서 N회 |
+| `onError(Throwable)` | 에러 발생 시 | 0 또는 1회 (발생 시 즉시 종료) |
+| `onComplete()` | 정상 종료 | 0 또는 1회 |
+
+스트림의 생애는 두 결말 중 하나로 닫힙니다. **값 흐름 → 정상 완료** 또는 **값 흐름 → 에러 종료**. `onError`와 `onComplete`는 동시에 일어나지 않으며, 한 번 종료된 Publisher는 더 이상 값을 뱉지 않습니다.
+
+### 3. 연산자 체인은 "설계도"다
+
+`map`, `filter`, `flatMap` 같은 연산자 각각은 **앞의 Publisher를 감싸는 새 Publisher를 반환**할 뿐 실행을 일으키지 않습니다. 체인 맨 끝에서 `subscribe()`가 호출되면 역방향으로 거슬러 올라가며 `request(n)`이 전달되고, 값이 순방향으로 흐르면서 각 연산자를 거쳐 구독자까지 도달합니다.
+
+체인의 동작을 눈으로 확인하고 싶으면 중간에 `.log()` 연산자를 끼우면 됩니다. 입문 단계의 가장 유용한 디버깅 트릭입니다.
+
+```
+onSubscribe(FluxMap.MapSubscriber)
+request(unbounded)
+onNext(1)
+onNext(2)
+onNext(3)
+onComplete()
+```
+
+## 실전 문제
+
+입문자가 가장 자주 부딪히는 네 가지 함정입니다. 모두 앞의 "Cold/Lazy + 시그널 3종 + 체인은 설계도" 원칙의 파생입니다.
+
+### 1. subscribe 누락
+
+가장 흔한 실수입니다. 체인을 만들었지만 구독하지 않아 **아무 일도 일어나지 않는** 버그. 테스트에서는 `.block()`으로 강제 구독하지만 프로덕션에서는 WebFlux 프레임워크가 자동으로 구독합니다. 컨트롤러 메서드가 `Mono/Flux`를 리턴만 하면 WebFlux가 알아서 구독하는 구조입니다.
+
+<Callout type="warning" title="예외 케이스">
+  `@Scheduled` 메서드나 `CommandLineRunner` 안에서 Reactor 체인을 만들었다면 WebFlux가 자동 구독하지 않습니다. 직접 `.subscribe()`를 호출해야 실행됩니다.
+</Callout>
+
+### 2. 체인 안에 블로킹 호출 섞기
+
+`JDBC`, `RestTemplate`, `Thread.sleep` 같은 블로킹 API를 체인 안에 그대로 넣으면 **Reactor Netty 워커 스레드가 통째로 막힙니다**. 워커 스레드는 보통 CPU 코어 수 정도(기본 4개 내외)라서 몇 개만 블로킹돼도 서버 전체가 멈춘 듯 보이는 현상이 생깁니다. 탈출구는 두 가지입니다.
+
+```java title="BlockingEscape.java"
+// (1) 부득이하게 블로킹 API를 써야 하면 전용 스케줄러로 이동
+Mono.fromCallable(() -> legacyJdbc.query(sql))
+    .subscribeOn(Schedulers.boundedElastic());
+
+// (2) 정공법: 리액티브 드라이버로 교체 (R2DBC, WebClient)
+webClient.get()
+    .uri("/users/{id}", id)
+    .retrieve()
+    .bodyToMono(User.class);
+```
+
+`Schedulers.boundedElastic()`은 블로킹 전용 스레드 풀로, 이벤트 루프와 분리되어 있어 블로킹이 다른 요청에 영향을 주지 않습니다. 하지만 근본 해결은 블로킹 드라이버를 리액티브 드라이버로 교체하는 것입니다.
+
+### 3. `map` vs `flatMap` 혼동
+
+입문 단계의 혼란 1위입니다. 차이는 반환 타입에 있습니다.
+
+<Tabs group="map-vs-flatmap">
+  <Tab label="map (동기 변환)">
+    ```java title="Map.java"
+    // T -> R : 값을 다른 값으로 변환 (동기)
+    Flux.just(1, 2, 3)
+        .map(n -> n * 2)                 // Flux<Integer>
+        .subscribe(System.out::println); // 2, 4, 6
+
+    // 비동기 호출을 map에 넣으면 타입이 꼬인다
+    Flux.just(1, 2, 3)
+        .map(n -> fetchAsync(n));        // Flux<Mono<User>> 중첩!
+    ```
+  </Tab>
+  <Tab label="flatMap (비동기 삽입 + 평탄화)">
+    ```java title="FlatMap.java"
+    // T -> Publisher<R> : 비동기 호출 결과를 펼친다
+    Flux.just(1, 2, 3)
+        .flatMap(n -> fetchAsync(n))     // Flux<User> 평탄화됨
+        .subscribe(System.out::println);
+
+    // 내부 Publisher를 구독해 결과를 하나의 스트림으로 합친다
+    // 주의: 순서 보장 안 됨 (순서가 중요하면 concatMap)
+    ```
+  </Tab>
+</Tabs>
+
+요약하면 `map`은 `T -> R` 동기 변환, `flatMap`은 `T -> Publisher<R>` 비동기 삽입 + 평탄화입니다. 비동기 호출을 연결할 때는 반드시 `flatMap`(또는 순서 보장이 필요하면 `concatMap`, 최신 값만 필요하면 `switchMap`)을 씁니다.
+
+### 4. 에러 처리 누락
+
+체인 어디서든 에러가 발생하면 뒤의 연산자는 건너뛰고 구독자에게 `onError` 시그널로 전달됩니다. 문제는 `subscribe(v -> ...)` 한 인자 버전만 쓴 경우인데, 이때 기본 에러 핸들러가 stderr에 스택 트레이스만 찍고 조용히 끝나버립니다.
+
+```java title="ErrorHandling.java"
+// 최소한 하나는 체인에 있어야 안전
+flux.onErrorResume(ex -> Flux.empty())        // 대체 Publisher로 복구
+    .onErrorReturn(FALLBACK_VALUE)            // 단일 폴백 값
+    .subscribe(v -> ..., err -> log.error(err)); // 또는 구독 시점 핸들러
+```
+
+실서비스 체인에는 `.onErrorResume()` 또는 `.onErrorReturn()` 중 하나는 반드시 포함돼야 합니다.
+
+## 기본 예제
+
+실제 코드를 만지기 시작할 때 필요한 최소 지식은 **생성 → 변환 → 구독**의 3단계입니다.
+
+### 1. 생성 팩토리
+
+```java title="Create.java"
+Mono.just("hello");                      // 값 1개
+Mono.empty();                            // 값 0개, 즉시 complete
+Mono.error(new IllegalStateException()); // 즉시 에러
+Mono.fromCallable(() -> repo.find(id));  // 게으른 실행 (구독 시점에 호출)
+
+Flux.just(1, 2, 3);                      // N개 고정 값
+Flux.fromIterable(List.of("a", "b"));    // 컬렉션에서
+Flux.range(1, 5);                        // 1, 2, 3, 4, 5
+Flux.interval(Duration.ofSeconds(1));    // 1초 간격 무한 스트림
+```
+
+### 2. 변환·필터 (80%는 이 조합)
+
+```java title="Pipeline.java"
+Flux.range(1, 10)
+    .filter(n -> n % 2 == 0)         // 짝수만: 2, 4, 6, 8, 10
+    .map(n -> n * n)                 // 제곱: 4, 16, 36, 64, 100
+    .take(3)                         // 앞 3개: 4, 16, 36
+    .flatMap(n -> fetchAsync(n))     // 비동기 호출 삽입
+    .subscribe(System.out::println);
+```
+
+### 3. 구독: 프로덕션 vs 테스트
+
+실서비스에서는 WebFlux 프레임워크가 자동으로 구독하므로 `subscribe()`를 직접 호출할 일은 거의 없습니다. 직접 호출이 필요한 건 단위 테스트, `main` 메서드, `@Scheduled` 작업 정도입니다.
+
+```java title="BlockingInTests.java"
+// 테스트에서만. 체인 안에서 호출하면 실전 문제 2번 함정에 빠진다.
+User user = userRepo.findById(1L).block();
+List<Product> list = productFlux.collectList().block();
+```
+
+<Callout type="warning" title="block()은 리액티브 체인 바깥에서만">
+  `block()`은 현재 스레드를 블로킹해 값을 꺼내는 메서드입니다. 테스트, 데모, 레거시 브릿지에서만 사용하고, WebFlux 컨트롤러나 리액티브 체인 내부에서는 절대 쓰지 마세요. 이벤트 루프 스레드가 멈춰 서버 전체가 스톨합니다.
+</Callout>
+
+## 트레이드오프
+
+Reactor 도입의 대가는 명확합니다. 수십 종의 연산자(`flatMap` · `concatMap` · `switchMap` · `zip` · `merge` 등) 학습, 체인만 찍히는 스택트레이스로 인한 디버깅 난이도, JPA/JDBC 같은 블로킹 드라이버를 버려야 하는 생태계 제약. 팀 전체의 적응이 필요합니다.
+
+그렇다면 Virtual Thread(Java 21+)와 Kotlin Coroutine이 보편화된 지금, Reactor는 여전히 유효한가? 세 도구의 포지션을 나란히 보면 선택 기준이 드러납니다.
+
+| 도구 | 코드 스타일 | 백프레셔 | 스트림 조합 연산자 | 러닝커브 |
+|---|---|---|---|---|
+| Reactor | 연산자 체인 (선언적) | 내장 | 풍부 (zip / merge / concatMap) | 높음 |
+| Kotlin Coroutine | 순차 코드 (suspend) | Flow에서 일부 | Flow 연산자 (적당) | 낮음 |
+| Virtual Thread | 순차 블로킹 코드 | 없음 | 없음 (표준 Stream만) | 거의 없음 |
+
+판단 기준을 정리하면 다음과 같습니다.
+
+- **단순 CRUD 서비스** → Virtual Thread + Spring MVC가 훨씬 간단합니다. Reactor는 과투자입니다.
+- **Kotlin 중심 팀** → Coroutine + Flow가 읽기 쉽고 충분합니다.
+- **백프레셔 · 스트리밍 · 복잡한 조합이 핵심 도메인** (실시간 피드, SSE, 대량 이벤트 파이프라인) → Reactor가 여전히 우위입니다.
+- **이미 WebFlux 기반 시스템** → 그대로 유지가 합리적입니다.
+
+<Callout type="success" title="실무 팁">
+  Reactor는 이제 "기본 선택지"가 아니라 "백프레셔 · 스트리밍 · 복잡한 조합이 필요할 때 고르는 도구"입니다. Mono/Flux 자체는 알아두되, 적용 여부는 도메인 요구사항에 맞춰 판단하세요.
+</Callout>
+
+## 마무리
+
+Mono/Flux는 "나중에 값을 뱉을 약속"을 타입 시스템에 올린 것입니다. 구독해야 실행되고, 시그널 3종으로 생애가 닫히며, 연산자 체인은 설계도일 뿐이라는 세 원칙이 나머지 모든 동작을 파생시킵니다. 입문 단계에서 부딪히는 함정(구독 누락, 블로킹 혼입, `map`/`flatMap` 혼동, 에러 처리 누락)도 이 세 원칙의 파생이므로, 원칙부터 잡으면 함정도 자연스럽게 피할 수 있습니다.
+
+다음 글에서는 이 Mono/Flux를 기반으로 Spring WebFlux가 어떻게 요청을 처리하는지, 어떤 상황에서 MVC 대신 WebFlux를 선택하는지를 다룹니다.
+
+## 참고 자료
+
+- [Project Reactor Reference Documentation](https://projectreactor.io/docs/core/release/reference/)
+- [Reactive Streams Specification](https://www.reactive-streams.org/)
+- [Spring WebFlux Reference](https://docs.spring.io/spring-framework/reference/web/webflux.html)
+- [Reactor Javadoc: Mono](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html)
+- [Reactor Javadoc: Flux](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Flux.html)
