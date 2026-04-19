@@ -9,11 +9,17 @@ import { KeywordLink } from '@/components/blog/KeywordLink'
 import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
 import { Tab, Tabs } from '@/components/mdx/Tabs'
+import { AlphaFoldPipeline } from '@/components/visualizations/AlphaFoldPipeline'
 import { CacheStampedeDefenseTimeline } from '@/components/visualizations/CacheStampedeDefenseTimeline'
 import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpectrum'
 import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
+import { ClaimHierarchyTree } from '@/components/visualizations/ClaimHierarchyTree'
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
 import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
+import { EmbeddingArithmetic } from '@/components/visualizations/EmbeddingArithmetic'
+import { GridTransformerPair } from '@/components/visualizations/GridTransformerPair'
+import { NeuralNetTraining } from '@/components/visualizations/NeuralNetTraining'
+import { SelfAttentionFlow } from '@/components/visualizations/SelfAttentionFlow'
 import { DDDAggregate } from '@/components/visualizations/DDDAggregate'
 import { DDDBoundedContext } from '@/components/visualizations/DDDBoundedContext'
 import { DDDTermConfusion } from '@/components/visualizations/DDDTermConfusion'
@@ -24,14 +30,18 @@ import { IdempotencyCausalityChain } from '@/components/visualizations/Idempoten
 import { IdempotencyKeyFlow } from '@/components/visualizations/IdempotencyKeyFlow'
 import { IOModelMatrix } from '@/components/visualizations/IOModelMatrix'
 import { IOModelTimeline } from '@/components/visualizations/IOModelTimeline'
+import { KafkaConsumerGroupScopes } from '@/components/visualizations/KafkaConsumerGroupScopes'
+import { KafkaPartitionStructure } from '@/components/visualizations/KafkaPartitionStructure'
 import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline'
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
+import { RedundancyFailurePatterns } from '@/components/visualizations/RedundancyFailurePatterns'
 import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
 import { RestaurantIOSequence } from '@/components/visualizations/RestaurantIOSequence'
 import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndexLookup'
 import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
+import { SoaVsKafkaTopology } from '@/components/visualizations/SoaVsKafkaTopology'
 import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
 import { TrieDeleteSnapshot } from '@/components/visualizations/TrieDeleteSnapshot'
 import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
@@ -81,12 +91,16 @@ export const mdxComponents: MDXComponents = {
   // numeric-column alignment without losing other attributes.
   th: (props: HTMLAttributes<HTMLTableCellElement>) => <th {...props} />,
   td: (props: HTMLAttributes<HTMLTableCellElement>) => <td {...props} />,
+  AlphaFoldPipeline,
   BTreeInsert,
   CacheStampedeDefenseTimeline,
   Callout,
+  ClaimHierarchyTree,
+  EmbeddingArithmetic,
   GCAlgorithmMatrix,
   GCCycle,
   GCHeapStructure,
+  GridTransformerPair,
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,
@@ -97,15 +111,21 @@ export const mdxComponents: MDXComponents = {
   IdempotencyKeyFlow,
   IOModelMatrix,
   IOModelTimeline,
+  KafkaConsumerGroupScopes,
+  KafkaPartitionStructure,
+  NeuralNetTraining,
   OptimizerPipeline,
   PERBetaSlider,
   QuickSort,
   QuickSortPivot,
+  RedundancyFailurePatterns,
   RelatedPost,
   RemoteCallOutcomes,
   RestaurantIOSequence,
   SecondaryIndexLookup,
+  SelfAttentionFlow,
   SequentialVsRandomIO,
+  SoaVsKafkaTopology,
   Tab,
   TrieBuilder,
   TrieDeleteSnapshot,
