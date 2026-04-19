@@ -45,6 +45,13 @@ export const MESSAGES = {
   'settings.font.small':       { ko: '작게',              en: 'Small' },
   'settings.font.normal':      { ko: '보통',              en: 'Normal' },
   'settings.font.large':       { ko: '크게',              en: 'Large' },
+  'settings.code':             { ko: '코드 블록 테마',    en: 'Code block theme' },
+  'settings.code.floating':    { ko: 'Floating',          en: 'Floating' },
+  'settings.code.rail':        { ko: 'Rail',              en: 'Rail' },
+  'settings.syntax':           { ko: 'Syntax 테마',       en: 'Syntax theme' },
+  'settings.syntax.atom':      { ko: 'Atom',              en: 'Atom' },
+  'settings.syntax.github':    { ko: 'GitHub',            en: 'GitHub' },
+  'settings.syntax.vitesse':   { ko: 'Vitesse',           en: 'Vitesse' },
 } as const
 
 export type MessageKey = keyof typeof MESSAGES

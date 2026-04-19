@@ -146,17 +146,25 @@
   --callout-success-title:  #064E3B;
   --callout-success-icon:   #059669;
 
-  /* Code block (Mac/Xcode-inspired window) — light mode.
+  /* Code block — light mode.
      --code-bg matches the one-light Shiki theme background so the
-     chrome bar and code area blend seamlessly. */
+     container and code area blend seamlessly across all themes. */
   --code-bg:             #FAFAFA;
-  --code-chrome-bg:      #ECECEC;
-  --code-chrome-border:  #D4D4D8;
-  --code-chrome-fg:      #52525B;
   --code-line-number:    #A1A1AA;
-  --code-traffic-red:    #FF5F57;
-  --code-traffic-yellow: #FEBC2E;
-  --code-traffic-green:  #28C840;
+
+  /* Syntax theme preview tokens — used by SettingsPanel mini-icons only.
+     Each triad (keyword/fn/string) is hand-picked to evoke the theme's
+     palette at a glance. Not consumed by the code blocks themselves
+     (those get inline --shiki-* vars from rehype-pretty-code). */
+  --syntax-preview-atom-keyword:    #A626A4;
+  --syntax-preview-atom-fn:         #4078F2;
+  --syntax-preview-atom-str:        #50A14F;
+  --syntax-preview-github-keyword:  #CF222E;
+  --syntax-preview-github-fn:       #8250DF;
+  --syntax-preview-github-str:      #0A3069;
+  --syntax-preview-vitesse-keyword: #AB5959;
+  --syntax-preview-vitesse-fn:      #BDA437;
+  --syntax-preview-vitesse-str:     #A6A05C;
 
   /* Visualization state tokens — 6 states × 3 slots = 18 variables.
      Consumed by components in components/visualizations/common/. New states
@@ -331,17 +339,10 @@
   --callout-success-title:  #A7F3D0;
   --callout-success-icon:   #6EE7B7;
 
-  /* Code block (Mac/Xcode-inspired window) — dark mode.
-     --code-bg matches the one-dark-pro Shiki theme background. Traffic
-     lights stay the canonical macOS colors regardless of theme. */
+  /* Code block — dark mode.
+     --code-bg matches the one-dark-pro Shiki theme background. */
   --code-bg:             #282C34;
-  --code-chrome-bg:      #21252B;
-  --code-chrome-border:  #181A1F;
-  --code-chrome-fg:      #9CA3AF;
   --code-line-number:    #4B5363;
-  --code-traffic-red:    #FF5F57;
-  --code-traffic-yellow: #FEBC2E;
-  --code-traffic-green:  #28C840;
 
   /* Visualization state tokens — dark mode. Muted backgrounds with pale
      foregrounds for contrast on #09090B. See :root for the light variant. */
@@ -697,127 +698,82 @@ body {
   .prose-kr table td { padding: 14px 18px; }
 }
 
-/* Shiki dual-theme syntax highlighting.
-   rehype-pretty-code with theme: { light: 'github-light', dark: 'github-dark' }
-   emits <pre>/<code>/<span> with inline --shiki-light and --shiki-dark CSS
-   variables. Apply the right variable based on the active theme. We scope to
-   `.prose-kr pre code[data-theme]` so the rule only touches syntax-highlighted
-   code blocks, not the html root's data-theme attribute. */
-.prose-kr pre code[data-theme],
-.prose-kr pre code[data-theme] span {
-  color: var(--shiki-light);
+/* Shiki multi-theme syntax highlighting.
+   velite.config.ts builds 3 preset pairs (atom, github, vitesse) — each
+   fenced block gets inline --shiki-{preset}-{light|dark} CSS variables
+   on every span. We pick the right pair at runtime via two html-level
+   attributes: data-syntax-theme (user preference) and data-theme (mode).
+   The [data-theme="dark"] selectors match the html root; the
+   code[data-theme] scoping ensures we only touch syntax-highlighted
+   blocks, not anywhere else that carries a data-theme attribute.
+
+   --code-bg is also scoped per preset so the container chrome blends
+   with each theme's native palette instead of sitting on a single tone. */
+
+/* ---------- atom (default) ---------- */
+html[data-syntax-theme="atom"] .prose-kr pre code[data-theme],
+html[data-syntax-theme="atom"] .prose-kr pre code[data-theme] span {
+  color: var(--shiki-atom-light);
+}
+html[data-theme="dark"][data-syntax-theme="atom"] .prose-kr pre code[data-theme],
+html[data-theme="dark"][data-syntax-theme="atom"] .prose-kr pre code[data-theme] span {
+  color: var(--shiki-atom-dark);
 }
 
-[data-theme="dark"] .prose-kr pre code[data-theme],
-[data-theme="dark"] .prose-kr pre code[data-theme] span {
-  color: var(--shiki-dark);
+/* ---------- github ---------- */
+html[data-syntax-theme="github"] .prose-kr pre code[data-theme],
+html[data-syntax-theme="github"] .prose-kr pre code[data-theme] span {
+  color: var(--shiki-github-light);
 }
+html[data-theme="dark"][data-syntax-theme="github"] .prose-kr pre code[data-theme],
+html[data-theme="dark"][data-syntax-theme="github"] .prose-kr pre code[data-theme] span {
+  color: var(--shiki-github-dark);
+}
+
+/* ---------- vitesse ---------- */
+html[data-syntax-theme="vitesse"] .prose-kr pre code[data-theme],
+html[data-syntax-theme="vitesse"] .prose-kr pre code[data-theme] span {
+  color: var(--shiki-vitesse-light);
+}
+html[data-theme="dark"][data-syntax-theme="vitesse"] .prose-kr pre code[data-theme],
+html[data-theme="dark"][data-syntax-theme="vitesse"] .prose-kr pre code[data-theme] span {
+  color: var(--shiki-vitesse-dark);
+}
+
+/* Container backgrounds matched to each preset's native palette.
+   Overrides the :root / [data-theme="dark"] --code-bg set earlier. */
+html[data-syntax-theme="github"]                       { --code-bg: #F6F8FA; }
+html[data-theme="dark"][data-syntax-theme="github"]    { --code-bg: #0D1117; }
+html[data-syntax-theme="vitesse"]                      { --code-bg: #F7F7F3; }
+html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
 
 /* ================================================================
-   Code block — Mac/Xcode-inspired window chrome
-   rehype-pretty-code wraps each fenced code block in a
-   <figure data-rehype-pretty-code-figure>, with an optional
-   <figcaption data-rehype-pretty-code-title> (when the author
-   sets `title="..."` on the fence) and the <pre><code> body.
-   We style the figure as a Mac window: rounded container + a 44px
-   chrome bar up top with traffic lights, file title, and language
-   badge, then the code body with line numbers below.
+   Code block — two user-selectable themes.
+   rehype-pretty-code emits <figure data-rehype-pretty-code-figure>
+   with an optional <figcaption data-rehype-pretty-code-title>
+   (present only when the fence carries title="...") and the <pre><code>
+   body. The active theme is driven by html[data-code-theme]:
+
+     floating (default) — no border, muted bg tint, filename as caption.
+     rail               — 2px left accent, filename caption above.
+
+   Shared baseline (typography, line numbers, highlighted line) applies
+   regardless of theme; each theme overrides only container chrome +
+   figcaption presentation.
    ================================================================ */
 
+/* ---------- Shared baseline ---------- */
 .prose-kr figure[data-rehype-pretty-code-figure] {
   position: relative;
   margin: 2em 0;
-  padding-top: 44px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   background-color: var(--code-bg);
-  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-/* Chrome bar background — spans the top 44px */
-.prose-kr figure[data-rehype-pretty-code-figure]::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 44px;
-  background-color: var(--code-chrome-bg);
-  border-bottom: 1px solid var(--code-chrome-border);
-  z-index: 1;
-}
-
-/* Traffic lights (red/yellow/green) — left side of chrome bar */
-.prose-kr figure[data-rehype-pretty-code-figure]::after {
-  content: '';
-  position: absolute;
-  top: 16px;
-  left: 18px;
-  width: 52px;
-  height: 12px;
-  background:
-    radial-gradient(circle at 6px 6px, var(--code-traffic-red)    5.5px, transparent 6px),
-    radial-gradient(circle at 26px 6px, var(--code-traffic-yellow) 5.5px, transparent 6px),
-    radial-gradient(circle at 46px 6px, var(--code-traffic-green)  5.5px, transparent 6px);
-  z-index: 3;
-  pointer-events: none;
-}
-
-/* Optional file title — centered in chrome bar when author sets
-   title="..." on the code fence. Rendered as the figcaption. */
-.prose-kr figure[data-rehype-pretty-code-figure]
-  figcaption[data-rehype-pretty-code-title] {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 44px;
-  margin: 0;
-  padding: 0 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--code-chrome-fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* Language badge — right side of chrome bar. rehype-pretty-code adds
-   data-language to the <pre>, so we put the pseudo-element on the pre
-   and absolute-position it to the figure (nearest positioned ancestor).
-   CSS attr() reads the value directly. */
-.prose-kr figure[data-rehype-pretty-code-figure] pre[data-language]::before {
-  content: attr(data-language);
-  position: absolute;
-  top: 14px;
-  right: 18px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--code-chrome-fg);
-  z-index: 2;
-  pointer-events: none;
-}
-
-/* Hide badge for plaintext blocks (no language selected) */
-.prose-kr figure[data-rehype-pretty-code-figure] pre[data-language="plaintext"]::before {
-  content: none;
-}
-
-/* Pre inside figure — transparent, no extra padding/rounding.
-   Higher specificity than the plain .prose-kr pre fallback above. */
 .prose-kr figure[data-rehype-pretty-code-figure] pre {
   margin: 0;
   padding: 16px 0;
@@ -831,37 +787,111 @@ body {
   line-height: 1.65;
 }
 
-/* Code element — reset line number counter */
 .prose-kr figure[data-rehype-pretty-code-figure] pre code {
   counter-reset: line;
   display: block;
 }
 
-/* Each logical line (rehype-pretty-code wraps lines in <span data-line>) */
 .prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line] {
   counter-increment: line;
   display: block;
-  padding-left: 20px;
-  padding-right: 20px;
+  padding-left: 12px;
+  padding-right: 16px;
 }
 
-/* Line number — rendered via CSS counter before each data-line span */
 .prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line]::before {
   content: counter(line);
   display: inline-block;
-  width: 2.5em;
-  margin-right: 1.25em;
+  width: 1.75em;
+  margin-right: 0.85em;
   text-align: right;
   color: var(--code-line-number);
   font-variant-numeric: tabular-nums;
   user-select: none;
 }
 
-/* Highlighted line (// [!code highlight]) — primary-tinted background
-   with a left accent bar via inset box-shadow (doesn't affect layout). */
 .prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line].highlighted {
   background-color: color-mix(in oklab, var(--primary) 12%, transparent);
   box-shadow: inset 3px 0 0 var(--primary);
+}
+
+/* ---------- Theme: floating (default) ----------
+   No border, muted bg tint only. Filename surfaces as a small caption
+   above the block so code meets the prose rhythm without a frame. */
+html[data-code-theme="floating"] .prose-kr figure[data-rehype-pretty-code-figure] {
+  border: 0;
+  background-color: color-mix(in oklab, var(--muted) 40%, var(--background));
+  border-radius: 10px;
+}
+
+html[data-code-theme="floating"]
+  .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title] {
+  margin: 0 0 6px 2px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  display: block;
+}
+
+/* Lift the caption visually out of the figure by pushing the pre up. */
+html[data-code-theme="floating"]
+  .prose-kr figure[data-rehype-pretty-code-figure]:has(figcaption[data-rehype-pretty-code-title]) {
+  background-color: transparent;
+  overflow: visible;
+}
+
+html[data-code-theme="floating"]
+  .prose-kr figure[data-rehype-pretty-code-figure]:has(figcaption[data-rehype-pretty-code-title]) pre {
+  background-color: color-mix(in oklab, var(--muted) 40%, var(--background));
+  border-radius: 10px;
+}
+
+/* ---------- Theme: rail ----------
+   Left 2px accent rail, otherwise bare. Filename as caption above. The
+   rail ties visually to highlighted-line left-accent; we suppress the
+   highlighted line's inset shadow to avoid a double accent. */
+html[data-code-theme="rail"] .prose-kr figure[data-rehype-pretty-code-figure] {
+  border: 0;
+  border-left: 2px solid var(--primary);
+  border-radius: 0 10px 10px 0;
+  background-color: color-mix(in oklab, var(--muted) 45%, var(--background));
+}
+
+html[data-code-theme="rail"]
+  .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title] {
+  margin: 0 0 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  display: block;
+}
+
+html[data-code-theme="rail"]
+  .prose-kr figure[data-rehype-pretty-code-figure]:has(figcaption[data-rehype-pretty-code-title]) {
+  background-color: transparent;
+  overflow: visible;
+  border-left: 0;
+}
+
+html[data-code-theme="rail"]
+  .prose-kr figure[data-rehype-pretty-code-figure]:has(figcaption[data-rehype-pretty-code-title]) pre {
+  background-color: color-mix(in oklab, var(--muted) 45%, var(--background));
+  border-left: 2px solid var(--primary);
+  border-radius: 0 10px 10px 0;
+}
+
+html[data-code-theme="rail"]
+  .prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line].highlighted {
+  box-shadow: none;
+  background-color: color-mix(in oklab, var(--primary) 10%, transparent);
 }
 
 /* ================================================================

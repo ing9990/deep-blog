@@ -105,7 +105,14 @@ export default defineConfig({
       [
         rehypePrettyCode,
         {
-          theme: { light: 'one-light', dark: 'one-dark-pro' },
+          theme: {
+            'atom-light':    'one-light',
+            'atom-dark':     'one-dark-pro',
+            'github-light':  'github-light',
+            'github-dark':   'github-dark',
+            'vitesse-light': 'vitesse-light',
+            'vitesse-dark':  'vitesse-dark',
+          },
           keepBackground: false,
           defaultLang: 'plaintext',
           transformers: [transformerNotationHighlight()],

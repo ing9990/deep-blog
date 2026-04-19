@@ -12,17 +12,23 @@ import {
 export type CardLayout = 'editorial' | 'timeline' | 'floating'
 export type Language = 'en' | 'ko'
 export type FontSize = 'small' | 'normal' | 'large'
+export type CodeTheme = 'floating' | 'rail'
+export type SyntaxTheme = 'atom' | 'github' | 'vitesse'
 
 export interface Settings {
   cardLayout: CardLayout
   language: Language
   fontSize: FontSize
+  codeTheme: CodeTheme
+  syntaxTheme: SyntaxTheme
 }
 
 const DEFAULT_SETTINGS: Settings = {
   cardLayout: 'timeline',
   language: 'ko',
   fontSize: 'normal',
+  codeTheme: 'floating',
+  syntaxTheme: 'atom',
 }
 
 const STORAGE_KEY = 'deep-settings'
@@ -59,6 +65,14 @@ export function normalizeFontSize(value: unknown): FontSize {
     : 'normal'
 }
 
+export function normalizeCodeTheme(value: unknown): CodeTheme {
+  return value === 'rail' ? 'rail' : 'floating'
+}
+
+export function normalizeSyntaxTheme(value: unknown): SyntaxTheme {
+  return value === 'github' || value === 'vitesse' ? value : 'atom'
+}
+
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -68,6 +82,8 @@ function loadSettings(): Settings {
       cardLayout: normalizeCardLayout(parsed.cardLayout),
       language: normalizeLanguage(parsed.language),
       fontSize: normalizeFontSize(parsed.fontSize),
+      codeTheme: normalizeCodeTheme(parsed.codeTheme),
+      syntaxTheme: normalizeSyntaxTheme(parsed.syntaxTheme),
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -94,6 +110,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.fontSize = settings.fontSize
   }, [settings.fontSize])
+
+  useEffect(() => {
+    document.documentElement.dataset.codeTheme = settings.codeTheme
+  }, [settings.codeTheme])
+
+  useEffect(() => {
+    document.documentElement.dataset.syntaxTheme = settings.syntaxTheme
+  }, [settings.syntaxTheme])
 
   const updateSetting = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {

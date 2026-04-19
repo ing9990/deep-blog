@@ -91,8 +91,8 @@ export default function RootLayout({
   return (
     <html lang="ko" className={`${paperlogy.variable} ${pretendard.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body>
-        <Script id="font-size-init" strategy="beforeInteractive">
-          {`try{var s=localStorage.getItem('deep-settings');if(s){var f=JSON.parse(s).fontSize;if(f==='small'||f==='large'||f==='normal'){document.documentElement.dataset.fontSize=f}}}catch(e){}`}
+        <Script id="settings-init" strategy="beforeInteractive">
+          {`try{var d=document.documentElement;var s=localStorage.getItem('deep-settings');if(s){var p=JSON.parse(s);var f=p.fontSize;if(f==='small'||f==='large'||f==='normal'){d.dataset.fontSize=f}d.dataset.codeTheme=(p.codeTheme==='rail')?'rail':'floating';var y=p.syntaxTheme;d.dataset.syntaxTheme=(y==='github'||y==='vitesse')?y:'atom'}else{d.dataset.codeTheme='floating';d.dataset.syntaxTheme='atom'}}catch(e){document.documentElement.dataset.codeTheme='floating';document.documentElement.dataset.syntaxTheme='atom'}`}
         </Script>
         <ThemeProvider>
           <MobileUIProvider posts={clientPosts}>

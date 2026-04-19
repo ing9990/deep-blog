@@ -13,10 +13,12 @@ import { CacheStampedeDefenseTimeline } from '@/components/visualizations/CacheS
 import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpectrum'
 import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
+import { CoroutineLayers } from '@/components/visualizations/CoroutineLayers'
 import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
 import { DDDAggregate } from '@/components/visualizations/DDDAggregate'
 import { DDDBoundedContext } from '@/components/visualizations/DDDBoundedContext'
 import { DDDTermConfusion } from '@/components/visualizations/DDDTermConfusion'
+import { EventLoopDance } from '@/components/visualizations/EventLoopDance'
 import { GCAlgorithmMatrix } from '@/components/visualizations/GCAlgorithmMatrix'
 import { GCCycle } from '@/components/visualizations/GCCycle'
 import { GCHeapStructure } from '@/components/visualizations/GCHeapStructure'
@@ -24,8 +26,12 @@ import { IdempotencyCausalityChain } from '@/components/visualizations/Idempoten
 import { IdempotencyKeyFlow } from '@/components/visualizations/IdempotencyKeyFlow'
 import { IOModelMatrix } from '@/components/visualizations/IOModelMatrix'
 import { IOModelTimeline } from '@/components/visualizations/IOModelTimeline'
+import { KafkaAcksComparison } from '@/components/visualizations/KafkaAcksComparison'
+import { KafkaClusterFlow } from '@/components/visualizations/KafkaClusterFlow'
 import { KafkaConsumerGroupScopes } from '@/components/visualizations/KafkaConsumerGroupScopes'
+import { KafkaLeaderFailover } from '@/components/visualizations/KafkaLeaderFailover'
 import { KafkaPartitionStructure } from '@/components/visualizations/KafkaPartitionStructure'
+import { KafkaReplicationFlow } from '@/components/visualizations/KafkaReplicationFlow'
 import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline'
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
@@ -94,15 +100,21 @@ export const mdxComponents: MDXComponents = {
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,
+  CoroutineLayers,
   DDDAggregate,
   DDDBoundedContext,
   DDDTermConfusion,
+  EventLoopDance,
   IdempotencyCausalityChain,
   IdempotencyKeyFlow,
   IOModelMatrix,
   IOModelTimeline,
+  KafkaAcksComparison,
+  KafkaClusterFlow,
   KafkaConsumerGroupScopes,
+  KafkaLeaderFailover,
   KafkaPartitionStructure,
+  KafkaReplicationFlow,
   OptimizerPipeline,
   PERBetaSlider,
   QuickSort,

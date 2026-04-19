@@ -6,8 +6,10 @@ import { X } from 'lucide-react'
 import {
   useSettings,
   type CardLayout,
+  type CodeTheme,
   type FontSize,
   type Language,
+  type SyntaxTheme,
 } from '@/components/providers/SettingsProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { cn } from '@/lib/utils'
@@ -33,6 +35,17 @@ const FONT_SIZE_OPTIONS: { value: FontSize; labelKey: MessageKey }[] = [
   { value: 'small',  labelKey: 'settings.font.small' },
   { value: 'normal', labelKey: 'settings.font.normal' },
   { value: 'large',  labelKey: 'settings.font.large' },
+]
+
+const CODE_THEME_OPTIONS: { value: CodeTheme; labelKey: MessageKey }[] = [
+  { value: 'floating', labelKey: 'settings.code.floating' },
+  { value: 'rail',     labelKey: 'settings.code.rail' },
+]
+
+const SYNTAX_THEME_OPTIONS: { value: SyntaxTheme; labelKey: MessageKey }[] = [
+  { value: 'atom',    labelKey: 'settings.syntax.atom' },
+  { value: 'github',  labelKey: 'settings.syntax.github' },
+  { value: 'vitesse', labelKey: 'settings.syntax.vitesse' },
 ]
 
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
@@ -173,6 +186,62 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             ))}
           </div>
         </div>
+
+        {/* Divider */}
+        <div className="border-t border-border" />
+
+        {/* Code Block Theme Section */}
+        <div className="px-5 py-3">
+          <div className="mb-2.5 text-[length:var(--text-settings-header)] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.code')}
+          </div>
+          <div className="flex gap-2">
+            {CODE_THEME_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => updateSetting('codeTheme', opt.value)}
+                className={cn(
+                  'flex flex-1 flex-col items-center gap-1.5 rounded-xl border-[1.5px] px-2 py-2.5 transition-all',
+                  settings.codeTheme === opt.value
+                    ? 'border-primary bg-accent'
+                    : 'border-border bg-background hover:border-border-strong hover:bg-muted',
+                )}
+              >
+                <CodeThemeMiniIcon theme={opt.value} active={settings.codeTheme === opt.value} />
+                <span className="text-[length:var(--text-caption)] font-semibold">{t(opt.labelKey)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-border" />
+
+        {/* Syntax Theme Section */}
+        <div className="px-5 py-3">
+          <div className="mb-2.5 text-[length:var(--text-settings-header)] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('settings.syntax')}
+          </div>
+          <div className="flex gap-2">
+            {SYNTAX_THEME_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => updateSetting('syntaxTheme', opt.value)}
+                className={cn(
+                  'flex flex-1 flex-col items-center gap-1.5 rounded-xl border-[1.5px] px-2 py-2.5 transition-all',
+                  settings.syntaxTheme === opt.value
+                    ? 'border-primary bg-accent'
+                    : 'border-border bg-background hover:border-border-strong hover:bg-muted',
+                )}
+              >
+                <SyntaxThemeMiniIcon theme={opt.value} active={settings.syntaxTheme === opt.value} />
+                <span className="text-[length:var(--text-caption)] font-semibold">{t(opt.labelKey)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -215,6 +284,73 @@ function LayoutMiniIcon({ layout, active }: { layout: CardLayout; active: boolea
         <div className={cn('h-[3px] w-full rounded-full', barColor)} />
         <div className={cn('h-[2px] w-3/4 rounded-full', barColor, 'opacity-50')} />
       </div>
+    </div>
+  )
+}
+
+/* Mini wireframe icons for each code block theme.
+   Each depicts: (top filename treatment) + (3 code lines) so the distinct
+   chrome of each theme reads at a glance. */
+function CodeThemeMiniIcon({ theme, active }: { theme: CodeTheme; active: boolean }) {
+  const lineColor = active ? 'bg-primary' : 'bg-muted-foreground/30'
+  const captionColor = active ? 'bg-primary' : 'bg-muted-foreground/40'
+
+  if (theme === 'floating') {
+    // Detached caption above + borderless tinted block
+    return (
+      <div className="flex h-7 w-9 flex-col gap-1">
+        <div className={cn('h-[2px] w-2 rounded-full', captionColor)} />
+        <div className={cn('flex flex-1 flex-col justify-center gap-[3px] rounded px-1', active ? 'bg-primary/15' : 'bg-muted-foreground/15')}>
+          <div className={cn('h-[2px] w-full rounded-full', lineColor)} />
+          <div className={cn('h-[2px] w-3/4 rounded-full', lineColor, 'opacity-60')} />
+        </div>
+      </div>
+    )
+  }
+
+  // rail — caption above + left accent rail
+  return (
+    <div className="flex h-7 w-9 flex-col gap-1">
+      <div className={cn('h-[2px] w-2 rounded-full', captionColor)} />
+      <div className="flex flex-1 items-stretch">
+        <div className={cn('w-[2px] shrink-0', active ? 'bg-primary' : 'bg-muted-foreground/50')} />
+        <div className={cn('flex flex-1 flex-col justify-center gap-[3px] rounded-r pl-1.5 pr-1', active ? 'bg-primary/10' : 'bg-muted-foreground/10')}>
+          <div className={cn('h-[2px] w-full rounded-full', lineColor)} />
+          <div className={cn('h-[2px] w-3/4 rounded-full', lineColor, 'opacity-60')} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* Mini palette swatches for each syntax theme. Each card shows three
+   dots in the theme's signature keyword/fn/string colors so the user
+   can preview the feel before selecting. Tokens defined in globals.css
+   (--syntax-preview-{theme}-{slot}); not reused anywhere else. */
+function SyntaxThemeMiniIcon({ theme, active }: { theme: SyntaxTheme; active: boolean }) {
+  const slots: Record<SyntaxTheme, readonly [string, string, string]> = {
+    atom: [
+      'bg-[var(--syntax-preview-atom-keyword)]',
+      'bg-[var(--syntax-preview-atom-fn)]',
+      'bg-[var(--syntax-preview-atom-str)]',
+    ],
+    github: [
+      'bg-[var(--syntax-preview-github-keyword)]',
+      'bg-[var(--syntax-preview-github-fn)]',
+      'bg-[var(--syntax-preview-github-str)]',
+    ],
+    vitesse: [
+      'bg-[var(--syntax-preview-vitesse-keyword)]',
+      'bg-[var(--syntax-preview-vitesse-fn)]',
+      'bg-[var(--syntax-preview-vitesse-str)]',
+    ],
+  }
+  const [keyword, fn, str] = slots[theme]
+  return (
+    <div className={cn('flex h-7 w-9 items-center justify-center gap-[3px] rounded', active ? 'opacity-100' : 'opacity-80')}>
+      <span className={cn('h-2.5 w-2.5 rounded-full', keyword)} />
+      <span className={cn('h-2.5 w-2.5 rounded-full', fn)} />
+      <span className={cn('h-2.5 w-2.5 rounded-full', str)} />
     </div>
   )
 }
