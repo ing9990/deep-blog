@@ -43,6 +43,7 @@ pnpm lint:fix              # 자동 수정 (next lint --fix + stylelint --fix)
 pnpm test                  # pretest: emphasis 가드 + 키워드 맵 → velite + vitest
 pnpm generate-keyword-map  # frontmatter 수정 후 수동 재생성
 pnpm check-mdx-emphasis    # `**"…"**` / `**(…)**` 패턴 단일 실행 검사
+pnpm check-mdx-tilde       # 한 줄/셀 안 `~` 2+ (GFM strikethrough 방지) 단일 실행 검사
 ```
 
 - **코드 수정 후**: `pnpm type-check` (필수) + `pnpm lint`. 변경 규모 크면 `pnpm build`.
@@ -70,6 +71,7 @@ pnpm check-mdx-emphasis    # `**"…"**` / `**(…)**` 패턴 단일 실행 검�
    - Shadow: `shadow-[0_...rgba...]` → `--shadow-card|card-hover|fab`
    예외 (자동 whitelist): `components/visualizations/{BTreeInsert,QuickSort,...}` SVG 로직 상수, `em`/`%` 상대 단위, primitive 정의 블록(`@theme inline`, `:root`, `[data-theme="dark"]`, `html[data-font-size="..."]`), 아이콘 픽셀 크기(`h-[22px] w-[22px]`), 단일 사용 리터럴(HeroIntro radial gradient 등). 토큰 전체 목록: `docs/design-tokens.md`.
 10. **MDX 본문 bold 안 구두점 금지** — `**"…"**` · `**(…)**` 패턴. `scripts/check-mdx-emphasis.ts`가 prebuild·predev·pretest에서 빌드 차단. 구두점·괄호를 bold 바깥으로 (`"**X**"`, `**X**(Y)`). Remark/Shiki 파이프라인에서 한글 조사와 결합 시 렌더링 불안정.
+11. **MDX 본문 범위 표기 `~` 2개 이상 금지** — 한 줄(또는 한 테이블 셀) 안에 unescaped `~`가 2개 이상이면 remark-gfm이 `<del>` 페어로 해석해 취소선이 발생한다 (예: `0~100 ... 60~70` → `0<del>100 ... 60</del>70`). `scripts/check-mdx-tilde.ts`가 prebuild·predev·pretest에서 빌드 차단. 숫자 범위는 en-dash `–`(U+2013) 또는 `0에서 100` 자연어, 한글 범위는 `수백에서 수천` 자연어, 단계 참조는 `1번부터 4번까지`로 치환. 근사값 단일 `~`(예: `~10ms`)는 허용.
 
 ## 6. 변경 금지 결정 (비자명 불변식)
 
