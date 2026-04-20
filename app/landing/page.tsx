@@ -138,7 +138,7 @@ export default function LandingPage() {
                 <BookOpen className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="text-[length:var(--text-caption)] font-semibold uppercase tracking-wider text-muted-foreground">
                   Deep Dive
                 </div>
                 <h2 className="text-lg font-bold">이론을 쉽게 정리합니다</h2>
@@ -146,7 +146,7 @@ export default function LandingPage() {
             </div>
             <p className="mb-5 flex-1 text-sm leading-relaxed text-muted-foreground">
               데이터베이스 인덱스, 트랜잭션 격리, 분산 시스템, JVM 내부, 캐시·메시지 큐 같은
-              주제를 "왜 이렇게 생겼는지" 중심으로 풀어냅니다. 외우는 대신 감각적으로
+              주제를 &quot;왜 이렇게 생겼는지&quot; 중심으로 풀어냅니다. 외우는 대신 감각적으로
               이해하는 데 초점을 맞춥니다.
             </p>
             <ul className="mb-6 flex flex-wrap gap-2">
@@ -176,7 +176,7 @@ export default function LandingPage() {
                 <Code2 className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="text-[length:var(--text-caption)] font-semibold uppercase tracking-wider text-muted-foreground">
                   Build In Public
                 </div>
                 <h2 className="text-lg font-bold">이커머스 백엔드를 쌓아갑니다</h2>
@@ -200,8 +200,8 @@ export default function LandingPage() {
                   <span
                     className={
                       status === 'in progress'
-                        ? 'text-[11px] font-medium text-primary'
-                        : 'text-[11px] text-muted-foreground'
+                        ? 'text-[length:var(--text-caption)] font-medium text-primary'
+                        : 'text-[length:var(--text-caption)] text-muted-foreground'
                     }
                   >
                     {status}
