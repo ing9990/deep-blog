@@ -51,8 +51,6 @@ const BLOG_TOPICS = [
   { icon: Server, label: 'Distributed Systems' },
   { icon: Cpu, label: 'JVM Internals' },
   { icon: Zap, label: 'Cache & Stampede' },
-  { icon: Sparkles, label: 'Coroutines' },
-  { icon: BookOpen, label: 'CAP · Kafka · DDD' },
 ]
 
 const SERVICES = [
@@ -103,8 +101,9 @@ export default function LandingPage() {
           <span className="text-primary">코드로 증명한다.</span>
         </h1>
         <p className="mt-6 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground md:text-lg">
-          DEEP은 깊은 CS 이론을 블로그로 정리하고, 같은 지식을 재료 삼아 미니 Coupang을
-          만들고 있습니다. 각 글이 답하는 문제는 이 서비스 어딘가에서 실제로 돌아갑니다.
+          DEEP은 깊은 CS 이론을 블로그로 정리하고, 같은 지식을 재료 삼아{' '}
+          <span className="font-semibold text-red-500">미니 Coupang</span>을 만들고 있습니다.
+          각 글이 답하는 문제는 이 서비스 어딘가에서 실제로 돌아갑니다.
         </p>
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
           <Link
@@ -149,13 +148,13 @@ export default function LandingPage() {
               주제를 &quot;왜 이렇게 생겼는지&quot; 중심으로 풀어냅니다. 외우는 대신 감각적으로
               이해하는 데 초점을 맞춥니다.
             </p>
-            <ul className="mb-6 flex flex-wrap gap-2">
+            <ul className="mb-6 space-y-2">
               {BLOG_TOPICS.map(({ icon: Icon, label }) => (
                 <li
                   key={label}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground"
+                  className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
                 >
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                   <span>{label}</span>
                 </li>
               ))}
