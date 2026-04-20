@@ -4,13 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// Shown once per session on the index page. Scroll-driven, four progressive
+// Shown once per session on the index page. Scroll-driven, two progressive
 // highlight stages revealed by down gestures:
-//   stage 1 → "단순 사용법을 넘어서,"
-//   stage 2 → "깊은 CS 지식을 바탕으로"
-//   stage 3 → "TRADE OFF를 비교합니다."
-//   stage 4 → "DEEP"
-// One more down gesture past stage 4 dismisses the hero. Dismissal is final
+//   stage 1 → all three intro lines emphasized together
+//   stage 2 → "DEEP" brand block emphasized
+// One more down gesture past stage 2 dismisses the hero. Dismissal is final
 // for the session (sessionStorage flag); there is no re-open path.
 //
 // Intent detection uses a burst + commit-delta detector so that trackpad
@@ -18,7 +16,7 @@ import { cn } from '@/lib/utils'
 // `createBurstDetector` below.
 const STORAGE_KEY = 'deep-hero-seen'
 const FADE_MS = 500
-const STAGE_TOTAL = 4
+const STAGE_TOTAL = 2
 
 // Tuning — see the "Commit-delta burst" design notes.
 const ADVANCE_IDLE_GAP_MS = 120
@@ -30,7 +28,7 @@ const ADVANCE_COOLDOWN_MS = 420
 const ADVANCE_TOUCH_IDLE_GAP_MS = 140
 const ADVANCE_TOUCH_COMMIT_DELTA = 80
 
-type Stage = 0 | 1 | 2 | 3 | 4 | 5
+type Stage = 0 | 1 | 2 | 3
 type Dir = 'up' | 'down'
 
 interface BurstDetector {
@@ -240,13 +238,13 @@ export function HeroIntro() {
         </p>
 
         <h1 className="flex flex-col gap-3 text-balance text-[length:var(--text-h1)] font-bold leading-tight tracking-[var(--tracking-tightest)]">
-          <HeroLine stage={stage} index={1} mountClass="hero-rise-1">
+          <HeroLine stage={stage} mountClass="hero-rise-1">
             기술의 작동 원리부터
           </HeroLine>
-          <HeroLine stage={stage} index={2} mountClass="hero-rise-2">
+          <HeroLine stage={stage} mountClass="hero-rise-2">
             왜 필요한지까지,
           </HeroLine>
-          <HeroLine stage={stage} index={3} mountClass="hero-rise-3">
+          <HeroLine stage={stage} mountClass="hero-rise-3">
             <span className="font-extrabold tracking-wide">쉽게 이해</span>
             할 수 있도록.
           </HeroLine>
@@ -256,22 +254,22 @@ export function HeroIntro() {
           className={cn(
             'hero-rise-3 mt-14 flex items-center justify-center gap-5 transition-all duration-500 ease-out',
             stage === 0 && 'opacity-90',
-            stage >= 1 && stage < 4 && 'scale-[0.96] opacity-25',
-            stage === 4 && 'scale-[1.04] opacity-100',
-            stage > 4 && 'opacity-100',
+            stage === 1 && 'scale-[0.96] opacity-25',
+            stage === 2 && 'scale-[1.04] opacity-100',
+            stage > 2 && 'opacity-100',
           )}
         >
           <span
             aria-hidden="true"
             className={cn(
               'h-px origin-right bg-white/60 transition-all duration-700 ease-out',
-              stage === 4 ? 'w-20 opacity-80' : 'w-14 opacity-25',
+              stage === 2 ? 'w-20 opacity-80' : 'w-14 opacity-25',
             )}
           />
           <span
             className={cn(
               'text-[length:var(--text-h1)] font-extrabold tracking-[var(--tracking-display)] transition-colors duration-500',
-              stage === 4 ? 'text-white' : 'text-white/80',
+              stage === 2 ? 'text-white' : 'text-white/80',
             )}
           >
             DEEP
@@ -280,7 +278,7 @@ export function HeroIntro() {
             aria-hidden="true"
             className={cn(
               'h-px origin-left bg-white/60 transition-all duration-700 ease-out',
-              stage === 4 ? 'w-20 opacity-80' : 'w-14 opacity-25',
+              stage === 2 ? 'w-20 opacity-80' : 'w-14 opacity-25',
             )}
           />
         </div>
@@ -306,15 +304,17 @@ export function HeroIntro() {
 
 interface HeroLineProps {
   stage: Stage
-  index: 1 | 2 | 3
   mountClass: string
   children: React.ReactNode
 }
 
-function HeroLine({ stage, index, mountClass, children }: HeroLineProps) {
-  const isActive = stage === index
+function HeroLine({ stage, mountClass, children }: HeroLineProps) {
+  // All three lines share a single "active" stage (stage 1) so the intro
+  // stays at two content beats: stage 1 emphasizes the lines, stage 2
+  // emphasizes DEEP. Passing stage 2 starts dismissal.
+  const isActive = stage === 1
   const isInitial = stage === 0
-  const isPassed = stage > index
+  const isPassed = stage > 1
 
   return (
     <span
