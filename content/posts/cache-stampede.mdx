@@ -24,11 +24,11 @@ draft: false
 
 Cache Stampede는 구현 버그가 아닙니다. TTL 만료 시점에 동일 키로 몰린 동시 요청이 모두 캐시 미스를 겪으면서, 같은 무거운 쿼리를 N번 동시에 DB로 던지는 현상입니다. 이 글에서는 왜 "TTL을 길게 잡으면 된다"가 해법이 아닌지, 그리고 4가지 방어 패턴이 같은 문제에 대한 어떤 다른 조정 전략인지 살펴봅니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. Cache Stampede가 어떻게 DB 장애를 일으키는지 이해한다
-  2. 4가지 방어 패턴(Mutex Lock, Single Flight, PER, SWR)의 구조적 차이를 구분할 수 있다
-  3. 자신의 시스템에 맞는 방어 전략을 선택하는 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - Cache Stampede가 어떻게 DB 장애를 일으키는지 이해한다
+  - 4가지 방어 패턴(Mutex Lock, Single Flight, PER, SWR)의 구조적 차이를 구분할 수 있다
+  - 자신의 시스템에 맞는 방어 전략을 선택하는 기준을 얻는다
+</Note>
 
 ## Cache Stampede
 
@@ -107,7 +107,7 @@ Cache Stampede는 캐시 만료 직후 동일 키로 몰린 동시 요청이 모
 
 Redis `SETNX`로 락을 잡고, 락 보유자만 DB fetch를 수행합니다. 나머지 요청은 락이 풀릴 때까지 spin하거나 stale 값을 반환합니다.
 
-```python title="mutex-lock.py"
+```py title="mutex-lock.py"
 def get_with_lock(key):
     value = cache.get(key)
     if value is not None:
@@ -155,7 +155,7 @@ func GetUser(id string) (*User, error) {
 
 만료된 stale 값을 즉시 반환하고, 백그라운드로 비동기 갱신을 수행합니다. HTTP `Cache-Control` 헤더 표준에도 등재된 패턴입니다.
 
-```python title="swr.py"
+```py title="swr.py"
 def get_swr(key):
     value, expires_at = cache.get_with_meta(key)
     if value is None:
@@ -201,7 +201,7 @@ $$\text{now} - \delta \cdot \beta \cdot \ln(\text{random()}) \geq \text{expirati
 
 부등식 좌변에서 $-\delta \cdot \beta \cdot \ln(\text{random()})$은 **항상 양수**이고($\ln$은 음수, 앞에 $-$가 있어 양수), $\text{random()}$이 작을수록 큰 값입니다. 이 양수가 *"갱신을 얼마나 일찍 트리거할지"*의 시간 폭이 됩니다. 평균값은 $\delta \cdot \beta$이고, 그 분포는 지수분포를 따릅니다.
 
-```python title="xfetch.py"
+```py title="xfetch.py"
 import math, random, time
 
 def x_fetch(key, beta=1.0):
@@ -266,7 +266,7 @@ t=5.5s  노드 A: GC 재개, fetch 완료, cache.setex(key, ...)  ← B의 값 �
 
 Jitter 없이 동일한 TTL로 캐시를 채우면 매 정시(0분)마다 모든 키가 일제히 만료되어 Cache Avalanche가 정기적으로 발생합니다. 권장 jitter 범위는 ±10~20%입니다. 너무 작으면 분산 효과가 미미하고, 너무 크면 데이터 신선도가 들쭉날쭉해져 디버깅이 어려워집니다.
 
-```python title="jitter.py"
+```py title="jitter.py"
 import random
 
 def setex_with_jitter(key, value, base_ttl=3600):

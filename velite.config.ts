@@ -7,6 +7,7 @@ import { transformerNotationHighlight } from '@shikijs/transformers'
 import { calculateReadingTime } from './lib/reading-time'
 import { extractPlainText } from './lib/plain-text'
 import remarkAutoLink from './plugins/remark-auto-link'
+import rehypeCodeLanguageBadge from './plugins/rehype-code-language-badge'
 import { KEYWORD_MAP, KEYWORDS_BY_LENGTH } from './lib/generated/keyword-map'
 import { CATEGORY_IDS } from './lib/categories'
 
@@ -48,6 +49,18 @@ const postFrontmatterShape = s.object({
   category: s.enum(CATEGORY_IDS),
   series: s.string().optional(),
   seriesOrder: s.number().int().positive().optional(),
+  // project-backed 포스트가 참조하는 services/*  도메인 서비스 이름들.
+  // Mode C 포스트가 서비스 샌드박스와 양방향 링크를 만들 때 사용.
+  // 값: lowercase-kebab-case, 실제 /services/<name>-service/ 디렉토리 이름과 일치.
+  relatedServices: s
+    .array(
+      s
+        .string()
+        .min(1)
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'relatedServices must be lowercase kebab-case (matches services/<name>-service/ directory)'),
+    )
+    .max(5)
+    .optional(),
   draft: s.boolean().default(false),
 })
 
@@ -118,6 +131,7 @@ export default defineConfig({
           transformers: [transformerNotationHighlight()],
         },
       ],
+      rehypeCodeLanguageBadge,
       [rehypeKatex, { strict: false, output: 'html' }],
     ],
   },

@@ -11,17 +11,17 @@ keywords:
 summary:
   ko: "B-Tree가 왜 디스크 기반 시스템의 표준 자료구조가 되었는지 이해하고, 탐색·삽입·분할의 내부 동작 원리와 B+Tree·해시 인덱스와의 트레이드오프를 구분할 수 있습니다."
   en: "Why B-Tree became the standard data structure for disk-based systems. Covers search, insert, and split mechanics, plus how it trades off against B+Tree and hash indexes."
-category: data-structure
+category: computer-science
 draft: false
 ---
 
 이진 탐색 트리는 메모리 안에서 $O(\log n)$ 탐색을 보장합니다. 그런데 데이터가 디스크에 있는 순간, 그 보장은 사실상 무의미해집니다. B-Tree는 디스크라는 물리적 제약 위에서 탄생한 자료구조이며, 그 구조의 모든 결정이 하나의 원칙을 따릅니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. B-Tree가 왜 디스크 기반 시스템의 표준 자료구조가 되었는지 이해한다
-  2. 탐색·삽입·분할의 내부 동작 메커니즘을 구분할 수 있다
-  3. B+Tree·해시 인덱스와의 트레이드오프를 비교하는 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - B-Tree가 왜 디스크 기반 시스템의 표준 자료구조가 되었는지 이해한다
+  - 탐색·삽입·분할의 내부 동작 메커니즘을 구분할 수 있다
+  - B+Tree·해시 인덱스와의 트레이드오프를 비교하는 기준을 얻는다
+</Note>
 
 ## B-Tree란
 

@@ -1,0 +1,179 @@
+---
+title:
+  ko: "Redis 입문"
+  en: "Redis Essentials"
+slug: "redis-essentials"
+date: 2026-04-20
+tags:
+  - backend
+  - cache
+  - Redis
+  - distributed-systems
+keywords:
+  - Redis
+  - 레디스
+  - Remote Dictionary Server
+  - In-Memory Data Store
+summary:
+  ko: "Redis가 왜 다중 인스턴스 환경에서 표준 공용 메모리 계층이 되었는지 이해하고, 싱글 스레드 이벤트 루프·7종 자료구조·영속성 설정의 내부 동작을 파악합니다. 분산 락·Rate Limiting·세션·리더보드·메시징 5가지 대표 영역을 훑으며 어떤 Redis 기능이 어떤 문제에 맞닿아 있는지 정리합니다."
+  en: "Understand why Redis became the standard shared-memory layer in multi-instance systems, and how its single-thread event loop, seven data structures, and persistence options work internally. Surveys five areas (distributed locks, rate limiting, sessions, leaderboards, messaging) where Redis fits."
+category: infrastructure
+draft: false
+---
+
+많은 기업이 Redis를 도입합니다. 이유는 단순히 '빠르다'가 아니라, 다중 인스턴스 환경에서 상태를 공유할 공용 메모리 계층이 필요하기 때문입니다. 이 글은 Redis가 왜 거기에 수렴했는지, 내부 구조는 어떻게 생겼는지, 그리고 분산 락, Rate Limiting, 세션, 리더보드, 메시징 같은 대표 영역에서 어떤 기능이 어떤 문제에 맞닿아 있는지 훑어보는 시리즈 오프너입니다.
+
+<Note title="이 글의 학습 목표">
+  - Redis가 왜 단순 캐시가 아닌 공용 메모리 계층으로 수렴했는지 이해한다
+  - 싱글 스레드 이벤트 루프, 7가지 자료구조, 영속성 옵션의 내부 동작을 구분할 수 있다
+  - 분산 락, Rate Limiting, 세션 등 대표 영역에서 Redis를 도입할지 판단하는 기준을 얻는다
+</Note>
+
+## Redis란
+
+Redis는 메모리 위에서 동작하는 키-값 저장소입니다. Remote Dictionary Server의 약자로, 네트워크 너머에서 여러 애플리케이션 인스턴스가 공유할 수 있는 '원격 해시맵'이 가장 정확한 출발점입니다. 2009년 Salvatore Sanfilippo가 자신의 실시간 웹 로그 분석 서비스에서 MySQL 병목을 풀기 위해 만든 것이 기원입니다.
+
+많은 개발자가 Redis를 '캐시'로만 인식하지만, Redis의 진짜 정체는 다양한 자료구조를 원격으로 노출하는 데이터 서버입니다. 단순 `String`뿐 아니라 `Hash`, `List`, `Set`, `Sorted Set`, `Stream`, `Bitmap`, `HyperLogLog`, `Geo` 같은 구조가 내장되어 있고, 각 자료구조마다 $O(1)$ 또는 $O(\log N)$ 연산이 서버 측에서 바로 제공됩니다. 클라이언트는 데이터를 가져와 로컬에서 가공하는 대신 "이 `Sorted Set`에서 상위 10개를 달라" 같은 명령을 보낼 뿐입니다.
+
+비슷한 카테고리와의 구분이 이해의 시작입니다.
+
+| 카테고리 | 대표 | Redis와의 차이 |
+|---|---|---|
+| In-memory cache (단순형) | Memcached | Memcached는 `String`만 지원, 영속성과 복제 없음. Redis는 풍부한 자료구조에 RDB/AOF 영속성과 복제까지 제공 |
+| 로컬 캐시 (프로세스 내) | Caffeine, Guava Cache | 프로세스당 독립이라 여러 인스턴스 간 공유 불가. Redis는 네트워크로 공유 |
+| RDBMS | MySQL, PostgreSQL | 디스크 기반, 강한 정합성, 복잡한 쿼리. Redis는 메모리 기반, 단순 연산, 처리량 우선 |
+| 전통 NoSQL | MongoDB, DynamoDB | 디스크 영속성이 기본. Redis는 메모리가 기본이고 영속성은 옵션 |
+
+Redis의 자리는 이 네 카테고리 어디에도 정확히 속하지 않습니다. 네트워크로 노출되는 풍부한 자료구조 서버에 선택적 영속성이 얹힌 중간 계층이며, 그래서 캐시뿐 아니라 세션 저장소, 실시간 랭킹, Rate Limiter, 메시지 큐 역할까지 한 인프라로 커버할 수 있습니다.
+
+## 왜 필요한가
+
+애플리케이션이 성장하면 가장 먼저 한계에 부딪히는 건 DB입니다. RDBMS는 디스크 기반이고 ACID를 지키기 때문에, 단순 조회조차 디스크 I/O, 버퍼풀 탐색, 락과 MVCC 오버헤드를 거칩니다. 조회 지연이 수 ms에서 수십 ms인 것이 정상입니다. 여기에 동시 접속 수천이 붙으면 connection pool, row lock, CPU가 동시에 포화됩니다. DB 서버를 스케일업해도 비용은 선형이 아니라 가파르게 증가합니다.
+
+이 병목의 본질은 '같은 데이터를 계속 디스크에서 다시 읽는다'는 점입니다. 상품 상세 정보 조회는 1초에 수천 번 들어와도 실제 데이터는 몇 분마다 한 번 바뀔 뿐입니다. 메모리에 한번 올려두고 재사용하면 되는데, 애플리케이션 프로세스 로컬 메모리에 올리면 인스턴스가 여러 대일 때 캐시가 공유되지 않는 문제가 생깁니다. 각 인스턴스가 따로 DB를 치니 N배 부하가 생기고 캐시 일관성도 깨집니다. 이 지점에서 네트워크로 공유되는 인메모리 계층이 필요해집니다. Redis가 수렴한 자리입니다.
+
+<Callout type="warning" title="흔한 오해: Redis는 그냥 캐시다?">
+  실제로는 세션, Rate Limiter, 리더보드, 메시지 큐, 분산 락까지 담당하는 인프라입니다. 또한 RDB 스냅샷과 AOF 로그로 영속성을 옵션으로 켤 수 있어, Redis를 주 저장소 수준으로 운영하는 경우도 있습니다.
+</Callout>
+
+## 내부 동작
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Redis의 내부는 **싱글 스레드 이벤트 루프**, **7가지 자료구조**, **선택적 영속성** 세 축으로 이뤄집니다. 이 세 축을 이해하면 운영 지식은 자연스럽게 따라옵니다.
+</Callout>
+
+### 싱글 스레드 이벤트 루프
+
+Redis를 이해하는 첫 충격 포인트는 이것입니다. Redis는 사실상 싱글 스레드로 모든 명령을 처리합니다. 멀티코어 시대에 이게 어떻게 가능할까요. 답은 '명령 실행이 극도로 빠르기 때문에 동시성이 필요 없다'입니다. 메모리 접근은 ns 단위이고 Redis의 자료구조 연산 대부분은 $O(1)$입니다. 락, 컨텍스트 스위칭, 캐시 일관성 오버헤드를 다 제거하면 단일 스레드가 초당 수십만에서 수백만 명령을 처리합니다.
+
+내부 구조는 Node.js와 같은 모양의 이벤트 루프입니다. `epoll`(Linux) 또는 `kqueue`(BSD) 기반 I/O 멀티플렉싱으로 수천 개 클라이언트 소켓을 감시하다가, 읽을 데이터가 도착한 소켓만 꺼내 순차적으로 명령을 실행합니다. 한 명령이 실행되는 동안 다른 명령은 큐에서 대기합니다.
+
+<Callout type="error" title="핵심 통찰: Redis는 빠른 캐시가 아니라 공용 메모리 계층이다">
+  Redis가 '빠른 캐시'로만 인식될 때 놓치는 것은, 그 설계의 중심이 속도가 아니라 **공유 가능한 자료구조 서버**라는 점입니다. 네트워크로 노출된 해시맵, 정렬 집합, 스트림이 있기에 분산 락, Rate Limiting, 리더보드 같은 문제가 한 인프라로 풀립니다. 속도는 결과이고, 의도는 공유입니다.
+</Callout>
+
+이 모델이 주는 중요한 성질이 하나 있습니다. 명령은 원자적입니다. `INCR counter`를 100개 클라이언트가 동시에 보내도 서버가 하나씩 직렬로 처리하므로 경쟁 조건이 없습니다. 이것이 분산 락, Rate Limiter, 멱등성 키 같은 기능을 Redis로 구현할 수 있게 해주는 근본 토대입니다.
+
+<Callout type="warning" title="함정: O(N) 명령이 전체 서버를 멈춘다">
+  `KEYS *`, 큰 Hash의 `HGETALL`, 큰 List의 `LRANGE 0 -1` 같은 $O(N)$ 명령을 돌리면 그 시간만큼 전체 서버가 멈춥니다. 한 클라이언트가 100만 키에 `KEYS *`를 날리면 다른 모든 클라이언트의 지연이 수 초로 튑니다. 실무 장애의 상당수가 이 패턴에서 나옵니다. Redis 6부터 I/O 스레딩(소켓 read/write만 멀티스레드)이 옵션으로 추가됐지만, 명령 실행 자체는 여전히 싱글 스레드입니다.
+</Callout>
+
+### 7가지 자료구조
+
+Redis가 Memcached와 근본적으로 다른 지점이 이것입니다. 데이터가 그냥 문자열이 아니라 서버 측에서 직접 조작 가능한 자료구조로 존재합니다. 7종을 사용처 기준으로 묶어 보면 다음과 같습니다.
+
+| 자료구조 | 내부 구조 | 대표 사용처 | 핵심 명령 |
+|---|---|---|---|
+| String | 단순 바이트열 (최대 512MB) | 세션, 토큰, 카운터, JSON 캐시 | `SET`, `GET`, `INCR`, `EXPIRE` |
+| Hash | 필드-값 맵 | 객체 저장 (필드 단위 부분 업데이트) | `HSET`, `HGET`, `HINCRBY` |
+| List | 양방향 linked list | 큐, 스택, 최근 N개 로그 | `LPUSH`, `RPOP`, `BLPOP`, `LTRIM` |
+| Set | 해시 테이블 | 태그, 중복 방지, 집합 연산 | `SADD`, `SISMEMBER`, `SINTER` |
+| Sorted Set (ZSet) | skip list + hash | 리더보드, 지연 큐, 시간 윈도우 | `ZADD`, `ZREVRANGE`, `ZRANGEBYSCORE` |
+| Stream (5.0+) | append-only log | 메시징 (Consumer Group 지원) | `XADD`, `XREADGROUP` |
+| Bitmap / HLL / Geo | 특수 목적 | 대량 플래그, 카디널리티 추정, 좌표 검색 | `BITCOUNT`, `PFCOUNT`, `GEORADIUS` |
+
+핵심은 '어떤 문제에 어떤 자료구조를 선택할 것인가'가 Redis 설계의 출발점이라는 것입니다. 상품 조회 캐시는 `String`, 장바구니는 `Hash`, 작업 큐는 `List` 또는 `Stream`, 리더보드는 `Sorted Set`, 중복 체크는 `Set`으로 매핑됩니다. 모든 걸 `String + JSON`으로 해결하고 있다면, `Hash`의 부분 갱신이나 `Sorted Set`의 자동 정렬이 주는 이점을 놓치고 있는 것입니다.
+
+### 영속성과 설정
+
+Redis가 '메모리니까 재시작하면 날아간다'는 통념은 절반만 맞습니다. Redis는 두 가지 영속성 메커니즘을 제공하고, 둘 다 비동기로 동작해 명령 지연에 영향을 주지 않습니다.
+
+**RDB (snapshot)**. 일정 조건(예: `save 900 1`은 900초 동안 1회 이상 변경 시 실행)에서 자식 프로세스를 `fork`해 메모리 전체를 디스크에 덤프합니다. `fork`는 copy-on-write를 쓰므로 부모 프로세스는 계속 명령을 받고, 자식이 파일을 쓰는 동안 변경된 페이지만 실제로 복사됩니다. 복구가 빠른 대신 스냅샷 사이의 변경분은 유실됩니다.
+
+**AOF (Append-Only File)**. 모든 쓰기 명령을 로그 파일에 append하고 복구 시 처음부터 재생합니다. 유실 범위가 작은 대신 파일이 커지고 복구가 느려집니다. `fsync` 정책이 핵심 튜닝 지점입니다. `always`는 명령마다 fsync로 가장 안전하지만 느리고, `everysec`은 1초마다 flush하여 실무 표준, `no`는 OS에 맡겨 빠르지만 위험합니다. 파일이 커지면 주기적으로 AOF rewrite로 압축합니다.
+
+실전에서는 둘 다 켜는 하이브리드 구성이 많습니다. RDB로 빠른 복구 기준점을 만들고 AOF로 그 이후 변경분을 메꿉니다. Redis 4.0부터는 AOF 파일 앞부분을 RDB 포맷으로 저장하는 `aof-use-rdb-preamble yes`가 기본입니다.
+
+영속성만큼 중요한 게 메모리 한계와 제거 정책입니다. 캐시로 쓸 때 무한정 메모리를 먹으면 OS가 OOM으로 Redis를 죽입니다. 그래서 `maxmemory`로 상한을 두고, 도달 시 어떤 키를 쫓아낼지 `maxmemory-policy`로 정합니다.
+
+| 설정 | 역할 | 실무 권장값 |
+|---|---|---|
+| `maxmemory` | 메모리 상한 | 서버 RAM의 75–80% |
+| `maxmemory-policy` | 초과 시 제거 정책 | 캐시면 `allkeys-lru`, TTL 기반이면 `volatile-lru` |
+| `save` / `appendonly` | 영속성 | 캐시면 둘 다 off, 주 저장소면 AOF `everysec`에 RDB 보조 |
+| `timeout` | idle 연결 종료 (초) | 300에서 600 권장 |
+| `tcp-keepalive` | TCP keepalive (초) | 300 (방화벽 환경 필수) |
+
+<Callout type="warning" title="함정: maxmemory-policy 기본값은 쓰기를 거부한다">
+  `maxmemory-policy`의 기본값은 `noeviction`으로, 메모리가 차면 쓰기가 에러로 거부됩니다. 캐시 용도에서는 재앙입니다. 반드시 `allkeys-lru` 또는 `allkeys-lfu`로 바꿔야 합니다. LRU는 최근에 사용하지 않은 것부터 제거하고, LFU는 평소에 덜 쓰이는 것부터 제거합니다.
+</Callout>
+
+## 실전 영역
+
+많은 기업이 Redis를 도입하는 이유는 막연히 '빠르니까'가 아닙니다. 다중 인스턴스 환경에서 상태를 공유할 공용 메모리 계층이 필요한 구체적 상황이 있고, Redis가 거기에 맞습니다. 대표적인 5가지 영역을 소개합니다. 각 영역의 상세 구현은 이 시리즈의 후속편에서 하나씩 다룹니다.
+
+### 1. 분산 락
+
+여러 앱 서버가 같은 자원(재고 차감, 포인트 적립 같은)에 동시 접근할 때 정합성을 지켜야 합니다. DB 락으로 풀면 커넥션을 길게 점유해 병목을 만듭니다. Redis는 `SET NX PX`(키가 없을 때만 세팅하면서 만료시간 지정)를 원자적으로 수행하므로, 이 명령 하나로 '먼저 세팅한 프로세스만 락을 가진다'를 표현할 수 있습니다. 해제는 소유자 토큰 검증 후 Lua 스크립트로 원자 수행합니다. 후속편에서 알고리즘 상세와 실패 시나리오를 다룹니다.
+
+### 2. Rate Limiting
+
+'사용자 X가 최근 1분 동안 Y번 이상 요청했는가'는 앱 서버 로컬 메모리로는 판정할 수 없습니다. 서버가 여러 대면 카운터가 분산되기 때문입니다. Redis는 원자 `INCR` 카운터 또는 `Sorted Set` 기반 타임스탬프 로그를 제공해 Fixed Window, Sliding Window Log, Token Bucket 같은 알고리즘을 깔끔하게 구현할 수 있게 해줍니다. 후속편에서 알고리즘 비교를 다룹니다.
+
+### 3. 세션 저장소
+
+로드밸런서 뒤에 앱 서버가 여러 대 있을 때 로그인 세션을 어디에 둘 것인가 문제입니다. 각 서버 메모리에 두면 sticky session이 필요하고, RDB에 두면 매 요청마다 DB를 칩니다. `String + TTL` 또는 `Hash`로 Redis에 세션을 올리면 모든 서버가 동일 세션을 읽고, `EXPIRE`로 자동 만료되어 로그아웃 처리도 간단해집니다. 후속편에서 운영 시나리오와 보안 고려사항을 다룹니다.
+
+### 4. 리더보드와 랭킹
+
+게임 점수, 실시간 인기 상품, 실시간 검색어처럼 '상위 N개'를 자주 조회해야 하는 경우입니다. DB의 `ORDER BY + LIMIT`은 데이터가 커질수록 느려지고, 매 갱신마다 재계산하면 일관성 유지가 복잡합니다. Redis의 `Sorted Set`은 `ZADD`로 삽입이 $O(\log N)$, `ZREVRANGE key 0 9`로 상위 10위를 $O(\log N)$에 반환합니다. 수천만 멤버까지 확장됩니다. 후속편에서 `Sorted Set`의 내부 자료구조를 다룹니다.
+
+### 5. 메시징 (Pub/Sub · Stream)
+
+마이크로서비스 간 가벼운 이벤트 전파가 필요할 때 쓰입니다. 풀스케일 메시지 큐(Kafka, RabbitMQ)를 도입하기엔 과하고, 동기 HTTP로 묶기는 싫을 때의 중간 지점입니다. Pub/Sub은 구독자가 없으면 메시지가 증발하는 fire-and-forget 모델이고, Stream(5.0+)은 append-only 로그에 Consumer Group을 얹어 재처리와 지속성이 필요한 경우까지 커버합니다. 후속편에서 Stream의 구조와 적합 영역을 다룹니다.
+
+공통점을 뽑으면 Redis가 들어가는 자리는 **상태를 저장해야 하는데 DB는 과하고 로컬 메모리는 공유가 안 되는 영역**입니다. 캐시 자체는 앞 섹션에서 이미 다뤘으므로 이 섹션에서는 별도 항목으로 두지 않았습니다.
+
+## 트레이드오프
+
+Redis의 장점만큼 대가도 명확합니다. 도입 전에 반드시 알아야 할 6가지입니다.
+
+**① 메모리 비용**. 같은 1GB라도 메모리는 디스크보다 훨씬 비쌉니다. 캐시 용도로 크기 상한을 둘 때는 큰 부담이 아니지만, Redis를 주 저장소로 쓰려는 순간 '데이터셋이 RAM을 초과하는 시점'을 미리 설계해야 합니다. 초과하면 Redis Cluster로 수평 샤딩하거나 다른 저장소로 이동하는 것 외에는 선택지가 없습니다.
+
+**② 영속성 한계**. AOF `everysec`도 최악의 경우 마지막 1초 분량을 잃을 수 있고, `always`로 바꾸면 매 명령마다 fsync가 걸려 처리량이 크게 떨어집니다. RDB는 스냅샷 사이의 변경분이 모두 유실됩니다. RDBMS 수준의 내구성을 Redis에 기대하면 안 되며, 금전이나 의료처럼 유실이 절대 허용되지 않는 데이터는 Redis 단독으로 담지 않는 것이 원칙입니다.
+
+<RelatedPost slug="single-point-of-failure" type="prerequisite" />
+
+**③ SPOF 위험**. 단일 Redis 인스턴스는 그 자체가 단일 장애점(SPOF)입니다. 고가용성을 원하면 Replica에 Sentinel(자동 failover 감시자)을 결합하거나 Redis Cluster(샤딩 + HA)를 구성해야 하고, 둘 다 운영 복잡도를 크게 올립니다. 'Redis 한 대만 띄워 운영 중'이면 장애 대응 계획이 비어있다고 봐야 합니다.
+
+**④ 싱글 스레드의 양날**. 명령 원자성을 공짜로 주는 대신, 긴 명령 하나가 전체 서버를 멈춥니다. `SLOWLOG GET`으로 느린 명령을 지속 모니터링하는 것이 운영 필수입니다. Lua 스크립트도 너무 길게 쓰면 같은 문제를 일으킵니다.
+
+**⑤ 데이터 모델의 단순성 비용**. Join, 복잡한 집계, 트랜잭션 격리 수준은 Redis의 영역이 아닙니다. `MULTI/EXEC`와 Lua로 멀티키 원자 연산은 가능하지만 제한적입니다. 복잡한 관계형 쿼리가 필요한 데이터는 여전히 RDBMS에 두고, Redis는 '빠르게 읽어야 하는 부분'만 맡는 하이브리드가 일반적입니다.
+
+**⑥ 클라이언트 측 복잡도**. Cluster 모드에서는 키마다 slot이 다르고 클라이언트가 slot-to-node 매핑을 관리해야 합니다. Pipelining, 연결 풀 크기, 명령별 latency 편차까지 클라이언트가 신경 쓸 것이 늘어납니다. 단일 인스턴스 때와는 다른 차원의 운영 지식이 필요합니다.
+
+Redis를 캐시 계층으로만 쓰면 ①과 제거 정책만 신경 써도 충분하지만, 주 저장소 수준의 의존도로 올라가면 ②부터 ⑥까지 전부 운영 이슈로 돌아옵니다. 캐시로 쓸 때 마주치는 대표 함정은 별도 글에서 깊이 다뤘습니다.
+
+<RelatedPost slug="cache-stampede" type="deep-dive" />
+
+## 마무리
+
+Redis를 '빠른 캐시'로만 이해하면 이 인프라의 절반을 놓칩니다. Redis의 진짜 의미는 **네트워크로 공유되는 풍부한 자료구조 서버에 선택적 영속성이 얹힌 공용 메모리 계층**이고, 많은 기업이 Redis를 도입하는 이유는 그 계층이 없으면 분산 락, Rate Limiting, 세션, 리더보드, 메시징 같은 문제들을 각자 다른 방식으로 풀어야 하기 때문입니다.
+
+이 글은 시리즈의 시작점입니다. 본문에서 언급한 영역들은 각각 후속 글에서 하나씩 파헤칠 예정입니다. 기초의 지도를 머릿속에 올려둔 뒤, 관심 있는 영역부터 깊이 들어가시면 됩니다.
+
+## 참고 자료
+
+- [Redis Documentation](https://redis.io/docs/)
+- [Redis Commands Reference](https://redis.io/commands/)
+- [Redis](https://redis.io/)

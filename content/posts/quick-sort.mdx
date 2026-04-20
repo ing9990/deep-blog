@@ -51,7 +51,7 @@ Lomuto 파티션 방식을 기준으로 동작을 정리하면:
 
 ### 의사 코드
 
-```python title="quicksort.py"
+```py title="quicksort.py"
 def quick_sort(arr, lo, hi):
     if lo < hi:
         pivot_index = partition(arr, lo, hi)
@@ -185,23 +185,25 @@ LIMIT 100;
 Quick Sort를 쓸 때 자주 마주치는 함정들입니다.
 
 <Callout type="error" title="이미 정렬된 배열에서의 최악 성능">
-  끝 원소를 피벗으로 고르는 단순한 구현은 이미 정렬된 배열 또는 역순으로 정렬된 배열에서 $O(n^2)$로 성능이 붕괴됩니다. 프로덕션 코드에서는 반드시 다음 중 하나를 사용하세요:
+  끝 원소를 피벗으로 고르는 단순한 구현은 이미 정렬된 배열 또는 역순으로 정렬된 배열에서 $O(n^2)$로 성능이 붕괴됩니다.
+</Callout>
 
+프로덕션 코드에서는 반드시 아래 대응 전략 중 하나를 적용해야 합니다.
+
+<Note title="피벗 선택 대응 전략">
   - **Median of three**: 첫/중간/끝 원소 중 중앙값을 피벗으로 선택
   - **Random pivot**: 매 파티션에서 랜덤 인덱스 선택
   - **Introsort**: Quick Sort가 재귀 깊이 임계값을 넘으면 Heap Sort로 fallback
-</Callout>
+</Note>
 
-<Callout type="success" title="실무 팁: 표준 라이브러리 활용">
-  대부분의 경우 언어 표준 라이브러리의 정렬이 Quick Sort 또는 그 개량판을 내부에서 사용하며, 이미 위의 함정을 모두 해결해뒀습니다.
+대부분의 경우 언어 표준 라이브러리의 정렬이 Quick Sort 또는 그 개량판을 내부에서 사용하며, 이미 위의 함정을 모두 해결해뒀습니다. 특별한 이유(in-place 요구사항, 특정 비교 로직 최적화 등)가 없다면 직접 구현보다 표준 라이브러리를 쓰세요.
 
+<Note title="언어별 표준 정렬 구현">
   - **Java**: `Arrays.sort(int[])` → Dual-Pivot Quicksort
   - **Python**: `list.sort()` / `sorted()` → Timsort (Quick Sort 아님)
   - **Rust**: `slice::sort_unstable()` → Pattern-defeating Quicksort (pdqsort)
   - **Kotlin**: JVM의 `Arrays.sort()` 를 그대로 사용
-
-  특별한 이유(in-place 요구사항, 특정 비교 로직 최적화 등)가 없다면 직접 구현보다 표준 라이브러리를 쓰세요.
-</Callout>
+</Note>
 
 <Callout type="info">
   이 글은 **Backend Notes의 MDX 스타일 가이드**를 겸합니다. 링크·문단·헤딩(h2/h3)·리스트(ol/ul)·인라인 코드·`code`·코드 블록(Python/Kotlin/TypeScript/SQL)·Shiki 라인 하이라이트·이미지·Callout(info/warning/error/success)·키워드 자동 링크·테이블·시각화 컴포넌트까지 모든 요소가 이 한 페이지 안에 포함되어 있습니다.

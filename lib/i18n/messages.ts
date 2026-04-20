@@ -46,6 +46,7 @@ export const MESSAGES = {
   'settings.font.normal':      { ko: '보통',              en: 'Normal' },
   'settings.font.large':       { ko: '크게',              en: 'Large' },
   'settings.code':             { ko: '코드 블록 테마',    en: 'Code block theme' },
+  'settings.code.flat':        { ko: 'Flat',              en: 'Flat' },
   'settings.code.floating':    { ko: 'Floating',          en: 'Floating' },
   'settings.code.rail':        { ko: 'Rail',              en: 'Rail' },
   'settings.syntax':           { ko: 'Syntax 테마',       en: 'Syntax theme' },

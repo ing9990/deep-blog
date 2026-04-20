@@ -8,8 +8,12 @@ import type {
 import { KeywordLink } from '@/components/blog/KeywordLink'
 import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
+import { CodeFigure } from '@/components/mdx/CodeFigure'
+import { Note } from '@/components/mdx/Note'
 import { Tab, Tabs } from '@/components/mdx/Tabs'
 import { CacheStampedeDefenseTimeline } from '@/components/visualizations/CacheStampedeDefenseTimeline'
+import { CAPPartitionDecision } from '@/components/visualizations/CAPPartitionDecision'
+import { CAPTriangle } from '@/components/visualizations/CAPTriangle'
 import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpectrum'
 import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
@@ -32,7 +36,12 @@ import { KafkaConsumerGroupScopes } from '@/components/visualizations/KafkaConsu
 import { KafkaLeaderFailover } from '@/components/visualizations/KafkaLeaderFailover'
 import { KafkaPartitionStructure } from '@/components/visualizations/KafkaPartitionStructure'
 import { KafkaReplicationFlow } from '@/components/visualizations/KafkaReplicationFlow'
+import { KYCVerificationFlow } from '@/components/visualizations/KYCVerificationFlow'
+import { AMLTermsHierarchy } from '@/components/visualizations/AMLTermsHierarchy'
+import { BackpressureStrategyMatrix } from '@/components/visualizations/BackpressureStrategyMatrix'
+import { OffsetVsCursorScan } from '@/components/visualizations/OffsetVsCursorScan'
 import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline'
+import { PACELCClassification } from '@/components/visualizations/PACELCClassification'
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
@@ -42,6 +51,7 @@ import { RestaurantIOSequence } from '@/components/visualizations/RestaurantIOSe
 import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndexLookup'
 import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
 import { SoaVsKafkaTopology } from '@/components/visualizations/SoaVsKafkaTopology'
+import { SyscallFlow } from '@/components/visualizations/SyscallFlow'
 import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
 import { TrieDeleteSnapshot } from '@/components/visualizations/TrieDeleteSnapshot'
 import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
@@ -91,9 +101,22 @@ export const mdxComponents: MDXComponents = {
   // numeric-column alignment without losing other attributes.
   th: (props: HTMLAttributes<HTMLTableCellElement>) => <th {...props} />,
   td: (props: HTMLAttributes<HTMLTableCellElement>) => <td {...props} />,
+  // rehype-pretty-code emits <figure data-rehype-pretty-code-figure>. Wrap
+  // those in a client-side CodeFigure that injects a copy button; non-code
+  // figures (visualization containers) pass through unchanged.
+  figure: ({ children, ...props }: HTMLAttributes<HTMLElement>) => {
+    const isCodeFigure =
+      (props as Record<string, unknown>)['data-rehype-pretty-code-figure'] !== undefined
+    if (isCodeFigure) {
+      return <CodeFigure {...props}>{children}</CodeFigure>
+    }
+    return <figure {...props}>{children}</figure>
+  },
   BTreeInsert,
   CacheStampedeDefenseTimeline,
   Callout,
+  CAPPartitionDecision,
+  CAPTriangle,
   GCAlgorithmMatrix,
   GCCycle,
   GCHeapStructure,
@@ -115,7 +138,13 @@ export const mdxComponents: MDXComponents = {
   KafkaLeaderFailover,
   KafkaPartitionStructure,
   KafkaReplicationFlow,
+  KYCVerificationFlow,
+  AMLTermsHierarchy,
+  BackpressureStrategyMatrix,
+  Note,
+  OffsetVsCursorScan,
   OptimizerPipeline,
+  PACELCClassification,
   PERBetaSlider,
   QuickSort,
   QuickSortPivot,
@@ -126,6 +155,7 @@ export const mdxComponents: MDXComponents = {
   SecondaryIndexLookup,
   SequentialVsRandomIO,
   SoaVsKafkaTopology,
+  SyscallFlow,
   Tab,
   TrieBuilder,
   TrieDeleteSnapshot,

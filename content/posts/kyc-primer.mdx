@@ -1,0 +1,194 @@
+---
+title:
+  ko: "KYC (Know Your Customer)"
+  en: "KYC (Know Your Customer)"
+slug: "kyc-primer"
+date: 2026-04-20
+tags:
+  - fintech
+  - compliance
+keywords:
+  - KYC
+  - Know Your Customer
+  - AML
+  - CDD
+  - EDD
+  - KYB
+summary:
+  ko: "KYC가 무엇이고 왜 필요한지, 어떤 검증 단계로 구성되는지 이해할 수 있습니다. 헷갈리기 쉬운 AML, CDD, EDD, KYB의 포함 관계와 축 차이를 정리하고, 전통 금융에서 가상자산 거래소까지 KYC 의무가 확장된 궤적을 살펴봅니다."
+  en: "Understand what KYC is, why it matters, and what verification steps make it up. Learn to distinguish the often-conflated AML, CDD, EDD, and KYB by their containment and scope, and trace how KYC obligations expanded from traditional banking to virtual asset exchanges."
+category: knowledge
+draft: false
+---
+
+은행 계좌를 열거나 거래소에 가입할 때마다 신분증을 찍고 셀피를 보내는 그 절차, 그 뒤에서 어떤 검증이 돌아가는지 궁금해한 적이 있을 것입니다. 이 글은 KYC가 무엇이고 왜 존재하는지, 그리고 AML, CDD, EDD, KYB 같이 비슷해 보이는 용어들이 실제로 어떻게 구분되는지를 가볍게 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - KYC가 무엇이며 단순 가입 절차가 아닌 이유를 이해한다
+  - AML, KYC, CDD, EDD, KYB의 포함 관계와 축 차이를 구분할 수 있다
+  - 실무에서 어떤 단계가 어떤 고객에게 적용되는지 판단하는 기준을 얻는다
+</Note>
+
+## KYC란
+
+**KYC(Know Your Customer)** 는 금융기관이나 규제 대상 사업자가 거래 상대방(고객)의 실제 신원을 확인하고 기록하는 절차입니다. 이름 그대로 "당신의 고객을 아십시오"입니다. 고객이 누구이며, 실존 인물이며, 밝힌 정보가 사실인지를 확인하는 것이 목적입니다.
+
+KYC는 흔히 3단계 구성으로 설명됩니다.
+
+| 단계 | 이름 | 핵심 |
+|---|---|---|
+| ① | Customer Identification Program (CIP) | 기본 신원 정보 수집 및 진위 검증 |
+| ② | Customer Due Diligence (CDD) | 고객 리스크 수준 평가 (거래 목적, 자금 출처, 예상 규모) |
+| ③ | Ongoing Monitoring | 거래 지속 동안 이상 패턴 감지 |
+
+<Callout type="warning" title="흔한 오해: KYC는 가입 때 한 번만?">
+  KYC는 "가입 시 신분증 제출"로 끝나는 것이 아닙니다. 계좌 개설 이후의 지속적 모니터링까지 포함하는 전체 프로세스입니다. 뉴스에서 "A 거래소가 KYC 의무 위반으로 제재받았다"는 기사가 나올 때, 대부분은 가입 때 신분증을 안 받았다는 것이 아니라 이후 모니터링이 허술했다는 뜻입니다.
+</Callout>
+
+또 하나의 핵심 구분은 KYC와 AML의 관계입니다. KYC는 **AML (Anti-Money Laundering, 자금세탁방지)의 하위 수단**입니다. AML이라는 큰 목표가 먼저 있고, 그 목표를 달성하기 위한 가장 기본적인 실행 도구가 KYC입니다. 이 관계는 "관련 용어 정리" 섹션에서 더 자세히 들여다봅니다.
+
+## 왜 필요한가
+
+KYC가 존재하는 이유는 두 축입니다. 하나는 **범죄 방지**, 다른 하나는 **규제 준수**입니다. 두 축은 맞물려 있지만 따로 이해해야 왜 은행과 핀테크가 이렇게 까다롭게 구는지 보입니다.
+
+### 범죄 방지 측면
+
+금융 시스템은 익명성이 허용되는 순간 자금세탁, 테러자금조달, 사기, 보이스피싱의 통로가 됩니다. "실제로 누가 이 계좌를 쓰는지" 알 수 없다면 훔친 돈을 깨끗한 돈으로 바꾸는 과정에서 금융기관이 무방비로 이용됩니다. KYC는 이 익명 루트를 원천 차단하는 가장 기본적인 장치입니다. 신분 확인이 안 된 계좌에는 그냥 돈이 들어오지 못합니다.
+
+### 규제 준수 측면
+
+각국은 KYC를 법적 의무로 못 박아 두었습니다. 주요 근거 법령과 기준은 다음과 같습니다.
+
+| 관할 | 법령 · 기준 |
+|---|---|
+| 한국 | 특정금융거래정보법(특금법) |
+| 미국 | Bank Secrecy Act (BSA), USA PATRIOT Act |
+| 유럽 | AMLD 5/6차 지침 (Anti-Money Laundering Directive) |
+| 국제 | FATF (Financial Action Task Force) 권고 |
+
+지키지 않으면 과징금 규모가 회사를 흔드는 수준입니다. 2012년 HSBC는 멕시코 마약 카르텔 자금세탁 방조로 약 19억 달러, 2014년 BNP Paribas는 제재국 거래 관련으로 약 89억 달러의 제재를 받았습니다. KYC/AML은 "있으면 좋은" 기능이 아니라 "없으면 사업을 못 하는" 요건입니다.
+
+## 동작 원리
+
+<Callout type="warning" title="이 구조를 이해하는 핵심">
+  KYC 검증은 하나의 단일 체크가 아니라, **Identity, Document, Biometric, Screening** 네 축이 병렬로 돌아가는 **Defense in Depth** 구조입니다. 한 축이 뚫려도 다른 축에서 걸러냅니다.
+</Callout>
+
+<Callout type="error" title="핵심 통찰: KYC의 본질은 '추적 가능성'의 확보">
+  KYC는 단순히 "이 사람이 누구인지 안다"가 목표가 아닙니다. 의심 거래가 발생했을 때 자금의 흐름을 역추적할 수 있도록 **익명성을 제거하고 신원을 기록에 남기는 것**이 본질입니다. 이 관점이 잡히면 왜 KYC가 가입 시점뿐 아니라 거래 지속 동안에도 모니터링을 요구하는지 자연스럽게 이해됩니다.
+</Callout>
+
+네 축을 각각 살펴보면 다음과 같습니다.
+
+### ① Identity (신원 확인)
+
+고객이 제공한 신원 정보(이름, 주민번호, 생년월일 등)가 실제 존재하는 사람과 일치하는지를 확인합니다. 한국에서는 통신사 본인인증, 공인인증서, 계좌 실명 인증 같은 **본인인증** 수단이 이 역할을 합니다. 해외에서는 정부 DB 또는 credit bureau API를 통해 동일한 검증을 수행합니다.
+
+### ② Document (문서 검증)
+
+신분증 사진이나 스캔본이 진짜 발급된 문서인지, 위조나 변조가 없는지를 검증합니다. MRZ (Machine Readable Zone) 파싱, 홀로그램과 UV 패턴 검출, 폰트와 여백 분석이 이 단계에서 일어납니다. 최근에는 NFC로 전자여권 칩을 직접 읽어 서명을 검증하는 방식도 널리 쓰입니다.
+
+### ③ Biometric (생체 인증)
+
+신분증 사진의 얼굴과 지금 카메라 앞에 있는 사람이 동일한지를 확인합니다. 두 부분으로 나뉩니다. **Face Match** 는 신분증 얼굴과 셀피의 유사도 점수를 계산하고, **Liveness Detection** 은 사진이나 딥페이크가 아니라 실제 살아있는 사람이 촬영 중임을 검증합니다.
+
+Liveness는 다시 두 방식으로 나뉩니다.
+
+- **Active Liveness**: 눈 깜빡임, 고개 돌리기, 랜덤 숫자 읽기 등 사용자에게 명시적 동작을 요구
+- **Passive Liveness**: 표정 미세 움직임, 질감, 빛 반사만으로 판별하며 사용자 동작 불필요
+
+딥페이크가 고도화되면서 Passive Liveness의 정확도가 최근 KYC 품질의 핵심 지표가 되었습니다.
+
+### ④ Screening (제재 리스트 대조)
+
+검증된 신원을 각종 블랙리스트와 대조합니다. 세 가지 축이 있습니다.
+
+| 리스트 | 내용 |
+|---|---|
+| Sanctions List | OFAC(미 재무부), EU 제재, UN 제재 대상 |
+| PEP (Politically Exposed Person) | 정치적 주요 인물. 고위 공직자, 가족, 측근. 뇌물과 횡령 리스크가 높아 EDD 대상 |
+| Adverse Media | 언론 부정 보도 (사기, 범죄 연루 보도 등) |
+
+네 축을 거친 뒤 마지막으로 **Risk Scoring** 이 수행됩니다. 각 검증 결과를 가중치로 합산해 고객을 Low, Medium, High Risk로 분류하고, 등급에 따라 자동 승인, 추가 서류 요청, 상담사 수동 심사, 거절로 분기됩니다.
+
+<KYCVerificationFlow />
+
+## 관련 용어 정리
+
+이 섹션이 이 글의 중심입니다. 용어들이 비슷해 보여서 섞이지만, 실제로는 **포함 관계** 와 **축의 차이** 가 분명합니다.
+
+### AML ⊃ KYC
+
+**AML (Anti-Money Laundering)** 은 목표입니다. "금융 시스템이 자금세탁이나 테러자금조달에 이용되지 않게 한다"는 상위 목표. 이 목표를 달성하기 위한 여러 수단 중 하나가 KYC입니다.
+
+AML 우산 아래에는 KYC 말고도 여러 도구가 있습니다.
+
+| 수단 | 역할 |
+|---|---|
+| KYC | 고객이 누구인지 확인 |
+| Transaction Monitoring | 거래 패턴이 수상한지 감지 |
+| SAR · STR (Suspicious Activity/Transaction Report) | 의심거래 발견 즉시 금융정보분석원(FIU) 보고 |
+| Record Keeping | 거래 기록 일정 기간 보존 |
+
+그래서 "AML 팀"은 KYC뿐 아니라 거래 모니터링, 의심거래보고(STR), 기록 보존까지 책임지는 팀입니다. KYC는 AML의 입구이지 전부가 아닙니다.
+
+### KYC ⊃ CDD ⊃ EDD
+
+같은 KYC 안에서도 고객마다 적용 강도가 다릅니다. "리스크가 낮으면 간단히, 높으면 깊게" 검증하는 원칙을 **Risk-Based Approach (RBA)** 라고 부르고, 강도별 단계는 SDD부터 EDD까지 세 계단으로 나뉩니다.
+
+| 단계 | Full Name | 적용 대상 | 검증 깊이 |
+|---|---|---|---|
+| SDD | Simplified Due Diligence | 저위험 (상장사, 공공기관) | 최소한의 신원 확인만 |
+| CDD | Customer Due Diligence | 일반 고객 (대부분) | 표준 KYC 절차 |
+| EDD | Enhanced Due Diligence | 고위험 (PEP, 고위험 국가, 대규모 거래) | 자금 출처 증빙, 실소유주 추적, 모니터링 주기 단축 |
+
+EDD가 발동되는 전형적 케이스는 고객이 PEP로 판명된 순간입니다. 예를 들어 개인 고객이 특정 국가 전직 장관으로 확인되면, 일반 CDD로는 부족합니다. 추가 재산 증빙, 자금 출처 서류, 거래 목적의 상세 서술이 요구됩니다.
+
+### KYB (법인용 KYC)
+
+**KYB (Know Your Business)** 는 대상이 개인이 아닌 **법인**일 때의 KYC입니다. 법인 고객은 추가로 **법인 실체 검증** 과 **UBO (Ultimate Beneficial Owner, 실소유주) 추적** 이 필요합니다.
+
+왜 UBO가 중요한가. 법인을 여러 겹의 지주회사, 신탁, 해외 법인으로 쌓아 올리면 진짜 돈의 주인이 가려집니다. 이를 "shell company를 이용한 beneficial ownership 은닉"이라고 부릅니다. KYB는 이 레이어를 뚫고 **최종적으로 25% 이상 지분 또는 실질 지배권을 가진 자연인** 까지 추적해야 완료됩니다. 파나마 페이퍼스(2016) 가 터진 이후 전 세계 UBO 규제가 급격히 강화됐습니다.
+
+<AMLTermsHierarchy />
+
+## 어디서 마주치는가
+
+KYC는 "금융"으로 묶이는 거의 모든 영역에서 마주칩니다. 대상은 고정돼 있지 않고 **규제가 따라잡는 속도** 에 따라 계속 확장되어 왔습니다.
+
+### 전통 금융
+
+가장 오래된 KYC 현장입니다. 은행 계좌 개설, 증권 계좌 개설, 보험 가입 시의 본인인증과 신분증 제출, 실명 확인 절차가 KYC입니다. 한국에서 "비대면 계좌 개설"이 가능해진 것도 (과거에는 영업점 방문 필수) KYC를 원격에서 수행할 수 있는 기술(신분증 스캔 + 얼굴 매칭 + 계좌 인증 1원 송금 등)이 규제 기준을 만족하게 되면서부터입니다.
+
+### 핀테크 (결제 · 송금 · 대출)
+
+Toss, Kakao Pay, PayPal, Stripe, Wise 같은 서비스가 이 영역입니다. 전통 금융보다 **가입 전환율** 이 사업 성패를 좌우하기 때문에, KYC의 **UX 품질** 자체가 경쟁력이 됩니다. "신분증 촬영 → 셀피 → 완료"가 60초 안에 끝나는지 5분이 걸리는지가 유저 이탈률을 좌우합니다. 핀테크 업계가 Liveness Detection, OCR, 자동 서류 검증에 공격적으로 투자해 온 이유입니다.
+
+### 가상자산 거래소
+
+가장 최근에 KYC 의무가 확장된 영역입니다. 한국은 2021년 특금법 개정으로 **가상자산사업자 (VASP, Virtual Asset Service Provider) 신고제** 가 도입되면서 거래소가 KYC와 Travel Rule을 강제로 구현해야 했고, 업비트, 빗썸, 코인원, 코빗이 이 요건을 맞춘 4대 거래소로 남았습니다. 유럽은 AMLD 5차(2020) 에서 가상자산 사업자를 AML 대상에 편입했습니다. 이 전환기에 KYC 없는 거래소들은 대부분 문을 닫았습니다.
+
+### 그 외 확장 영역
+
+- 온라인 도박, 스포츠 베팅 (합법화된 관할권)
+- 고가품 거래 (미술품, 보석 등 일정 금액 이상의 현금 거래)
+- 가상자산 지갑 서비스
+- DeFi 프로토콜 (현재 규제 회색지대, FATF는 "통제권이 있는 운영 주체가 있으면 VASP로 간주"하는 방향)
+
+<Callout type="info" title="확장 궤적의 일반 법칙">
+  KYC 의무는 "돈의 흐름이 있는 곳이면 언젠가 KYC가 온다"는 일반 법칙을 따릅니다. 지난 10년간 규제는 핀테크에서 가상자산으로, 다시 DeFi로 계속 확장되어 왔고, 이 궤적은 앞으로도 이어질 가능성이 높습니다.
+</Callout>
+
+## 마무리
+
+KYC를 한 문장으로 정리하면 "금융 시스템이 익명성의 통로가 되지 않도록, 고객의 신원을 확인하고 거래 내내 모니터링하는 절차"입니다. 단순 가입 체크리스트가 아니라 AML이라는 상위 목표의 실행 도구이며, 그 안에서도 고객 리스크에 따라 SDD, CDD, EDD로 강도가 나뉩니다. 법인 고객에게는 UBO 추적을 포함한 KYB가 적용됩니다.
+
+이 용어 지도를 손에 쥐고 나면, 앞으로 "특금법 개정", "가상자산 Travel Rule", "UBO 투명성 요건" 같은 뉴스가 눈에 들어올 때 각 용어가 위 지도의 어느 칸을 건드리고 있는지 바로 파악할 수 있습니다.
+
+## 참고 자료
+
+- [FATF Recommendations](https://www.fatf-gafi.org/en/publications/Fatfrecommendations/Fatf-recommendations.html)
+- [FinCEN Customer Due Diligence Requirements](https://www.fincen.gov/resources/statutes-regulations/cdd-final-rule)
+- [European Commission: Anti-Money Laundering and Countering the Financing of Terrorism](https://finance.ec.europa.eu/financial-crime/anti-money-laundering-and-countering-financing-terrorism_en)
+- [한국 금융정보분석원(KoFIU) 특금법 안내](https://www.kofiu.go.kr/kor/policy/amls01.do)
+- [Panama Papers (ICIJ)](https://www.icij.org/investigations/panama-papers/)

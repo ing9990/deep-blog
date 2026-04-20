@@ -12,17 +12,17 @@ keywords:
 summary:
   ko: "JVM GC가 왜 필요하고, 힙 구조와 세대별 수거가 어떻게 동작하며, 알고리즘별 트레이드오프를 판단하는 기준을 얻습니다."
   en: "Why JVM GC exists, how the heap is structured, how generational collection works, and the tradeoffs between the major algorithms."
-category: language
+category: language-backend
 draft: false
 ---
 
 C/C++에서 메모리를 직접 관리해본 개발자라면 `free` 누락으로 인한 메모리 누수나 Dangling Pointer의 고통을 알고 있습니다. JVM의 Garbage Collector는 이 책임을 런타임으로 옮겨 개발자를 해방시킵니다. 하지만 공짜는 아닙니다. GC가 가져가는 대가를 이해해야 합니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. JVM GC가 왜 필요하고 어떤 문제를 해결하는지 이해한다
-  2. 힙 구조와 세대별 수거 메커니즘을 구분할 수 있다
-  3. GC 알고리즘별 트레이드오프를 판단하는 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - JVM GC가 왜 필요하고 어떤 문제를 해결하는지 이해한다
+  - 힙 구조와 세대별 수거 메커니즘을 구분할 수 있다
+  - GC 알고리즘별 트레이드오프를 판단하는 기준을 얻는다
+</Note>
 
 ## GC란
 

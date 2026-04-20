@@ -21,11 +21,11 @@ draft: false
 
 분산 시스템 설계가 복잡한 이유의 상당 부분은 Two Generals' Problem 하나로 설명됩니다. 네트워크가 메시지를 잃을 수 있다는 단순한 사실이, "두 노드가 같은 결정에 도달했다"는 확정적 합의를 수학적으로 불가능하게 만듭니다. 이 글에서는 그 증명의 핵심과, 현대 시스템이 이 불가능성을 어떻게 받아들이며 설계되었는지를 정리합니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. 왜 메시지를 여러 번 보내는 방법으로도 합의가 불가능한지 이해한다
-  2. Common Knowledge의 무한 계층과 Eventual Agreement의 차이를 구분할 수 있다
-  3. 왜 분산 시스템의 기본값이 At-least-once와 멱등성인지 판단 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - 왜 메시지를 여러 번 보내는 방법으로도 합의가 불가능한지 이해한다
+  - Common Knowledge의 무한 계층과 Eventual Agreement의 차이를 구분할 수 있다
+  - 왜 분산 시스템의 기본값이 At-least-once와 멱등성인지 판단 기준을 얻는다
+</Note>
 
 ## 문제의 풍경
 

@@ -21,11 +21,11 @@ draft: false
 
 Claude Code는 터미널에서 돌아가는 AI 코딩 에이전트지만, 개발자만 쓰는 도구가 아닙니다. 파일을 읽고 고치는 모든 업무(특허 명세서, OA 대응, 청구항 초안, 엑셀 관리)에서 똑같이 유용합니다. 이 글은 비개발자가 자신의 업무에 맞게 Claude Code를 세팅할 수 있도록, 설치부터 4가지 확장 축의 설계 원리까지를 한눈에 안내합니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. Claude Code가 일반 챗봇과 어떻게 다른지 이해한다
-  2. 네 가지 확장 축(CLAUDE.md·Skills·Agents·Plugins)의 역할을 구분할 수 있다
-  3. 내 업무에 맞는 커스터마이징 방향을 선택하는 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - Claude Code가 일반 챗봇과 어떻게 다른지 이해한다
+  - 네 가지 확장 축(CLAUDE.md·Skills·Agents·Plugins)의 역할을 구분할 수 있다
+  - 내 업무에 맞는 커스터마이징 방향을 선택하는 기준을 얻는다
+</Note>
 
 ## Claude Code란
 
@@ -116,7 +116,7 @@ Claude Code는 여러분 컴퓨터 안에서 돌아가는 프로그램입니다.
 
 터미널을 완전히 닫았다가 **다시 열고** 다음을 실행.
 
-```bash
+```sh
 claude --version
 ```
 
@@ -126,7 +126,7 @@ claude --version
 
 작업할 **프로젝트 폴더** 안에서 `claude`를 실행합니다. 아직 프로젝트가 없다면 빈 폴더 하나를 만들어도 괜찮습니다.
 
-```bash
+```sh
 cd ~/Documents/my-project   # 작업 폴더로 이동
 claude                       # Claude Code 실행
 ```

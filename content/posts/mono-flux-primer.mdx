@@ -23,11 +23,11 @@ draft: false
 
 Spring WebFlux 코드를 처음 열면 `Mono<User>`, `Flux<Order>` 같은 리턴 타입에 당황하게 됩니다. 이 글은 Mono/Flux가 무엇이고 왜 이런 모양을 하고 있는지, 그리고 입문자가 가장 자주 부딪히는 네 가지 함정까지를 예제 중심으로 정리합니다. WebFlux 본편을 보기 전 반드시 알아야 할 개념만 담았습니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. Mono와 Flux가 각각 무엇이고 왜 필요한지 이해한다
-  2. Cold/Lazy 실행 모델과 구독 시점의 차이를 구분할 수 있다
-  3. 입문자가 자주 만드는 함정을 피하고 연산자 선택 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - Mono와 Flux가 각각 무엇이고 왜 필요한지 이해한다
+  - Cold/Lazy 실행 모델과 구독 시점의 차이를 구분할 수 있다
+  - 입문자가 자주 만드는 함정을 피하고 연산자 선택 기준을 얻는다
+</Note>
 
 ## Mono와 Flux란
 

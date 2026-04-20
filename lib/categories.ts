@@ -2,11 +2,9 @@ import type { Language } from '@/components/providers/SettingsProvider'
 
 export const CATEGORY_IDS = [
   'computer-science',
-  'data-structure',
-  'language',
+  'language-backend',
   'database',
-  'frameworks',
-  'library',
+  'infrastructure',
   'ai',
   'knowledge',
   'etc',
@@ -24,17 +22,12 @@ export const CATEGORIES: readonly CategoryMeta[] = [
   {
     id: 'computer-science',
     label:       { en: 'Computer Science', ko: '컴퓨터 과학' },
-    description: { en: 'OS, algorithms', ko: 'OS, 알고리즘' },
+    description: { en: 'OS, algorithms, data structures', ko: 'OS, 알고리즘, 자료구조' },
   },
   {
-    id: 'data-structure',
-    label:       { en: 'Data Structure', ko: '자료구조' },
-    description: { en: 'B-Tree, hash maps, arrays, linked lists', ko: 'B-Tree, 해시맵, 배열, 연결 리스트' },
-  },
-  {
-    id: 'language',
-    label:       { en: 'Language', ko: '언어' },
-    description: { en: 'Kotlin, TypeScript, Java, JVM', ko: 'Kotlin, TypeScript, Java, JVM' },
+    id: 'language-backend',
+    label:       { en: 'Language & Backend', ko: '언어 & 백엔드' },
+    description: { en: 'Languages, runtimes, backend frameworks and libraries (JVM, Kotlin, Spring Boot, JPA, QueryDSL, WebFlux)', ko: '언어, 런타임, 백엔드 프레임워크·라이브러리 (JVM, Kotlin, Spring Boot, JPA, QueryDSL, WebFlux)' },
   },
   {
     id: 'database',
@@ -42,14 +35,9 @@ export const CATEGORIES: readonly CategoryMeta[] = [
     description: { en: 'MySQL, PostgreSQL, indexes', ko: 'MySQL, PostgreSQL, 인덱스' },
   },
   {
-    id: 'frameworks',
-    label:       { en: 'Frameworks', ko: '프레임워크' },
-    description: { en: 'Spring Boot, Next.js', ko: 'Spring Boot, Next.js' },
-  },
-  {
-    id: 'library',
-    label:       { en: 'Library', ko: '라이브러리' },
-    description: { en: 'Querydsl, JPA', ko: 'Querydsl, JPA' },
+    id: 'infrastructure',
+    label:       { en: 'Infrastructure', ko: '인프라' },
+    description: { en: 'Middleware and infra products (Redis, Kafka, RabbitMQ)', ko: '미들웨어·인프라 제품 (Redis, Kafka, RabbitMQ)' },
   },
   {
     id: 'ai',

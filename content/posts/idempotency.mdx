@@ -20,11 +20,11 @@ draft: false
 
 Idempotency는 같은 요청을 여러 번 보내도 한 번 보낸 것과 동일한 결과를 보장하는 성질입니다. 단순한 수학 정의에서 출발한 이 개념이 왜 분산 시스템 설계의 핵심 장치가 되는지, 그리고 내부적으로 어떻게 구현되는지를 이 글에서 정리합니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. Idempotency의 수학적 정의와 시스템 문맥에서의 의미를 이해한다
-  2. HTTP 메서드 의미론, Idempotency-Key 패턴, 자연 멱등 설계를 구분할 수 있다
-  3. 어떤 연산에 멱등성을 적용하고 어떤 연산은 제외할지 판단하는 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - Idempotency의 수학적 정의와 시스템 문맥에서의 의미를 이해한다
+  - HTTP 메서드 의미론, Idempotency-Key 패턴, 자연 멱등 설계를 구분할 수 있다
+  - 어떤 연산에 멱등성을 적용하고 어떤 연산은 제외할지 판단하는 기준을 얻는다
+</Note>
 
 ## 멱등성이란
 
@@ -90,7 +90,7 @@ HTTP 스펙은 메서드를 멱등 / 비멱등으로 나눕니다. 왜 이렇게
 
 <IdempotencyKeyFlow />
 
-```python title="idempotent_charge.py"
+```py title="idempotent_charge.py"
 def charge(user_id: str, amount: int, idempotency_key: str):
     existing = keys.find(idempotency_key)              # 1. 키 조회
     if existing:

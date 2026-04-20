@@ -22,11 +22,11 @@ draft: false
 
 DDD는 "어디에 쓰는가"보다 "왜 이런 용어들이 만들어졌는가"를 먼저 이해해야 진짜 가치를 발휘하는 방법론입니다. 이 글은 Bounded Context, Aggregate, Ubiquitous Language 같은 핵심 용어가 각각 어떤 실전 문제를 해결하려고 등장했는지 가볍게 정리합니다. DDD의 이원 구조를 먼저 잡으면, 이후 개별 용어들이 제자리를 찾습니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. DDD가 어떤 종류의 문제를 해결하려고 등장했는지 이해합니다.
-  2. Strategic Design과 Tactical Design의 역할 차이를 구분할 수 있습니다.
-  3. 어떤 프로젝트가 DDD 도입에 적합한지 판단하는 기준을 얻습니다.
-</Callout>
+<Note title="이 글의 학습 목표">
+  - DDD가 어떤 종류의 문제를 해결하려고 등장했는지 이해합니다.
+  - Strategic Design과 Tactical Design의 역할 차이를 구분할 수 있습니다.
+  - 어떤 프로젝트가 DDD 도입에 적합한지 판단하는 기준을 얻습니다.
+</Note>
 
 ## DDD란
 
@@ -120,7 +120,7 @@ Tactical Design은 "도메인 모델을 코드로 어떻게 표현할 것인가"
 
 같은 이름과 생일의 두 고객이라도 `customerId`가 다르면 다른 사람입니다. 반면 "10,000원"이라는 `Money` 객체 두 개는 서로 같은 값이고 교체 가능합니다.
 
-```kotlin title="Entity.kt"
+```kt title="Entity.kt"
 class Customer(
     val id: CustomerId,            // [!code highlight]
     var name: String,
@@ -131,7 +131,7 @@ class Customer(
 }
 ```
 
-```kotlin title="ValueObject.kt"
+```kt title="ValueObject.kt"
 data class Money(                   // [!code highlight]
     val amount: BigDecimal,
     val currency: Currency,

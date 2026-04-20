@@ -1,24 +1,20 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BookOpen,
-  Boxes,
   Brain,
   Code2,
   Cpu,
   Database,
-  GitFork,
   Lightbulb,
+  Server,
   Sparkles,
 } from 'lucide-react'
 import type { CategoryId } from './categories'
 
 export const CATEGORY_ICONS: Record<CategoryId, LucideIcon> = {
   'computer-science': Cpu,
-  'data-structure': GitFork,
-  language: Code2,
+  'language-backend': Code2,
   database: Database,
-  frameworks: Boxes,
-  library: BookOpen,
+  infrastructure: Server,
   ai: Brain,
   knowledge: Lightbulb,
   etc: Sparkles,

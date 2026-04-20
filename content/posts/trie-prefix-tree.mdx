@@ -14,17 +14,17 @@ keywords:
 summary:
   ko: "트라이가 왜 HashMap으로 풀 수 없는 접두어 검색 문제를 구조 자체로 해결하는지 이해하고, 노드 구조와 삽입/탐색 내부 동작, 메모리 폭발을 완화하는 Compressed Trie·Radix Tree·Aho-Corasick 같은 진화를 구분할 수 있습니다."
   en: "How Trie solves prefix-search problems that HashMap structurally cannot, via per-character branching and path sharing. Covers node layout, insert/search mechanics, and the memory tradeoff that drives variants like Compressed Trie, Radix Tree, and Aho-Corasick."
-category: data-structure
+category: computer-science
 draft: false
 ---
 
 검색창에 "ap"를 치면 즉시 "apple, app, apricot"이 뜨는 동작을 HashMap으로는 구현할 수 없습니다. HashMap은 "정확 일치" 질의만 답할 수 있고, 접두어 질의는 전체 키를 스캔해야 하기 때문입니다. 트라이는 이 접두어 문제를 구조 자체로 해결하도록 1960년 Edward Fredkin이 설계한 자료구조입니다. 이 글에서는 노드 구조와 삽입/탐색의 내부 메커니즘, CS 제약 세 가지가 왜 이 구조를 강제했는지, 그리고 메모리 폭발을 완화하는 Compressed Trie, Radix Tree, Aho-Corasick 같은 진화의 방향을 살펴봅니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. 접두어 검색이 왜 HashMap으로는 구조적으로 불가능한지 이해한다
-  2. 트라이의 노드 구조와 삽입/탐색 내부 동작 원리를 구분할 수 있다
-  3. 언제 트라이가 맞고 언제 틀린지, 메모리 폭발을 완화하는 변형을 선택하는 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - 접두어 검색이 왜 HashMap으로는 구조적으로 불가능한지 이해한다
+  - 트라이의 노드 구조와 삽입/탐색 내부 동작 원리를 구분할 수 있다
+  - 언제 트라이가 맞고 언제 틀린지, 메모리 폭발을 완화하는 변형을 선택하는 기준을 얻는다
+</Note>
 
 ## 트라이란
 
@@ -63,7 +63,7 @@ draft: false
 
 삽입, 탐색, 삭제의 기본 알고리즘을 TypeScript로 먼저 정리합니다.
 
-```typescript title="Trie.ts"
+```ts title="Trie.ts"
 class TrieNode {
   children = new Map<string, TrieNode>()
   isEnd = false

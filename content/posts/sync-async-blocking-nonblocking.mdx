@@ -24,12 +24,12 @@ draft: false
 
 동기와 비동기, 블로킹과 논블로킹. 네 단어가 한 줄에 등장하면 대부분 어느 쪽이 어느 쪽과 반대말인지 헷갈립니다. 실은 이 둘은 **서로 다른 두 개의 축**이고, 섞어 쓰는 순간부터 혼란이 시작됩니다. 이 글은 음식점 비유로 4가지 조합의 직관을 먼저 잡은 뒤, OS 단계의 동작과 실제 시스템(Tomcat, Nginx, Node.js, io_uring, Virtual Thread)으로 차례차례 내려갑니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. Sync/Async와 Blocking/Non-Blocking이 서로 다른 축임을 이해한다
-  2. 4가지 조합을 음식점 비유로 직관적으로 구분할 수 있다
-  3. OS의 두 단계 read() 관점에서 각 모델이 무엇을 다르게 하는지 안다
-  4. 시스템 요구에 맞는 I/O 모델을 선택하는 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - Sync/Async와 Blocking/Non-Blocking이 서로 다른 축임을 이해한다
+  - 4가지 조합을 음식점 비유로 직관적으로 구분할 수 있다
+  - OS의 두 단계 read() 관점에서 각 모델이 무엇을 다르게 하는지 안다
+  - 시스템 요구에 맞는 I/O 모델을 선택하는 기준을 얻는다
+</Note>
 
 ## 두 축이 다르다
 
@@ -104,7 +104,7 @@ while (true) {
 
 OS 레벨에서는 커널이 데이터 도착부터 유저 버퍼로 복사까지 모두 처리하고, 완료된 후에야 애플리케이션에 알림을 보내는 구조입니다. Linux의 `io_uring`(5.1+), Windows의 IOCP(I/O Completion Port)가 여기 해당합니다.
 
-```kotlin title="KotlinCoroutineAsync.kt"
+```kt title="KotlinCoroutineAsync.kt"
 suspend fun fetchOrder(id: Long): Order {
     val resp = httpClient.get("/orders/$id")  // suspension point, 스레드 해제 // [!code highlight]
     return resp.body()
@@ -226,7 +226,7 @@ Reactive 스택의 러닝 커브와 디버깅 난이도 없이 동시성을 얻�
 
 사내 관리자 API처럼 동시성이 낮고 로직이 단순하면 전통 Tomcat이 정답입니다.
 
-```kotlin title="AdminApi.kt"
+```kt title="AdminApi.kt"
 @RestController
 class AdminController(private val orderRepository: OrderRepository) {
     @GetMapping("/orders")
@@ -236,7 +236,7 @@ class AdminController(private val orderRepository: OrderRepository) {
 
 고트래픽 공개 API는 coroutine 기반으로 전환합니다.
 
-```kotlin title="ReactiveApi.kt"
+```kt title="ReactiveApi.kt"
 @Bean
 fun router() = coRouter {
     GET("/orders/{id}") { req ->
@@ -249,7 +249,7 @@ fun router() = coRouter {
 
 외부 API 호출 체인에서는 coroutine의 병렬 실행이 빛을 발합니다.
 
-```kotlin title="OrderService.kt"
+```kt title="OrderService.kt"
 suspend fun placeOrder(req: OrderRequest): Order = coroutineScope {
     val payment = async { paymentClient.charge(req.amount) }  // [!code highlight]
     val stock   = async { stockClient.reserve(req.items) }    // [!code highlight]

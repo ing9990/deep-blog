@@ -19,17 +19,17 @@ keywords:
 summary:
   ko: "Kafka가 브로커 장애에도 데이터 유실 없이 동작하는 복제 메커니즘을 이해할 수 있습니다. Leader/Follower 역할, ISR(In-Sync Replica)의 편입과 축출 기준, acks 옵션과 min.insync.replicas의 실제 보장, 리더 장애 시 Controller가 주관하는 재선출 과정까지, HA가 만들어지는 과정을 따라갑니다."
   en: "Understand how Kafka stays resilient through broker failures. Covers Leader/Follower roles, how replicas enter and leave the ISR set, what acks and min.insync.replicas actually guarantee, and how the Controller re-elects a leader when a broker dies."
-category: library
+category: infrastructure
 draft: false
 ---
 
 Kafka 입문편에서 "여러 브로커에 복제된다"는 한 줄로 지나간 부분이 있습니다. 그 한 줄이 사실은 Kafka가 프로덕션에서 신뢰받는 이유 전체입니다. 이 글은 브로커 장애에도 데이터가 살아남는 복제 메커니즘을 Leader/Follower, ISR, `acks`, 리더 재선출의 네 축으로 풀어냅니다.
 
-<Callout type="info" title="이 글의 학습 목표">
-  1. Leader와 Follower의 역할 분담, ISR이 "합격한 Follower 목록"인 이유를 이해한다
-  2. `acks=0/1/all`과 `min.insync.replicas`가 실제로 어떤 유실을 막고 못 막는지 구분할 수 있다
-  3. 리더 장애 시 Controller가 ISR 안에서만 후보를 뽑는 이유와 Unclean Election의 양자택일을 판단하는 기준을 얻는다
-</Callout>
+<Note title="이 글의 학습 목표">
+  - Leader와 Follower의 역할 분담, ISR이 "합격한 Follower 목록"인 이유를 이해한다
+  - `acks=0/1/all`과 `min.insync.replicas`가 실제로 어떤 유실을 막고 못 막는지 구분할 수 있다
+  - 리더 장애 시 Controller가 ISR 안에서만 후보를 뽑는 이유와 Unclean Election의 양자택일을 판단하는 기준을 얻는다
+</Note>
 
 <RelatedPost slug="kafka-essentials" type="prerequisite" />
 
@@ -201,7 +201,7 @@ Replica 3개 중:
   Follower-1  (네트워크 지연으로 ISR 탈락)
   Follower-2  (GC 장시간 멈춤으로 ISR 탈락)
 
-ISR = { Leader } — 단 1명.
+ISR = { Leader } (단 1명).
 ```
 
 Producer가 `acks=all` 로 메시지 M을 보내면 Leader는 "ISR 전체(= 나 혼자)에 복제 완료" 라고 판단해 바로 응답합니다. 그 직후 Leader가 죽으면 **M 은 어디에도 없습니다**. `acks=1` 과 **똑같은 유실**이 발생하죠.
@@ -309,6 +309,6 @@ Kafka 복제를 이해하는 가장 짧은 경로는 "그냥 따라 쓰기"가 �
 
 - [Apache Kafka 공식 문서: Replication](https://kafka.apache.org/documentation/#replication)
 - [Jun Rao, "Intra-cluster Replication in Apache Kafka" (Confluent)](https://www.confluent.io/blog/hands-free-kafka-replication-a-lesson-in-operational-simplicity/)
-- [Kafka 공식 문서: Design — Replication](https://kafka.apache.org/documentation/#design_replication)
+- [Kafka 공식 문서: Design, Replication](https://kafka.apache.org/documentation/#design_replication)
 - [KIP-966: Eligible Leader Replicas](https://cwiki.apache.org/confluence/display/KAFKA/KIP-966%3A+Eligible+Leader+Replicas)
 - [Confluent: Kafka ISR and unclean leader election](https://developer.confluent.io/learn/kafka-broker-internals/)

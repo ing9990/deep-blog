@@ -38,6 +38,7 @@ const FONT_SIZE_OPTIONS: { value: FontSize; labelKey: MessageKey }[] = [
 ]
 
 const CODE_THEME_OPTIONS: { value: CodeTheme; labelKey: MessageKey }[] = [
+  { value: 'flat',     labelKey: 'settings.code.flat' },
   { value: 'floating', labelKey: 'settings.code.floating' },
   { value: 'rail',     labelKey: 'settings.code.rail' },
 ]
@@ -294,6 +295,22 @@ function LayoutMiniIcon({ layout, active }: { layout: CardLayout; active: boolea
 function CodeThemeMiniIcon({ theme, active }: { theme: CodeTheme; active: boolean }) {
   const lineColor = active ? 'bg-primary' : 'bg-muted-foreground/30'
   const captionColor = active ? 'bg-primary' : 'bg-muted-foreground/40'
+
+  if (theme === 'flat') {
+    // Header bar + framed panel with language badge pip
+    return (
+      <div className="flex h-7 w-9 flex-col overflow-hidden rounded border border-border">
+        <div className={cn('flex h-[9px] items-center gap-[2px] px-1', active ? 'bg-primary/15' : 'bg-muted-foreground/15')}>
+          <div className={cn('h-[4px] w-[5px] rounded-sm', active ? 'bg-primary' : 'bg-muted-foreground/60')} />
+          <div className={cn('h-[2px] w-2 rounded-full', captionColor, 'opacity-80')} />
+        </div>
+        <div className="flex flex-1 flex-col justify-center gap-[3px] px-1">
+          <div className={cn('h-[2px] w-full rounded-full', lineColor)} />
+          <div className={cn('h-[2px] w-3/4 rounded-full', lineColor, 'opacity-60')} />
+        </div>
+      </div>
+    )
+  }
 
   if (theme === 'floating') {
     // Detached caption above + borderless tinted block

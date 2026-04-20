@@ -152,6 +152,18 @@
   --code-bg:             #FAFAFA;
   --code-line-number:    #A1A1AA;
 
+  /* Code chip (pill) — dark pill for inline code inside <Note>.
+     Distinct from the teal .prose-kr code body style; the chip reads
+     as a neutral reference-key chip inside the supplementary box. */
+  --code-chip-bg:  #E4E6EB;
+  --code-chip-fg:  #18181B;
+
+  /* Note box — neutral supplementary-list frame (Vercel docs "Good to
+     know" style). Intentionally distinct from --callout-* tokens which
+     are emphasis/alert accents. */
+  --note-bg:      #FAFAFB;
+  --note-border:  #E4E4E7;
+
   /* Syntax theme preview tokens — used by SettingsPanel mini-icons only.
      Each triad (keyword/fn/string) is hand-picked to evoke the theme's
      palette at a glance. Not consumed by the code blocks themselves
@@ -343,6 +355,16 @@
      --code-bg matches the one-dark-pro Shiki theme background. */
   --code-bg:             #282C34;
   --code-line-number:    #4B5363;
+
+  /* Code chip (pill) — dark mode. Desaturated grey so the pill reads
+     distinctly from the teal inline code surface outside <Note>. */
+  --code-chip-bg:  #2A2F3A;
+  --code-chip-fg:  #E4E6EB;
+
+  /* Note box — dark mode. Slightly lighter than --background so the
+     frame separates without relying on color accent. */
+  --note-bg:      #131317;
+  --note-border:  #27272A;
 
   /* Visualization state tokens — dark mode. Muted backgrounds with pale
      foregrounds for contrast on #09090B. See :root for the light variant. */
@@ -544,6 +566,93 @@ body {
 
 .prose-kr li {
   margin-bottom: 0.4em;
+  padding-left: 0.25em;
+}
+
+/* Muted marker color so bullets/numbers don't compete with body text. */
+.prose-kr ul > li::marker {
+  color: var(--muted-foreground);
+}
+
+.prose-kr ol > li::marker {
+  color: var(--muted-foreground);
+  font-weight: var(--weight-medium);
+}
+
+/* Nested lists: tighter spacing, one indent level of rhythm. */
+.prose-kr li > ul,
+.prose-kr li > ol {
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+}
+
+/* ================================================================
+   Note box — supplementary-list container (`<Note>` MDX component).
+   Purpose-distinct from <Callout>: Callout is a single-line
+   emphasis/alert box, Note is a neutral frame that groups several
+   short reference points as a dash-prefixed list.
+   ================================================================ */
+
+.prose-kr .note {
+  margin: 1.75em 0;
+  padding: 1em 1.25em;
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-panel);
+  background-color: var(--note-bg);
+}
+
+.prose-kr .note > .note-title {
+  margin: 0 0 0.6em 0;
+  font-weight: var(--weight-semibold);
+  color: var(--foreground);
+}
+
+.prose-kr .note > .note-body > :first-child { margin-top: 0; }
+.prose-kr .note > .note-body > :last-child  { margin-bottom: 0; }
+
+/* Dash marker list for Note internals. CSS-driven so authors keep
+   writing `<ul><li>...</li></ul>` in MDX — no em-dash in source
+   (em-dash is globally forbidden; guards enforce). */
+.prose-kr .note ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.prose-kr .note ul > li {
+  position: relative;
+  padding-left: 1.4em;
+  margin: 0.6em 0;
+  line-height: var(--leading-relaxed);
+}
+
+.prose-kr .note ul > li::before {
+  content: '–';                  /* en-dash marker (U+2013), not em-dash */
+  position: absolute;
+  left: 0.25em;
+  top: 0;
+  color: var(--muted-foreground);
+  font-weight: var(--weight-medium);
+}
+
+.prose-kr .note ol {
+  padding-left: 1.5em;
+  margin: 0;
+}
+
+.prose-kr .note ol > li {
+  margin: 0.6em 0;
+  line-height: var(--leading-relaxed);
+}
+
+/* Inline code inside Note = dark chip pill. Overrides the teal body
+   style so references scan as neutral chips within the frame. */
+.prose-kr .note code:not(pre code) {
+  color: var(--code-chip-fg);
+  background-color: var(--code-chip-bg);
+  border-radius: 4px;
+  padding: 0.15em 0.45em;
+  font-weight: var(--weight-medium);
 }
 
 .prose-kr blockquote {
@@ -748,21 +857,32 @@ html[data-syntax-theme="vitesse"]                      { --code-bg: #F7F7F3; }
 html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
 
 /* ================================================================
-   Code block — two user-selectable themes.
-   rehype-pretty-code emits <figure data-rehype-pretty-code-figure>
-   with an optional <figcaption data-rehype-pretty-code-title>
-   (present only when the fence carries title="...") and the <pre><code>
-   body. The active theme is driven by html[data-code-theme]:
+   Code block — baseline is `flat` (Vercel-docs style): single frame,
+   filename header bar with a language badge + copy button, no line
+   numbers. `floating` and `rail` remain as user-selectable overrides
+   under html[data-code-theme=...].
 
-     floating (default) — no border, muted bg tint, filename as caption.
-     rail               — 2px left accent, filename caption above.
+   rehype-pretty-code emits:
+     <figure data-rehype-pretty-code-figure>
+       <figcaption data-rehype-pretty-code-title data-language="ts">
+         app/blog/page.tsx
+       </figcaption>
+       <pre data-language="ts">
+         <code data-language="ts">
+           <span data-line>...</span>
+         </code>
+       </pre>
+     </figure>
 
-   Shared baseline (typography, line numbers, highlighted line) applies
-   regardless of theme; each theme overrides only container chrome +
-   figcaption presentation.
+   `plugins/rehype-code-language-badge.ts` normalizes the raw fence
+   language (typescript → ts) and forwards it to the figcaption so the
+   CSS badge below reads a stable 2-3 char token.
+
+   The MDX `figure` override (components/mdx/components.tsx) wraps this
+   in a client component that injects a copy button.
    ================================================================ */
 
-/* ---------- Shared baseline ---------- */
+/* ---------- Shared baseline (flat) ---------- */
 .prose-kr figure[data-rehype-pretty-code-figure] {
   position: relative;
   margin: 2em 0;
@@ -770,8 +890,49 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
   max-width: 100%;
   min-width: 0;
   background-color: var(--code-bg);
-  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
   overflow: hidden;
+}
+
+/* Figcaption becomes a header bar: language badge on the left,
+   filename text, copy button slot on the right. */
+.prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title] {
+  margin: 0;
+  padding: 10px 44px 10px 14px;
+  background-color: color-mix(in oklab, var(--muted) 40%, var(--code-bg));
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Language badge derived from data-language via `attr()`. The rehype
+   plugin normalizes values so this renders short tokens like "TS" or
+   "PY". When no data-language is present, the badge is hidden by the
+   empty-attr fallback. */
+.prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title]::before {
+  content: attr(data-language);
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  line-height: 1.2;
+}
+
+.prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title]:not([data-language])::before,
+.prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title][data-language=""]::before {
+  display: none;
 }
 
 .prose-kr figure[data-rehype-pretty-code-figure] pre {
@@ -788,18 +949,27 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
 }
 
 .prose-kr figure[data-rehype-pretty-code-figure] pre code {
-  counter-reset: line;
   display: block;
 }
 
 .prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line] {
-  counter-increment: line;
   display: block;
-  padding-left: 12px;
+  padding-left: 16px;
   padding-right: 16px;
 }
 
-.prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line]::before {
+/* Line numbers: opt-in only when the fence carries `showLineNumbers`.
+   rehype-pretty-code adds data-line-numbers to the <code> in that
+   case. Default (absent attribute) shows no numbers. */
+.prose-kr figure[data-rehype-pretty-code-figure] pre code[data-line-numbers] {
+  counter-reset: line;
+}
+
+.prose-kr figure[data-rehype-pretty-code-figure] pre code[data-line-numbers] span[data-line] {
+  counter-increment: line;
+}
+
+.prose-kr figure[data-rehype-pretty-code-figure] pre code[data-line-numbers] span[data-line]::before {
   content: counter(line);
   display: inline-block;
   width: 1.75em;
@@ -811,17 +981,49 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
 }
 
 .prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line].highlighted {
-  background-color: color-mix(in oklab, var(--primary) 12%, transparent);
-  box-shadow: inset 3px 0 0 var(--primary);
+  background-color: color-mix(in oklab, var(--primary) 10%, transparent);
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
-/* ---------- Theme: floating (default) ----------
-   No border, muted bg tint only. Filename surfaces as a small caption
-   above the block so code meets the prose rhythm without a frame. */
+/* Copy button (components/mdx/CodeFigure.tsx) — absolutely anchored to
+   the top-right of the figure. Sits inside the header bar when present
+   and over the bare pre when absent. */
+.prose-kr figure[data-rehype-pretty-code-figure] .code-copy-button {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  background-color: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+  z-index: 1;
+}
+
+.prose-kr figure[data-rehype-pretty-code-figure] .code-copy-button:hover {
+  background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+/* ---------- Theme: floating (alternate, opt-in) ----------
+   Minimalist look: no frame border, no header bar. The figcaption
+   reverts to a small pre-block label. Language badge is suppressed
+   since there's no header surface to anchor it. */
 html[data-code-theme="floating"] .prose-kr figure[data-rehype-pretty-code-figure] {
   border: 0;
   background-color: color-mix(in oklab, var(--muted) 40%, var(--background));
   border-radius: 10px;
+}
+
+html[data-code-theme="floating"] .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title]::before,
+html[data-code-theme="rail"]     .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title]::before {
+  display: none;
 }
 
 html[data-code-theme="floating"]

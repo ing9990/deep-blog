@@ -12,7 +12,7 @@ import {
 export type CardLayout = 'editorial' | 'timeline' | 'floating'
 export type Language = 'en' | 'ko'
 export type FontSize = 'small' | 'normal' | 'large'
-export type CodeTheme = 'floating' | 'rail'
+export type CodeTheme = 'flat' | 'floating' | 'rail'
 export type SyntaxTheme = 'atom' | 'github' | 'vitesse'
 
 export interface Settings {
@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS: Settings = {
   cardLayout: 'timeline',
   language: 'ko',
   fontSize: 'normal',
-  codeTheme: 'floating',
+  codeTheme: 'flat',
   syntaxTheme: 'atom',
 }
 
@@ -66,7 +66,8 @@ export function normalizeFontSize(value: unknown): FontSize {
 }
 
 export function normalizeCodeTheme(value: unknown): CodeTheme {
-  return value === 'rail' ? 'rail' : 'floating'
+  if (value === 'rail' || value === 'floating' || value === 'flat') return value
+  return 'flat'
 }
 
 export function normalizeSyntaxTheme(value: unknown): SyntaxTheme {
