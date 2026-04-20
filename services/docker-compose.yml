@@ -1,0 +1,40 @@
+# Shared development infrastructure for all backend services.
+#
+# Phase 1 MVP: only Postgres. Redis / Prometheus / Grafana / OTel Collector /
+# Tempo will be added in later steps when we introduce the concept that needs
+# them. The volume mount under ./.volumes/postgres persists data across
+# container restarts; delete it to wipe state.
+#
+# Usage:
+#   cd services
+#   docker compose up -d postgres
+#   docker compose ps
+#   docker compose exec postgres psql -U deep -c '\l'   # list databases
+#
+# Stop:
+#   docker compose down          # keep data
+#   docker compose down -v       # stop + remove anonymous volumes
+#   rm -rf .volumes/postgres     # wipe persistent data
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: deep-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: deep
+      POSTGRES_PASSWORD: deep_local
+      # "deep" is the bootstrap database that always exists. The real
+      # per-service databases (seller_db, product_db) are created by the
+      # init script in ./init/ on first container start.
+      POSTGRES_DB: deep
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.volumes/postgres:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deep -d deep"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

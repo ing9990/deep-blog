@@ -1,0 +1,21 @@
+# Version Catalog: a central place for dependency versions.
+# Build files reference entries here via alias(libs.plugins.*) or
+# libs.* accessors instead of hardcoding versions.
+
+[versions]
+kotlin = "2.1.0"
+springBoot = "3.3.5"
+springDependencyManagement = "1.1.6"
+
+[libraries]
+spring-boot-starter-web       = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-actuator  = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-test      = { module = "org.springframework.boot:spring-boot-starter-test" }
+kotlin-reflect                = { module = "org.jetbrains.kotlin:kotlin-reflect" }
+junit-platform-launcher       = { module = "org.junit.platform:junit-platform-launcher" }
+
+[plugins]
+kotlin-jvm                  = { id = "org.jetbrains.kotlin.jvm",             version.ref = "kotlin" }
+kotlin-spring               = { id = "org.jetbrains.kotlin.plugin.spring",   version.ref = "kotlin" }
+spring-boot                 = { id = "org.springframework.boot",             version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management",     version.ref = "springDependencyManagement" }

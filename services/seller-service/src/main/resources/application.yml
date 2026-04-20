@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: seller-service
+  # Java 21 virtual threads for request handling. Lets MVC (blocking API)
+  # scale like reactive code for I/O-bound workloads without adopting
+  # WebFlux.
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Phase 1 Step 2 exposes only health + info. Prometheus comes when
+        # Micrometer + Prometheus are wired in the observability step.
+        include: [health, info]
+  endpoint:
+    health:
+      probes:
+        enabled: true
