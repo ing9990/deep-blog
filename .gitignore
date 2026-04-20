@@ -42,3 +42,7 @@ coverage/
 
 # Brainstorming visual companion (mockups, server state)
 .superpowers/
+
+# Planning artifacts (local-only; .claude/plans is covered by .claude/* above)
+docs/superpowers/plans/
+docs/superpowers/specs/
