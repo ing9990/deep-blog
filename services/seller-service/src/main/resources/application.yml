@@ -8,6 +8,24 @@ spring:
     virtual:
       enabled: true
 
+  # Local dev datasource. Expects services/docker-compose.yml Postgres
+  # to be running (docker compose up -d postgres). Integration tests
+  # ignore this and use Testcontainers via @ServiceConnection.
+  datasource:
+    url: jdbc:postgresql://localhost:5432/seller_db
+    username: deep
+    password: deep_local
+
+  jpa:
+    hibernate:
+      # Phase 1a: Hibernate가 스키마 관리. Phase 2에서 Flyway로 이관.
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    # Lazy 로딩 에러를 런타임이 아닌 개발 중에 드러내기 위해 off.
+    open-in-view: false
+
 server:
   port: 8081
 
@@ -22,3 +40,8 @@ management:
     health:
       probes:
         enabled: true
+
+logging:
+  level:
+    # Show actual SQL from JPA during dev; trim later when noise dominates.
+    org.hibernate.SQL: DEBUG

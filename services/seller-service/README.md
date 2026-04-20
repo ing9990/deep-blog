@@ -4,9 +4,19 @@
 
 ## 현재 단계
 
-**Phase 1 Step 2**: Gradle + Spring Boot Hello.
+**Phase 1 Step 4**: JPA + Postgres + Seller 엔티티 + Testcontainers 통합 테스트.
 
-아직 없는 것: 도메인 엔티티, Postgres 연결, Testcontainers, REST API. 이 모두는 다음 단계들에서 점진 추가.
+지금까지 누적:
+- Gradle Kotlin DSL + Version Catalog (Step 2)
+- Spring Boot 3.3 + Kotlin 2.1 + Java 21 Virtual Threads (Step 2)
+- Spring Data JPA + Postgres 16 driver + Hibernate (Step 4)
+- `Seller` 엔티티 + `SellerRepository` (Step 4)
+- Testcontainers 통합 테스트 (`@ServiceConnection` 활용, Step 4)
+
+아직 없는 것:
+- REST API (`POST /api/v1/sellers`, `GET /api/v1/sellers/{id}`) — Step 6
+- Multi-module 분리 (`storage:domain`, `storage:core-db`, `core:core-api`) — 추후 refactor
+- 관측성 스택 (Prometheus, Grafana, OTel, k6) — Step 8~11
 
 ## 실행
 
