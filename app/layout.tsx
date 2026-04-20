@@ -2,16 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import Script from 'next/script'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
-import { MobileUIProvider } from '@/components/providers/MobileUIProvider'
 import { SettingsProvider } from '@/components/providers/SettingsProvider'
-import { Header } from '@/components/blog/Header'
-import { Footer } from '@/components/blog/Footer'
-import { MobileOverlays } from '@/components/blog/MobileOverlays'
-import { MobilePostTocFab } from '@/components/blog/MobilePostTocFab'
-import { SettingsFab } from '@/components/layout/SettingsFab'
 import { HydrationGate } from '@/components/layout/HydrationGate'
-import { getAllPosts } from '@/lib/posts'
-import { toClientPost } from '@/lib/client-post'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import 'katex/dist/katex.min.css'
@@ -47,7 +39,7 @@ const jetbrainsMono = localFont({
   weight: '100 800',
 })
 
-const SITE_URL = 'https://ing9990.com'
+const SITE_URL = 'https://deep.ing9990.com'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -86,8 +78,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const clientPosts = getAllPosts().map(toClientPost)
-
   return (
     <html lang="ko" className={`${paperlogy.variable} ${pretendard.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body>
@@ -95,20 +85,9 @@ export default function RootLayout({
           {`try{var d=document.documentElement;var s=localStorage.getItem('deep-settings');if(s){var p=JSON.parse(s);var f=p.fontSize;if(f==='small'||f==='large'||f==='normal'){d.dataset.fontSize=f}d.dataset.codeTheme=(p.codeTheme==='rail')?'rail':'floating';var y=p.syntaxTheme;d.dataset.syntaxTheme=(y==='github'||y==='vitesse')?y:'atom'}else{d.dataset.codeTheme='floating';d.dataset.syntaxTheme='atom'}}catch(e){document.documentElement.dataset.codeTheme='floating';document.documentElement.dataset.syntaxTheme='atom'}`}
         </Script>
         <ThemeProvider>
-          <MobileUIProvider posts={clientPosts}>
-            <SettingsProvider>
-              <HydrationGate>
-                <div className="flex min-h-screen flex-col">
-                  <Header />
-                  <main className="flex-1">{children}</main>
-                  <Footer />
-                </div>
-                <MobileOverlays />
-                <MobilePostTocFab />
-                <SettingsFab />
-              </HydrationGate>
-            </SettingsProvider>
-          </MobileUIProvider>
+          <SettingsProvider>
+            <HydrationGate>{children}</HydrationGate>
+          </SettingsProvider>
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />

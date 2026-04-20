@@ -1,0 +1,29 @@
+import { MobileUIProvider } from '@/components/providers/MobileUIProvider'
+import { Header } from '@/components/blog/Header'
+import { Footer } from '@/components/blog/Footer'
+import { MobileOverlays } from '@/components/blog/MobileOverlays'
+import { MobilePostTocFab } from '@/components/blog/MobilePostTocFab'
+import { SettingsFab } from '@/components/layout/SettingsFab'
+import { getAllPosts } from '@/lib/posts'
+import { toClientPost } from '@/lib/client-post'
+
+export default function BlogLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const clientPosts = getAllPosts().map(toClientPost)
+
+  return (
+    <MobileUIProvider posts={clientPosts}>
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1">{children}</main>
+        <Footer />
+      </div>
+      <MobileOverlays />
+      <MobilePostTocFab />
+      <SettingsFab />
+    </MobileUIProvider>
+  )
+}

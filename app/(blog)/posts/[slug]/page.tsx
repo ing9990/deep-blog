@@ -23,7 +23,7 @@ export async function generateMetadata({
   const post = getPostBySlug(slug)
   if (!post) return {}
 
-  const url = `https://ing9990.com/posts/${post.slug}`
+  const url = `https://deep.ing9990.com/posts/${post.slug}`
 
   return {
     title: post.title.ko,
