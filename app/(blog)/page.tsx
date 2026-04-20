@@ -4,7 +4,6 @@ import { CATEGORY_IDS, type CategoryId } from '@/lib/categories'
 import { BlogHomeClient } from '@/components/blog/BlogHomeClient'
 import { IndexFilterProvider } from '@/components/blog/IndexFilterContext'
 import { IndexCategoryNav } from '@/components/blog/IndexCategoryNav'
-import { HeroIntro } from '@/components/blog/HeroIntro'
 import { DocShell } from '@/components/layout/DocShell'
 
 export default async function IndexPage({
@@ -24,17 +23,14 @@ export default async function IndexPage({
       : undefined
 
   return (
-    <>
-      <HeroIntro />
-      <IndexFilterProvider
-        initialCategory={validCategory}
-        initialTag={tag}
-        initialSort={validSort}
-      >
-        <DocShell leftSlot={<IndexCategoryNav allPosts={allPosts} />}>
-          <BlogHomeClient allPosts={allPosts} />
-        </DocShell>
-      </IndexFilterProvider>
-    </>
+    <IndexFilterProvider
+      initialCategory={validCategory}
+      initialTag={tag}
+      initialSort={validSort}
+    >
+      <DocShell leftSlot={<IndexCategoryNav allPosts={allPosts} />}>
+        <BlogHomeClient allPosts={allPosts} />
+      </DocShell>
+    </IndexFilterProvider>
   )
 }
