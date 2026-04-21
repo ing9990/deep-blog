@@ -1,0 +1,24 @@
+[versions]
+springBoot = "3.3.5"
+springDependencyManagement = "1.1.6"
+postgres = "42.7.4"
+testcontainers = "1.20.4"
+lombok = "1.18.36"
+
+[libraries]
+spring-boot-starter-web          = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-validation   = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-starter-actuator     = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-data-jpa     = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-test         = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-boot-testcontainers       = { module = "org.springframework.boot:spring-boot-testcontainers" }
+postgresql                       = { module = "org.postgresql:postgresql",               version.ref = "postgres" }
+testcontainers-postgresql        = { module = "org.testcontainers:postgresql",           version.ref = "testcontainers" }
+testcontainers-junit-jupiter     = { module = "org.testcontainers:junit-jupiter",        version.ref = "testcontainers" }
+junit-platform-launcher          = { module = "org.junit.platform:junit-platform-launcher" }
+micrometer-registry-prometheus   = { module = "io.micrometer:micrometer-registry-prometheus" }
+lombok                           = { module = "org.projectlombok:lombok",                version.ref = "lombok" }
+
+[plugins]
+spring-boot                  = { id = "org.springframework.boot",             version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management",      version.ref = "springDependencyManagement" }

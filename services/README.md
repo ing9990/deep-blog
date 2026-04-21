@@ -4,27 +4,40 @@
 
 ## Current phase
 
-**Phase 1a — Step 1**: Postgres only. No service code yet.
+**Phase 2 Step 8a**: Observability 스택 — Prometheus + Grafana 도입. 서비스는 `/actuator/prometheus`를 노출하고 Prometheus가 15초마다 scrape.
 
-The goal of this step is to make `docker compose up -d postgres` work, and to verify that `psql` can connect and list `seller_db` + `product_db`. Spring Boot services come in the next step.
+누적 구성:
+- Postgres 16 (`seller_db`, `product_db`)
+- mini-coupang (8080, monolith: seller + product 도메인 포함)
+- **Prometheus 2.55** (9090) — scrape: 자신 + mini-coupang
+- **Grafana 11.3** (3000) — Prometheus datasource 자동 프로비저닝, 익명 Viewer 허용
 
 ## Quick start
 
 ```bash
 cd services
 
-# Start Postgres
-docker compose up -d postgres
+# 인프라 전체 기동
+docker compose up -d postgres prometheus grafana
 
-# Wait for healthcheck to go green (~5s)
+# 앱 기동
+cd mini-coupang && ./gradlew bootRun
+
+# 상태 확인
 docker compose ps
 
-# Verify the per-service databases exist
+# Postgres DB 리스트
 docker compose exec postgres psql -U deep -c '\l'
 
-# Connect manually
-docker compose exec postgres psql -U deep -d seller_db
-# \q  to exit
+# Prometheus target (모두 "health":"up"이어야 함)
+curl -s http://localhost:9090/api/v1/targets | \
+  jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
+
+# Grafana UI (익명 접근)
+open http://localhost:3000
+
+# 메트릭 쿼리 예시
+curl -s 'http://localhost:9090/api/v1/query?query=up' | jq '.data.result'
 ```
 
 ## Stop / reset
@@ -37,36 +50,32 @@ rm -rf .volumes/postgres     # wipe persistent data on host
 
 ## Credentials (local only)
 
-| | |
-|---|---|
-| user | `deep` |
-| password | `deep_local` |
-| host | `localhost` |
-| port | `5432` |
-| bootstrap DB | `deep` |
-| service DBs | `seller_db`, `product_db` |
+| Target | Host | Port | 인증 |
+|---|---|---|---|
+| Postgres | `localhost` | 5432 | user `deep` / pw `deep_local` / DBs: `deep`, `minicoupang_db` |
+| mini-coupang | `localhost` | 8080 | 없음 (MVP) |
+| Prometheus | `localhost` | 9090 | 없음 |
+| Grafana | `localhost` | 3000 | 익명 Viewer / admin `admin`·`deep_local` |
 
 ## Layout
 
 ```
 services/
-├── docker-compose.yml                    # infrastructure (Phase 1a: Postgres)
+├── docker-compose.yml                  # 공용 인프라: postgres + prometheus + grafana
 ├── init/
-│   └── 01-create-databases.sh            # runs on first Postgres start
-├── .volumes/                             # local volumes (gitignored)
+│   └── 01-create-databases.sh          # Postgres 첫 기동 시 DB 생성
+├── observability/
+│   ├── prometheus/prometheus.yml       # scrape 대상: seller/product/self
+│   └── grafana/provisioning/
+│       └── datasources/prometheus.yml  # Prometheus 자동 등록
+├── mini-coupang/                       # Spring Boot · Kotlin · 8080 (monolith)
+├── .volumes/                           # postgres/prometheus/grafana 영속 볼륨 (gitignore)
 └── README.md
-```
-
-Service code will be added here in subsequent steps:
-
-```
-services/
-├── seller-service/      # Step 2-6
-└── product-service/     # Step 7
 ```
 
 ## Notes
 
-- **Observability stack** (Prometheus, Grafana, OTel Collector, Tempo) is deferred to later steps. It's intentional: each piece gets introduced with the concept that needs it, not all at once.
-- **Schema isolation via database, not instance**: one Postgres, one DB per service. If services later need isolated instances (different versions, restart schedules, etc.), split then.
-- **DB init is one-shot**: `init/*.sh` runs only when the data directory is empty. To re-run after adding a new DB, either add a migration in the service itself or wipe `.volumes/postgres/` and bring the container back up.
+- **스키마 격리: DB로, 인스턴스로 X**: 단일 Postgres에 서비스별 DB. 버전/재시작 주기가 분기하면 그때 인스턴스 분리.
+- **DB init은 1회**: `init/*.sh`는 데이터 디렉토리가 비어 있을 때만 실행. 새 DB는 서비스 쪽 마이그레이션으로 추가(Phase 2 후반 Flyway 도입 예정) 또는 `.volumes/postgres/` 삭제 후 재기동.
+- **Prometheus scrape**: 호스트에서 동작하는 서비스를 컨테이너가 긁기 위해 `host.docker.internal` 사용. macOS Docker Desktop에서 기본 동작. Linux는 `extra_hosts`로 매핑 필요.
+- **관측 다음 단계**: OpenTelemetry Collector + Tempo(분산 trace), k6 부하 시나리오는 후속 step에서.
