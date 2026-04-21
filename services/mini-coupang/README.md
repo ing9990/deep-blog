@@ -80,15 +80,49 @@ Testcontainers 기반 integration 테스트. 로컬 Postgres 불필요.
 
 | 항목 | 값 |
 |---|---|
-| 언어 | Kotlin 2.1 |
-| JVM | Java 21 (Virtual Threads enabled) |
+| 언어 | **Java 21** (Virtual Threads enabled) |
 | 프레임워크 | Spring Boot 3.3.5 |
+| 엔티티 패턴 | Lombok (`@Getter`, `@Builder`, `@NoArgsConstructor(PROTECTED)`, `@AllArgsConstructor(PRIVATE)`) + 정적 팩토리 + 도메인 메서드 (woowahan-eats `UserOrder` 패턴) |
+| DTO | Java record (불변 + 자동 equals/hashCode) |
 | ORM | Spring Data JPA + Hibernate |
 | DB | PostgreSQL 16 (`minicoupang_db`) |
-| 테스트 | JUnit 5 + Testcontainers |
+| 테스트 | JUnit 5 + Testcontainers + AssertJ + MockMvc |
 | 관측 | Micrometer + Prometheus |
 | 빌드 | Gradle 8.14 (Kotlin DSL + Version Catalog) |
 | 포트 | 8080 |
+
+## 엔티티 코딩 규칙
+
+모든 `@Entity` 클래스는 다음 패턴을 따른다. 참고: `https://github.com/f-lab-edu/woowahan-eats/blob/main/src/main/java/com/flab/woowahaneats/domain/order/user/domain/UserOrder.java`
+
+```java
+@Entity
+@Table(name = "...")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)   // JPA만 호출 가능
+@AllArgsConstructor(access = AccessLevel.PRIVATE)    // Builder 내부만 사용
+@Builder(toBuilder = true)
+public class Foo {
+    @Id @GeneratedValue(...)
+    private Long id;
+
+    // ... private 필드만. Setter 금지.
+
+    public static Foo create(...) {    // 정적 팩토리 + 검증
+        validate...;
+        return Foo.builder()...build();
+    }
+
+    public void someBehavior(...) {    // 상태 변경은 도메인 메서드로
+        validate...;
+        this.field = ...;
+    }
+
+    private static void validate...(...) { ... }
+}
+```
+
+핵심: **Setter 금지**, **필드 변경은 도메인 메서드 경유**, **정적 팩토리에서 필수 검증**.
 
 ## MSA 전환 체크리스트 (향후)
 
