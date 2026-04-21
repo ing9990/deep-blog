@@ -1,0 +1,71 @@
+services:
+  postgres-member:
+    image: postgres:16
+    container_name: mc-postgres-member
+    environment:
+      POSTGRES_DB: member
+      POSTGRES_USER: member
+      POSTGRES_PASSWORD: member
+    ports:
+      - "5442:5432"
+    volumes:
+      - postgres-member-data:/var/lib/postgresql/data
+
+  postgres-seller:
+    image: postgres:16
+    container_name: mc-postgres-seller
+    environment:
+      POSTGRES_DB: seller
+      POSTGRES_USER: seller
+      POSTGRES_PASSWORD: seller
+    ports:
+      - "5443:5432"
+    volumes:
+      - postgres-seller-data:/var/lib/postgresql/data
+
+  postgres-product:
+    image: postgres:16
+    container_name: mc-postgres-product
+    environment:
+      POSTGRES_DB: product
+      POSTGRES_USER: product
+      POSTGRES_PASSWORD: product
+    ports:
+      - "5444:5432"
+    volumes:
+      - postgres-product-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: mc-redis
+    ports:
+      - "6390:6379"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: mc-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: mc-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+volumes:
+  postgres-member-data:
+  postgres-seller-data:
+  postgres-product-data:

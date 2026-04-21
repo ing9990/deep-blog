@@ -1,0 +1,6 @@
+rootProject.name = 'mini-coupang'
+
+include 'common-module'
+include 'member-service'
+include 'seller-service'
+include 'product-service'
