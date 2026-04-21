@@ -1,4 +1,4 @@
-package com.deepblog.minicoupang.domain.seller;
+package com.deepblog.minicoupang.domain.user;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,26 +14,20 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * Seller aggregate root.
- *
- * 소스 패턴(woowahan-eats UserOrder 기반):
- * - @NoArgsConstructor(PROTECTED): JPA 요구사항을 충족하되 외부 new 차단.
- * - @AllArgsConstructor(PRIVATE): @Builder가 내부적으로 사용.
- * - @Builder(toBuilder = true): toBuilder로 불변식 유지하며 파생 인스턴스 생성.
- * - 필드 전체 private + @Getter만 노출. Setter는 금지.
- * - 상태 변경은 반드시 도메인 메서드 경유(rename 등). 직접 필드 접근 X.
+ * User aggregate root (구매자/주문자).
+ * Seller와 동일한 UserOrder 패턴을 따른다.
  */
 @Entity
-@Table(name = "sellers")
+@Table(name = "users")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder(toBuilder = true)
-public class Seller {
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "seller_id")
+    @Column(name = "user_id")
     private Long id;
 
     @Column(nullable = false, length = 80)
@@ -49,13 +43,13 @@ public class Seller {
     private Long version;
 
     /**
-     * 판매자 생성 팩토리. email은 lowercase로 정규화. passwordHash는 호출부가 인코딩 후 전달.
+     * 사용자 생성 팩토리. passwordHash는 호출부가 인코딩 후 전달한다.
      */
-    public static Seller create(String name, String email, String passwordHash) {
+    public static User create(String name, String email, String passwordHash) {
         validateName(name);
         validateEmail(email);
         validatePasswordHash(passwordHash);
-        return Seller.builder()
+        return User.builder()
                 .name(name.trim())
                 .email(email.trim().toLowerCase())
                 .passwordHash(passwordHash)

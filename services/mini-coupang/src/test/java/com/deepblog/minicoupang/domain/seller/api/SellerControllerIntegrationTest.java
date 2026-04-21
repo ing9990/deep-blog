@@ -36,7 +36,7 @@ class SellerControllerIntegrationTest {
         mockMvc.perform(post("/api/v1/sellers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {"name":"Toss Seller","email":"toss@example.com"}
+                            {"name":"Toss Seller","email":"toss@example.com","password":"password123"}
                             """))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", startsWith("/api/v1/sellers/")))
@@ -50,7 +50,7 @@ class SellerControllerIntegrationTest {
         String created = mockMvc.perform(post("/api/v1/sellers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {"name":"Seller A","email":"a@example.com"}
+                            {"name":"Seller A","email":"a@example.com","password":"password123"}
                             """))
                 .andReturn().getResponse().getContentAsString();
         long id = objectMapper.readTree(created).get("id").asLong();
@@ -72,7 +72,7 @@ class SellerControllerIntegrationTest {
         mockMvc.perform(post("/api/v1/sellers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {"name":"","email":"x@example.com"}
+                            {"name":"","email":"x@example.com","password":"password123"}
                             """))
                 .andExpect(status().isBadRequest());
     }
@@ -82,14 +82,14 @@ class SellerControllerIntegrationTest {
         mockMvc.perform(post("/api/v1/sellers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {"name":"First","email":"dup@example.com"}
+                            {"name":"First","email":"dup@example.com","password":"password123"}
                             """))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/v1/sellers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {"name":"Second","email":"dup@example.com"}
+                            {"name":"Second","email":"dup@example.com","password":"password123"}
                             """))
                 .andExpect(status().isConflict());
     }

@@ -1,7 +1,9 @@
 package com.deepblog.minicoupang;
 
+import com.deepblog.minicoupang.global.security.JwtProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
  * mini-coupang monolith 진입점.
@@ -11,6 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 설계 의도 (domain-design.md §1.5 전환 체크리스트 참조).
  */
 @SpringBootApplication
+@ConfigurationPropertiesScan(basePackageClasses = JwtProperties.class)
 public class MiniCoupangApplication {
 
     public static void main(String[] args) {
