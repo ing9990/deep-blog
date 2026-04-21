@@ -4,19 +4,48 @@
 
 ## 현재 단계
 
-**Phase 1 Step 4**: JPA + Postgres + Seller 엔티티 + Testcontainers 통합 테스트.
+**Phase 1 Step 6 완료**: seller-service 기본 REST API까지 동작.
 
-지금까지 누적:
+누적:
 - Gradle Kotlin DSL + Version Catalog (Step 2)
 - Spring Boot 3.3 + Kotlin 2.1 + Java 21 Virtual Threads (Step 2)
 - Spring Data JPA + Postgres 16 driver + Hibernate (Step 4)
 - `Seller` 엔티티 + `SellerRepository` (Step 4)
-- Testcontainers 통합 테스트 (`@ServiceConnection` 활용, Step 4)
+- Testcontainers 통합 테스트 (`@ServiceConnection`, Step 4)
+- Bean Validation 기반 request DTO + service + controller (Step 6)
+- `POST /api/v1/sellers`, `GET /api/v1/sellers/{id}` (Step 6)
+- MockMvc end-to-end 테스트 5건 (Step 6)
 
 아직 없는 것:
-- REST API (`POST /api/v1/sellers`, `GET /api/v1/sellers/{id}`) — Step 6
 - Multi-module 분리 (`storage:domain`, `storage:core-db`, `core:core-api`) — 추후 refactor
+- product-service (Step 7)
 - 관측성 스택 (Prometheus, Grafana, OTel, k6) — Step 8~11
+
+## API
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/sellers` | 판매자 등록. body: `{name, email}`. 201 + `Location` 헤더 |
+| `GET`  | `/api/v1/sellers/{id}` | 단건 조회. 200 or 404 |
+| `GET`  | `/actuator/health` | Spring Actuator health |
+
+## 예시 요청 (bootRun 중)
+
+```bash
+# Postgres 먼저 기동
+cd services && docker compose up -d postgres
+
+# 서비스 기동
+cd services/seller-service && ./gradlew bootRun
+
+# 등록
+curl -i -X POST http://localhost:8081/api/v1/sellers \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Toss Seller","email":"toss@example.com"}'
+
+# 조회 (생성 응답의 id 사용)
+curl http://localhost:8081/api/v1/sellers/1
+```
 
 ## 실행
 
