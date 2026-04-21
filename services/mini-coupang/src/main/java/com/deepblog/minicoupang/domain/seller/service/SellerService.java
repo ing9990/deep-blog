@@ -7,6 +7,7 @@ import com.deepblog.minicoupang.domain.seller.storage.SellerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,10 +18,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class SellerService {
 
     private final SellerRepository repository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public SellerResponse create(CreateSellerRequest request) {
-        Seller seller = Seller.create(request.name(), request.email());
+        String hash = passwordEncoder.encode(request.password());
+        Seller seller = Seller.create(request.name(), request.email(), hash);
         try {
             Seller saved = repository.save(seller);
             return SellerResponse.from(saved);

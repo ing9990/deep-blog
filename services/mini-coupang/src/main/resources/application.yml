@@ -38,3 +38,10 @@ management:
 logging:
   level:
     org.hibernate.SQL: DEBUG
+
+# JWT secret은 로컬용 기본값. 운영에서는 ${APP_JWT_SECRET} 환경변수로 주입.
+# HS256은 최소 32바이트 필요.
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:local-dev-secret-please-change-in-production-0123456789}
+    ttl: 1h
