@@ -11,8 +11,7 @@
 set -euo pipefail
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-  CREATE DATABASE seller_db;
-  CREATE DATABASE product_db;
+  CREATE DATABASE minicoupang_db;
 EOSQL
 
-echo "Created databases: seller_db, product_db"
+echo "Created databases: minicoupang_db"

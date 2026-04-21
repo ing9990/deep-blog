@@ -8,8 +8,8 @@
 
 누적 구성:
 - Postgres 16 (`seller_db`, `product_db`)
-- seller-service (8081) + product-service (8082)
-- **Prometheus 2.55** (9090) — scrape: 자신 + seller-service + product-service
+- mini-coupang (8080, monolith: seller + product 도메인 포함)
+- **Prometheus 2.55** (9090) — scrape: 자신 + mini-coupang
 - **Grafana 11.3** (3000) — Prometheus datasource 자동 프로비저닝, 익명 Viewer 허용
 
 ## Quick start
@@ -20,9 +20,8 @@ cd services
 # 인프라 전체 기동
 docker compose up -d postgres prometheus grafana
 
-# 서비스는 각 디렉토리에서
-(cd seller-service  && ./gradlew bootRun) &
-(cd product-service && ./gradlew bootRun) &
+# 앱 기동
+cd mini-coupang && ./gradlew bootRun
 
 # 상태 확인
 docker compose ps
@@ -53,9 +52,8 @@ rm -rf .volumes/postgres     # wipe persistent data on host
 
 | Target | Host | Port | 인증 |
 |---|---|---|---|
-| Postgres | `localhost` | 5432 | user `deep` / pw `deep_local` / DBs: `deep`, `seller_db`, `product_db` |
-| seller-service | `localhost` | 8081 | 없음 (MVP) |
-| product-service | `localhost` | 8082 | 없음 (MVP) |
+| Postgres | `localhost` | 5432 | user `deep` / pw `deep_local` / DBs: `deep`, `minicoupang_db` |
+| mini-coupang | `localhost` | 8080 | 없음 (MVP) |
 | Prometheus | `localhost` | 9090 | 없음 |
 | Grafana | `localhost` | 3000 | 익명 Viewer / admin `admin`·`deep_local` |
 
@@ -70,8 +68,7 @@ services/
 │   ├── prometheus/prometheus.yml       # scrape 대상: seller/product/self
 │   └── grafana/provisioning/
 │       └── datasources/prometheus.yml  # Prometheus 자동 등록
-├── seller-service/                     # Spring Boot · Kotlin · 8081
-├── product-service/                    # Spring Boot · Kotlin · 8082
+├── mini-coupang/                       # Spring Boot · Kotlin · 8080 (monolith)
 ├── .volumes/                           # postgres/prometheus/grafana 영속 볼륨 (gitignore)
 └── README.md
 ```
