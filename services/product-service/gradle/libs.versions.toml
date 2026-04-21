@@ -21,6 +21,7 @@ postgresql                       = { module = "org.postgresql:postgresql",      
 testcontainers-postgresql        = { module = "org.testcontainers:postgresql",           version.ref = "testcontainers" }
 testcontainers-junit-jupiter     = { module = "org.testcontainers:junit-jupiter",        version.ref = "testcontainers" }
 junit-platform-launcher          = { module = "org.junit.platform:junit-platform-launcher" }
+micrometer-registry-prometheus   = { module = "io.micrometer:micrometer-registry-prometheus" }
 
 [plugins]
 kotlin-jvm                   = { id = "org.jetbrains.kotlin.jvm",             version.ref = "kotlin" }

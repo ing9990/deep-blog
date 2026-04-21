@@ -31,6 +31,9 @@ dependencies {
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.kotlin.reflect)
+    // Actuator가 /actuator/prometheus를 텍스트 포맷으로 노출하려면
+    // Micrometer의 Prometheus 레지스트리가 런타임에 있어야 한다.
+    runtimeOnly(libs.micrometer.registry.prometheus)
     runtimeOnly(libs.postgresql)
 
     testImplementation(libs.spring.boot.starter.test)

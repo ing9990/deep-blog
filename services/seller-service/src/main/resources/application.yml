@@ -33,13 +33,18 @@ management:
   endpoints:
     web:
       exposure:
-        # Phase 1 Step 2 exposes only health + info. Prometheus comes when
-        # Micrometer + Prometheus are wired in the observability step.
-        include: [health, info]
+        # Phase 2: Prometheus scraping 가능하도록 /actuator/prometheus
+        # 노출. Micrometer가 JVM + HTTP 서버 메트릭을 기본 export.
+        include: [health, info, prometheus, metrics]
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      # 각 서비스의 모든 메트릭에 application 태그를 달아 Grafana/Prometheus
+      # 쿼리에서 필터/그룹화 쉬움.
+      application: seller-service
 
 logging:
   level:

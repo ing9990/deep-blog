@@ -26,6 +26,7 @@ dependencies {
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.kotlin.reflect)
+    runtimeOnly(libs.micrometer.registry.prometheus)
     runtimeOnly(libs.postgresql)
 
     testImplementation(libs.spring.boot.starter.test)
