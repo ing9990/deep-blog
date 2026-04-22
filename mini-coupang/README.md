@@ -262,6 +262,16 @@ infrastructure/
     └── SpringEventPublisher.java         # 초기엔 ApplicationEvent, 나중에 Kafka로 교체
 ```
 
+## 현재 구현
+
+- **auth** — 이메일/패스워드 회원가입·로그인·로그아웃
+  - `Account(id, email, password_hash, created_at)` + `AccountRepository` (JPA)
+  - `AuthService` (BCrypt 해시, 이메일 중복 체크)
+  - `AuthController`: `POST /auth/signup` (201) / `POST /auth/login` (200, 세션 발급) / `POST /auth/logout` (204)
+  - `AuthInterceptor`가 `HttpSession`에서 `AUTH_ACCOUNT_ID`를 읽어 `AuthContextHolder`(ThreadLocal)에 `AuthContext`를 세팅
+  - 실패 응답: 409 `DUPLICATE_EMAIL`, 401 `INVALID_CREDENTIALS`, 400 `VALIDATION_ERROR`
+  - 설계 근거: Spring Security 없이 Session + 커스텀 Interceptor 축 (단일 인스턴스 모노리스 전제, 다중 인스턴스로 확장 시 Spring Session + Redis 승격)
+
 ## 다음 단계
 
-현재는 Spring Boot 컨텍스트가 뜨는 것 외에는 아무 기능도 없다. 이후 작은 단위(예: `auth` 회원가입 → `product` 등록/조회 → `cart` → `order` 생성 → `payment` …)로 하나씩 채워 나가며, 각 단계에서 SLO·측정·트레이드오프를 근거로 구현을 결정한다.
+작은 단위(예: `user` / `seller` 프로필 분리 → `product` 등록/조회 → `cart` → `order` 생성 → `payment` …)로 하나씩 채워 나가며, 각 단계에서 SLO·측정·트레이드오프를 근거로 구현을 결정한다.
