@@ -27,6 +27,7 @@ import { EventLoopDance } from '@/components/visualizations/EventLoopDance'
 import { GCAlgorithmMatrix } from '@/components/visualizations/GCAlgorithmMatrix'
 import { GCCycle } from '@/components/visualizations/GCCycle'
 import { GCHeapStructure } from '@/components/visualizations/GCHeapStructure'
+import { GrpcCallFlow } from '@/components/visualizations/GrpcCallFlow'
 import { IdempotencyCausalityChain } from '@/components/visualizations/IdempotencyCausalityChain'
 import { IdempotencyKeyFlow } from '@/components/visualizations/IdempotencyKeyFlow'
 import { IOModelMatrix } from '@/components/visualizations/IOModelMatrix'
@@ -121,6 +122,7 @@ export const mdxComponents: MDXComponents = {
   GCAlgorithmMatrix,
   GCCycle,
   GCHeapStructure,
+  GrpcCallFlow,
   CardinalitySpectrum,
   CardinalityTradeoff,
   CompositeIndexLeaf,

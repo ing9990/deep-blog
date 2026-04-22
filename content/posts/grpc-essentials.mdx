@@ -1,0 +1,281 @@
+---
+title:
+  ko: "gRPC 입문"
+  en: "gRPC Essentials"
+slug: "grpc-essentials"
+date: 2026-04-22
+tags:
+  - backend
+  - distributed-systems
+  - gRPC
+  - RPC
+keywords:
+  - gRPC
+  - Protobuf
+  - Protocol Buffers
+  - Remote Procedure Call
+summary:
+  ko: "gRPC가 왜 만들어졌고, REST 대비 어떤 문제를 해결하며, .proto 정의부터 서버와 클라이언트 구현까지 입문에 필요한 흐름을 이해할 수 있습니다. HTTP/2와 Protobuf가 결합해 만들어내는 RPC의 새 형태를 살펴봅니다."
+  en: "Understand why gRPC was created, what problems it solves over REST, and the basic flow from .proto definition through server and client implementation. Explores the new shape of RPC that HTTP/2 and Protobuf together create."
+category: infrastructure
+draft: false
+---
+
+마이크로서비스가 늘어나면서 서버 사이의 통신은 사람이 읽을 일이 거의 없어졌습니다. gRPC는 그런 환경을 위해 다시 설계된 RPC 프레임워크로, JSON과 HTTP/1.1로는 풀기 어려운 세 가지 문제를 정면으로 풀어냅니다. 이 글은 gRPC의 큰 그림과 가장 흔한 unary RPC 한 개를 처음부터 끝까지 만드는 흐름을 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - gRPC가 REST 대비 어떤 문제를 해결하기 위해 만들어졌는지 이해한다
+  - `.proto` 정의에서 서버, 클라이언트 코드가 자동 생성되는 흐름을 구분할 수 있다
+  - 자신의 시스템에서 gRPC가 적합한 상황과 피해야 할 상황을 판단하는 기준을 얻는다
+</Note>
+
+## gRPC란
+
+gRPC는 Google이 2015년에 공개한 오픈소스 RPC 프레임워크입니다. RPC(Remote Procedure Call)는 원격 함수를 마치 로컬 함수처럼 호출하는 방식이고, gRPC는 그 RPC를 현대 분산 환경에 맞게 다시 설계한 구현체입니다.
+
+다른 통신 방식과 구분 짓는 세 가지 축이 있습니다.
+
+| 축 | 내용 |
+|---|---|
+| IDL 기반 | `.proto` 파일에 서비스 인터페이스를 먼저 선언. 서버와 클라이언트의 계약서가 됨 |
+| 코드 자동 생성 | `protoc` 컴파일러로 서버 스텁과 클라이언트 스텁을 원하는 언어로 생성 |
+| HTTP/2 + Protobuf | 텍스트 JSON이 아닌 바이너리 포맷을 HTTP/2 위에서 멀티플렉싱 |
+
+처음 만지면 "REST는 핸들러만 등록하면 끝인데 왜 컴파일 단계가 따로 있지?"가 가장 어색한 부분입니다. 이 사전 합의(precompiled contract)가 다음 섹션에서 풀어낼 gRPC의 핵심 동기입니다.
+
+## 왜 필요한가
+
+REST는 단순하고 어디서나 동작하지만, 마이크로서비스 간 내부 통신이 늘면서 세 가지 한계가 분명해졌습니다. gRPC는 그 셋을 정면으로 해결합니다.
+
+### 1. JSON은 사람에게는 쉽지만 기계에는 비싸다
+
+JSON은 텍스트입니다. `{"userId":1234,"price":29900}` 한 줄을 송신 측은 문자열로 직렬화하고, 수신 측은 다시 파싱해 객체로 복원합니다. 필드 이름(`userId`, `price`)이 매 요청마다 같이 실려 가고, 숫자도 문자로 바뀌어 전송됩니다(`1234` → `"1234"`).
+
+Protobuf는 같은 데이터를 태그 번호 + 바이너리로 보냅니다. 필드 이름은 보내지 않고 `userId`는 그냥 "1번 필드", `price`는 "2번 필드"로 표시됩니다. 같은 페이로드 기준 일반적으로 3에서 10배 작고, 직렬화 속도도 빠릅니다.
+
+### 2. REST는 계약이 문서에만 있다
+
+REST API는 보통 Swagger/OpenAPI 문서로 설명되지만, 그 문서는 코드와 분리되어 있습니다. 서버가 응답에 `userName` 대신 `user_name`으로 바꿔도 컴파일러는 모릅니다. 클라이언트는 런타임에 `null`을 받고 나서야 깨집니다.
+
+gRPC는 `.proto` 파일이 코드 자체입니다. 서버와 클라이언트가 같은 `.proto`를 공유하고 거기서 코드가 생성되므로, 필드 이름과 타입이 컴파일 시점에 강제됩니다. REST의 "런타임에 터지는 계약 위반"이 거의 사라집니다.
+
+### 3. HTTP/1.1은 한 연결당 한 요청
+
+HTTP/1.1은 한 TCP 연결 위에서 요청을 줄 세웁니다(Head-of-line blocking). 동시 요청을 보내려면 연결을 여러 개 만들어야 하고, 서버가 클라이언트에 자발적으로 데이터를 푸시하려면 폴링·SSE·WebSocket 같은 우회가 필요합니다.
+
+gRPC는 HTTP/2를 깔고 갑니다. 한 TCP 연결 위에서 여러 요청을 동시에 흘리고(멀티플렉싱), 양방향 스트리밍이 1급 시민입니다. 이 덕에 gRPC는 단순 요청-응답뿐 아니라 다음 4가지 통신 패턴을 표준으로 제공합니다.
+
+| 패턴 | 설명 | 예시 |
+|---|---|---|
+| Unary | 1요청, 1응답 (REST와 동일) | 사용자 조회 |
+| Server streaming | 1요청, N응답 | 주문 목록을 페이지 단위로 흘리기 |
+| Client streaming | N요청, 1응답 | 위치 정보를 계속 보내고 마지막에 요약 받기 |
+| Bidirectional | N요청, N응답 | 채팅, 실시간 게임 동기화 |
+
+## 내부 동작
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  gRPC는 `.proto` 한 파일을 계약서로 두고, 서버와 클라이언트 코드를 컴파일 시점에 동시에 생성합니다.
+  개발자가 작성하는 것은 비즈니스 로직과 호출 코드뿐이고, 직렬화와 전송은 모두 자동입니다.
+</Callout>
+
+<Callout type="error" title="핵심 통찰: gRPC는 RPC가 아니라 컴파일 파이프라인이다">
+  gRPC를 라이브러리로만 보면 본질을 놓칩니다. 핵심은 `.proto`라는 단일 진실 공급원에서 양쪽 코드가 동시에 생성된다는 것입니다.
+  덕분에 계약 위반이 런타임이 아닌 컴파일 시점에 잡히고, 다양한 언어가 같은 서비스를 호출하는 환경에서도 일관성이 유지됩니다.
+</Callout>
+
+기초 구현은 다섯 단계입니다. `.proto` 정의 → 의존성·플러그인 설정 → 코드 생성 → 서버 구현 → 클라이언트 호출. Spring Boot + Java 기준으로 가장 흔한 unary RPC(1요청-1응답) 한 개를 만들어 보겠습니다.
+
+<GrpcCallFlow />
+
+### Step 1. `.proto` 파일 작성
+
+`src/main/proto/user.proto`에 다음과 같이 정의합니다.
+
+```proto title="user.proto"
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.example.grpc.user";
+
+service UserService {
+  rpc GetUser (GetUserRequest) returns (GetUserResponse);
+}
+
+message GetUserRequest {
+  int64 user_id = 1;
+}
+
+message GetUserResponse {
+  int64 user_id = 1;
+  string name = 2;
+  string email = 3;
+}
+```
+
+읽는 법은 단순합니다. `service`는 함수의 묶음(Java 인터페이스 같은 것), `rpc`는 함수 시그니처, `message`는 요청/응답 DTO입니다. 각 필드 뒤의 `= 1`, `= 2`는 필드 태그 번호로, Protobuf가 바이너리에서 필드를 식별하는 ID입니다.
+
+<Callout type="warning" title="태그 번호는 절대 재사용하지 않는다">
+  한번 정한 필드 태그 번호는 나중에 변경하거나 다른 필드에 재사용하면 안 됩니다.
+  같은 `.proto`로 만든 구버전 클라이언트와 신버전 서버가 혼재할 때 호환성이 깨지기 때문입니다.
+  필드를 제거할 때는 `reserved 3;`처럼 명시해 그 번호를 영구히 봉인합니다.
+</Callout>
+
+### Step 2. 의존성과 Protobuf 플러그인
+
+`build.gradle`에 컴파일러와 Spring Boot 통합 스타터를 추가합니다.
+
+```groovy title="build.gradle"
+plugins {
+  id 'java'
+  id 'org.springframework.boot' version '3.3.0'
+  id 'com.google.protobuf' version '0.9.4'
+}
+
+dependencies {
+  implementation 'net.devh:grpc-server-spring-boot-starter:3.1.0.RELEASE'
+  implementation 'net.devh:grpc-client-spring-boot-starter:3.1.0.RELEASE'
+  implementation 'io.grpc:grpc-netty-shaded:1.63.0'
+}
+
+protobuf {
+  protoc { artifact = 'com.google.protobuf:protoc:3.25.1' }
+  plugins {
+    grpc { artifact = 'io.grpc:protoc-gen-grpc-java:1.63.0' }
+  }
+  generateProtoTasks {
+    all()*.plugins { grpc {} }
+  }
+}
+```
+
+`protoc`는 Protobuf 컴파일러로 메시지 클래스를 만들고, `protoc-gen-grpc-java`는 gRPC 서비스 스텁을 만드는 플러그인입니다. `grpc-spring-boot-starter`는 서버 부트스트랩과 클라이언트 채널 관리를 자동으로 처리해 줍니다.
+
+### Step 3. 코드 생성
+
+```bash
+./gradlew build
+```
+
+빌드 한 번이면 `build/generated/source/proto/main/`에 다음이 생성됩니다.
+
+| 생성물 | 설명 |
+|---|---|
+| `GetUserRequest.java`, `GetUserResponse.java` | 메시지 POJO (빌더 패턴) |
+| `UserServiceGrpc.UserServiceImplBase` | 서버용 추상 클래스 |
+| `UserServiceGrpc.UserServiceBlockingStub` | 클라이언트용 동기 호출 stub |
+
+이 코드는 수동으로 건드리지 않습니다. `.proto`를 바꾸면 다음 빌드 때 다시 생성됩니다.
+
+### Step 4. 서버 구현
+
+생성된 `UserServiceImplBase`를 상속해서 비즈니스 로직만 채웁니다.
+
+```java title="UserGrpcService.java"
+import io.grpc.stub.StreamObserver;
+import net.devh.boot.grpc.server.service.GrpcService;
+
+@GrpcService
+public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
+
+  @Override
+  public void getUser(GetUserRequest request,
+                      StreamObserver<GetUserResponse> responseObserver) {
+    GetUserResponse response = GetUserResponse.newBuilder()
+        .setUserId(request.getUserId())
+        .setName("Hong Gildong")
+        .setEmail("hong@example.com")
+        .build();
+
+    responseObserver.onNext(response);
+    responseObserver.onCompleted();
+  }
+}
+```
+
+`@GrpcService`는 Spring Boot 스타터가 제공하는 어노테이션으로, 이 빈을 자동으로 gRPC 서버에 등록합니다. `StreamObserver`는 응답을 흘려보내는 통로입니다. unary RPC도 내부적으로는 스트림이라 `onNext`로 한 번 보내고 `onCompleted`로 종료를 알립니다.
+
+`application.yml`은 한 줄이면 충분합니다.
+
+```yaml title="application.yml"
+grpc:
+  server:
+    port: 9090
+```
+
+### Step 5. 클라이언트 호출
+
+같은 `.proto`로 생성된 stub을 주입받아 함수처럼 호출합니다.
+
+```java title="UserClient.java"
+import net.devh.boot.grpc.client.inject.GrpcClient;
+
+@Service
+public class UserClient {
+
+  @GrpcClient("user-service")
+  private UserServiceGrpc.UserServiceBlockingStub stub;
+
+  public String fetchUserName(long userId) {
+    GetUserRequest request = GetUserRequest.newBuilder()
+        .setUserId(userId)
+        .build();
+
+    GetUserResponse response = stub.getUser(request);
+    return response.getName();
+  }
+}
+```
+
+```yaml title="application.yml"
+grpc:
+  client:
+    user-service:
+      address: 'static://localhost:9090'
+      negotiation-type: plaintext
+```
+
+`stub.getUser(request)`는 일반 메서드 호출로 보이지만, 내부에서는 다음 일이 일어납니다.
+
+1. `GetUserRequest`를 Protobuf 바이너리로 직렬화
+2. HTTP/2 스트림에 실어 서버로 송신
+3. 서버에서 응답 바이너리를 받아 `GetUserResponse` 객체로 역직렬화
+4. 호출 측에 반환
+
+Streaming(server / client / bidi)도 같은 패턴입니다. `.proto`에 `stream` 키워드를 붙이고 서버와 클라이언트에서 `StreamObserver`를 직접 다루면 됩니다. 입문 단계에서는 unary 한 개를 끝까지 돌려보는 것이 우선입니다.
+
+## 어디에 쓰고 어디에 피할까
+
+gRPC가 만능은 아닙니다. 가장 잘 맞는 곳과 오히려 부담이 되는 곳이 분명히 갈립니다.
+
+### 적합한 곳
+
+| 환경 | 이유 |
+|---|---|
+| 마이크로서비스 간 내부 통신 | `.proto`를 공유 모듈로 두면 계약 위반이 컴파일 시점에 잡힘 |
+| 다양한 언어가 섞인 환경 | `.proto` 하나로 Java, Go, Python 등 모든 언어 클라이언트가 자동 생성 |
+| 실시간 양방향 통신 | 채팅, 위치 동기화, 실시간 알림. WebSocket을 직접 다루는 것보다 타입 안전 |
+| 모바일과 백엔드 사이 | 페이로드가 작아 셀룰러 환경에서 유리. gRPC 설계 동기 중 하나 |
+
+### 피하는 게 나은 곳
+
+| 환경 | 이유 |
+|---|---|
+| 브라우저와 서버 사이 | 브라우저는 HTTP/2 trailer 같은 기능을 직접 못 다룸. `gRPC-Web` 프록시 계층이 따로 필요 |
+| 외부에 공개하는 퍼블릭 API | 외부 개발자에게 `.proto` 받아 `protoc` 돌리라는 진입 장벽이 큼. `curl` 한 줄 테스트가 안 됨 |
+| 단순 CRUD 백엔드 | 트래픽이 적고 통신 패턴이 unary 하나뿐이면 도입 비용이 얻는 것보다 큼 |
+
+한 줄로 정리하면, "내부에서, 자주, 다양한 언어가, 실시간으로 호출"하면 gRPC, "외부에, 가끔, 사람이 디버깅하면서" 쓸 거면 REST입니다.
+
+## 마무리
+
+gRPC는 RPC 라이브러리가 아니라 `.proto`를 중심으로 한 컴파일 파이프라인입니다. JSON의 비용, REST의 느슨한 계약, HTTP/1.1의 단방향 한계라는 세 가지 문제를 한 번에 푸는 대신, 코드 생성 단계와 디버깅 도구라는 새로운 비용을 받아들입니다. 자신의 시스템이 "내부 마이크로서비스 사이의 자주 일어나는 호출"이 핵심이라면 그 비용은 충분히 지불할 가치가 있습니다.
+
+이 글은 unary RPC 하나를 끝까지 돌리는 데 집중했지만, gRPC의 진짜 강력한 면은 streaming과 양방향 통신에 있습니다. HTTP/2 멀티플렉싱 내부 동작, Protobuf wire format, streaming 4종 상세, 운영 시 로드밸런싱 전략은 별도 글감으로 남겨 둡니다.
+
+## 참고 자료
+
+- [gRPC 공식 문서](https://grpc.io/docs/)
+- [Protocol Buffers 공식 문서](https://protobuf.dev/)
+- [grpc-spring-boot-starter (yidongnan)](https://github.com/grpc-ecosystem/grpc-spring-boot-starter)
+- [HTTP/2 RFC 9113](https://www.rfc-editor.org/rfc/rfc9113)
