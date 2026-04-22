@@ -12,9 +12,7 @@ tags:
 keywords:
   - "RAG"
   - "Retrieval-Augmented Generation"
-  - "임베딩"
   - "벡터 검색"
-  - "ANN"
 summary:
   ko: "LLM이 가중치 안에 없는 지식을 답하는 방법을 이해할 수 있습니다. 의미 검색이 벡터 공간의 최근접 이웃 탐색으로 환원되는 원리, chunking과 ANN의 트레이드오프, Fine-tuning과 Long-context와의 선택 기준까지 다룹니다."
   en: "How LLMs answer with knowledge that isn't in their weights. Understand semantic search reduced to nearest-neighbor search in vector space, chunking and ANN tradeoffs, and when to pick RAG over fine-tuning or long-context."
@@ -140,19 +138,11 @@ $$v(\text{king}) - v(\text{man}) + v(\text{woman}) \approx v(\text{queen})$$
 
 그다음 벡터 DB에서 "질문 벡터 $q$와 가장 가까운 chunk 벡터 top-k개"를 찾아야 합니다. 가장 단순한 방법은 **exact search**, 저장된 모든 $N$개 벡터와 $q$의 유사도를 계산해 상위 $k$개를 고르는 것입니다. 시간 복잡도는 $O(N \cdot d)$입니다.
 
-$N$이 10만이면 괜찮지만, 1억이라면? 1536차원 float32 벡터 1억 개는 약 600 GB, 질의 한 번에 1억 번의 내적이 필요합니다. 100ms 안에 답하려면 불가능합니다. 그래서 실무에서는 **근사 최근접 이웃(ANN, Approximate Nearest Neighbor)** 을 씁니다. "정확히 가장 가까운 점"을 포기하는 대신 "거의 가까운 점을 매우 빠르게" 찾는 알고리즘입니다. Recall이 98% 정도면 99에서 100%를 고집할 이유가 별로 없습니다. 어차피 LLM이 여러 chunk를 참고해 답을 보완하기 때문입니다.
+$N$이 10만이면 괜찮지만, 1억이라면? 1536차원 float32 벡터 1억 개는 약 600 GB, 질의 한 번에 1억 번의 내적이 필요합니다. 100ms 안에 답하려면 불가능합니다. 그래서 실무에서는 **근사 최근접 이웃 (ANN, Approximate Nearest Neighbor)** 을 씁니다. "정확히 가장 가까운 점"을 포기하는 대신 "거의 가까운 점을 매우 빠르게" 찾는 알고리즘으로, HNSW · IVF · PQ 같은 대표 인덱스가 있습니다. Recall이 98% 정도면 99에서 100%를 고집할 이유가 별로 없습니다. 어차피 LLM이 여러 chunk를 참고해 답을 보완하기 때문입니다.
 
-대표 알고리즘을 감각적으로 소개하면 다음과 같습니다.
+<RelatedPost slug="vector-database-primer" type="deep-dive" />
 
-| 알고리즘 | 핵심 아이디어 | 특징 |
-|---|---|---|
-| HNSW | 벡터들을 다층 그래프로 연결. 위층은 듬성듬성, 아래층은 촘촘. 위에서 대충 방향 잡고 내려오며 정밀화 | 질의 시간 거의 $O(\log N)$. `pgvector`, Qdrant, Weaviate 기본 |
-| IVF | 벡터 공간을 $K$개 클러스터로 분할. 질의 벡터가 속한 클러스터만 검사 | 클러스터 경계 근처 점을 놓칠 수 있음. FAISS 기본 옵션 |
-| PQ | 벡터를 조각으로 쪼개 코드북으로 양자화. 저장 공간을 수십 배 압축 | 정확도 하락, 메모리 부족 대규모에 유리. 보통 IVF와 조합(`IVF-PQ`) |
-
-HNSW는 도시 지도를 고속도로 → 국도 → 골목길 순으로 좁혀 내려가는 탐색에 가깝습니다. 대략적인 방향을 먼저 잡고 점점 정밀해지는 발상입니다.
-
-공통 핵심은 **recall · latency · memory의 삼각 트레이드오프**입니다. 세 축 중 둘을 선택하면 나머지 하나는 포기해야 합니다. 프로덕션에서는 보통 HNSW로 시작해 "recall 95% 이상 + p95 50ms 이하"를 목표로 `ef_search`, `M` 같은 파라미터를 튜닝합니다.
+RAG 맥락에서 중요한 건 **recall · latency · memory의 삼각 트레이드오프**입니다. 세 축 중 둘을 선택하면 나머지 하나는 포기해야 합니다. 프로덕션에서는 보통 HNSW로 시작해 "recall 95% 이상 + p95 50ms 이하"를 목표로 `ef_search`, `M` 같은 파라미터를 튜닝합니다.
 
 Top-k 조회로 끝내지 않고 **Re-ranking**으로 재정렬하는 2단 파이프라인도 흔합니다. Embedding 모델은 두 텍스트를 따로따로 벡터화한 뒤 거리로 비교합니다(`bi-encoder`, 빠름). Re-ranker는 (질문, chunk) 쌍을 함께 입력받아 관련성을 채점합니다(`cross-encoder`, 정확하지만 느림). 그래서 "빠른 bi-encoder로 top-50을 뽑고 → 느린 cross-encoder로 top-5로 재정렬 → LLM에 넘김"처럼 조합합니다. Cohere Rerank, BGE-reranker 등이 이 용도입니다.
 
