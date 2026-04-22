@@ -48,7 +48,6 @@ export const MESSAGES = {
   'settings.code':             { ko: '코드 블록 테마',    en: 'Code block theme' },
   'settings.code.flat':        { ko: 'Flat',              en: 'Flat' },
   'settings.code.floating':    { ko: 'Floating',          en: 'Floating' },
-  'settings.code.rail':        { ko: 'Rail',              en: 'Rail' },
   'settings.syntax':           { ko: 'Syntax 테마',       en: 'Syntax theme' },
   'settings.syntax.atom':      { ko: 'Atom',              en: 'Atom' },
   'settings.syntax.github':    { ko: 'GitHub',            en: 'GitHub' },

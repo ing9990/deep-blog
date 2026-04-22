@@ -22,6 +22,7 @@ import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
 import { DDDAggregate } from '@/components/visualizations/DDDAggregate'
 import { DDDBoundedContext } from '@/components/visualizations/DDDBoundedContext'
 import { DDDTermConfusion } from '@/components/visualizations/DDDTermConfusion'
+import { DualWriteFailureWindows } from '@/components/visualizations/DualWriteFailureWindows'
 import { EventLoopDance } from '@/components/visualizations/EventLoopDance'
 import { GCAlgorithmMatrix } from '@/components/visualizations/GCAlgorithmMatrix'
 import { GCCycle } from '@/components/visualizations/GCCycle'
@@ -127,6 +128,7 @@ export const mdxComponents: MDXComponents = {
   DDDAggregate,
   DDDBoundedContext,
   DDDTermConfusion,
+  DualWriteFailureWindows,
   EventLoopDance,
   IdempotencyCausalityChain,
   IdempotencyKeyFlow,

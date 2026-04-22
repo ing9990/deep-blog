@@ -1,0 +1,73 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "schemaVersion": 39,
+  "tags": ["mini-coupang", "outbox"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "15s",
+  "title": "mini-coupang — Outbox & Consumer",
+  "uid": "mc-outbox",
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Outbox unpublished rows (seller-service)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "outbox_events_unpublished{application=\"seller-service\"}",
+          "legendFormat": "unpublished"
+        },
+        {
+          "refId": "B",
+          "expr": "outbox_events_total{application=\"seller-service\"}",
+          "legendFormat": "total"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Kafka consumer records (product-service)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(kafka_consumer_fetch_manager_records_consumed_total{application=\"product-service\"}[1m])",
+          "legendFormat": "{{topic}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Consumer lag per partition (product-service)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kafka_consumer_fetch_manager_records_lag{application=\"product-service\"}",
+          "legendFormat": "{{topic}} p{{partition}}"
+        }
+      ]
+    }
+  ]
+}

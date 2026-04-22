@@ -5,8 +5,8 @@ export const CATEGORY_IDS = [
   'language-backend',
   'database',
   'infrastructure',
-  'ai',
   'knowledge',
+  'mini-coupang-backend',
   'etc',
 ] as const
 
@@ -40,14 +40,14 @@ export const CATEGORIES: readonly CategoryMeta[] = [
     description: { en: 'Middleware and infra products (Redis, Kafka, RabbitMQ)', ko: '미들웨어·인프라 제품 (Redis, Kafka, RabbitMQ)' },
   },
   {
-    id: 'ai',
-    label:       { en: 'AI', ko: 'AI' },
-    description: { en: 'LLM, machine learning, AI engineering', ko: 'LLM, 머신러닝, AI 엔지니어링' },
-  },
-  {
     id: 'knowledge',
     label:       { en: 'Knowledge', ko: '지식' },
     description: { en: 'Terms, concepts, fundamentals', ko: '용어, 개념, 기초 지식' },
+  },
+  {
+    id: 'mini-coupang-backend',
+    label:       { en: 'Mini Coupang Backend', ko: '미니쿠팡 백엔드' },
+    description: { en: 'Implementation-origin posts from the mini-coupang sandbox (design decisions with measurements)', ko: '미니쿠팡 샌드박스 구현에서 나온 설계 결정과 측정 기반 기록' },
   },
   {
     id: 'etc',
