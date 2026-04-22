@@ -1,4 +1,4 @@
-package com.deepblog.minicoupang.domain.auth;
+package com.deepblog.minicoupang.domain.auth.context;
 
 public record AuthContext(Long accountId) {
 
