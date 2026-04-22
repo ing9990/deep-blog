@@ -1,5 +1,7 @@
 package com.deepblog.minicoupang.domain.auth.context;
 
+import static java.util.Optional.ofNullable;
+
 import java.util.Optional;
 
 public final class AuthContextHolder {
@@ -14,7 +16,7 @@ public final class AuthContextHolder {
     }
 
     public static Optional<AuthContext> get() {
-        return Optional.ofNullable(CONTEXT.get());
+        return ofNullable(CONTEXT.get());
     }
 
     public static void clear() {

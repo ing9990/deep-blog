@@ -17,7 +17,8 @@
 
 ## 아키텍처 예시 (참고용)
 
-> 아래는 방향성 예시이며 실제 구현은 달라질 수 있다. 예를 들어 결제 이전 재고 예약은 Redis를 통해서만 수행하고, 결제 실패·환불 시점의 재고 복구는 Event를 발행해 Event Handler에서 수행하는 식으로 바뀔 수 있다. 세부 구현은 각 기능을 작게 쪼개 구현하는 시점에 결정한다.
+> 아래는 방향성 예시이며 실제 구현은 달라질 수 있다. 예를 들어 결제 이전 재고 예약은 Redis를 통해서만 수행하고, 결제 실패·환불 시점의 재고 복구는 Event를 발행해
+> Event Handler에서 수행하는 식으로 바뀔 수 있다. 세부 구현은 각 기능을 작게 쪼개 구현하는 시점에 결정한다.
 
 ### 최상위 구조
 
@@ -261,17 +262,3 @@ infrastructure/
 └── messaging/
     └── SpringEventPublisher.java         # 초기엔 ApplicationEvent, 나중에 Kafka로 교체
 ```
-
-## 현재 구현
-
-- **auth** — 이메일/패스워드 회원가입·로그인·로그아웃
-  - `Account(id, email, password_hash, created_at)` + `AccountRepository` (JPA)
-  - `AuthService` (BCrypt 해시, 이메일 중복 체크)
-  - `AuthController`: `POST /auth/signup` (201) / `POST /auth/login` (200, 세션 발급) / `POST /auth/logout` (204)
-  - `AuthInterceptor`가 `HttpSession`에서 `AUTH_ACCOUNT_ID`를 읽어 `AuthContextHolder`(ThreadLocal)에 `AuthContext`를 세팅
-  - 실패 응답: 409 `DUPLICATE_EMAIL`, 401 `INVALID_CREDENTIALS`, 400 `VALIDATION_ERROR`
-  - 설계 근거: Spring Security 없이 Session + 커스텀 Interceptor 축 (단일 인스턴스 모노리스 전제, 다중 인스턴스로 확장 시 Spring Session + Redis 승격)
-
-## 다음 단계
-
-작은 단위(예: `user` / `seller` 프로필 분리 → `product` 등록/조회 → `cart` → `order` 생성 → `payment` …)로 하나씩 채워 나가며, 각 단계에서 SLO·측정·트레이드오프를 근거로 구현을 결정한다.

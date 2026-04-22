@@ -47,6 +47,8 @@ import { PACELCClassification } from '@/components/visualizations/PACELCClassifi
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
+import { RagPipeline } from '@/components/visualizations/RagPipeline'
+import { EmbeddingSpace } from '@/components/visualizations/EmbeddingSpace'
 import { RedundancyFailurePatterns } from '@/components/visualizations/RedundancyFailurePatterns'
 import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
 import { RestaurantIOSequence } from '@/components/visualizations/RestaurantIOSequence'
@@ -58,6 +60,9 @@ import { ThreadLocalMapStructure } from '@/components/visualizations/ThreadLocal
 import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
 import { TrieDeleteSnapshot } from '@/components/visualizations/TrieDeleteSnapshot'
 import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
+import { VectorSearchSpace } from '@/components/visualizations/VectorSearchSpace'
+import { HNSWLevelWalk } from '@/components/visualizations/HNSWLevelWalk'
+import { IVFNprobe } from '@/components/visualizations/IVFNprobe'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   'data-keyword-link'?: string
@@ -153,6 +158,8 @@ export const mdxComponents: MDXComponents = {
   PERBetaSlider,
   QuickSort,
   QuickSortPivot,
+  RagPipeline,
+  EmbeddingSpace,
   RedundancyFailurePatterns,
   RelatedPost,
   RemoteCallOutcomes,
@@ -166,5 +173,8 @@ export const mdxComponents: MDXComponents = {
   TrieBuilder,
   TrieDeleteSnapshot,
   TwoGeneralsMessenger,
+  VectorSearchSpace,
+  HNSWLevelWalk,
+  IVFNprobe,
   Tabs,
 }
