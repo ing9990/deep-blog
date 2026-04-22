@@ -11,47 +11,43 @@ import com.deepblog.seller.model.request.SellerSignupRequest;
 import com.deepblog.seller.model.response.SellerLoginResponse;
 import com.deepblog.seller.model.response.SellerSignupResponse;
 import com.deepblog.seller.repository.SellerRepository;
+import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class SellerAuthService {
 
-    private final SellerRepository repo;
-    private final PasswordEncoder encoder;
-    private final JwtProvider jwt;
-    private final SellerRefreshTokenStore refreshStore;
+    private static final Set<SellerStatus> BLOCKED_STATUSES =
+        Set.of(SellerStatus.SUSPENDED, SellerStatus.WITHDRAWN);
 
-    public SellerAuthService(
-        SellerRepository repo,
-        PasswordEncoder encoder,
-        JwtProvider jwt,
-        SellerRefreshTokenStore refreshStore
-    ) {
-        this.repo = repo;
-        this.encoder = encoder;
-        this.jwt = jwt;
-        this.refreshStore = refreshStore;
-    }
+    private final SellerRepository sellerRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtProvider jwtProvider;
+    private final SellerRefreshTokenStore refreshTokenStore;
 
-    public SellerSignupResponse signup(SellerSignupRequest req) {
-        if (repo.existsByEmail(req.email())) {
+    public SellerSignupResponse signup(SellerSignupRequest request) {
+        if (sellerRepository.existsByEmail(request.email())) {
             throw new BusinessException(SellerAuthErrorCode.EMAIL_ALREADY_EXISTS);
         }
-        if (repo.existsByBusinessRegistrationNo(req.businessRegistrationNo())) {
-            throw new BusinessException(SellerAuthErrorCode.BUSINESS_REGISTRATION_NO_ALREADY_EXISTS);
+        if (sellerRepository.existsByBusinessRegistrationNo(request.businessRegistrationNo())) {
+            throw new BusinessException(
+                SellerAuthErrorCode.BUSINESS_REGISTRATION_NO_ALREADY_EXISTS
+            );
         }
 
-        Seller saved = repo.save(Seller.signUpAutoApproved(
-            req.email(),
-            encoder.encode(req.password()),
-            req.businessName(),
-            req.businessRegistrationNo(),
-            req.representativeName(),
-            req.contactPhone(),
-            req.settlementAccount()
+        Seller saved = sellerRepository.save(Seller.signUpAutoApproved(
+            request.email(),
+            passwordEncoder.encode(request.password()),
+            request.businessName(),
+            request.businessRegistrationNo(),
+            request.representativeName(),
+            request.contactPhone(),
+            request.settlementAccount()
         ));
 
         return new SellerSignupResponse(
@@ -62,21 +58,16 @@ public class SellerAuthService {
         );
     }
 
-    public SellerLoginResponse login(SellerLoginRequest req) {
-        Seller seller = repo.findByEmail(req.email())
+    public SellerLoginResponse login(SellerLoginRequest request) {
+        Seller seller = sellerRepository.findByEmail(request.email())
             .orElseThrow(() -> new BusinessException(SellerAuthErrorCode.INVALID_CREDENTIALS));
 
-        if (!encoder.matches(req.password(), seller.getPasswordHash())) {
-            throw new BusinessException(SellerAuthErrorCode.INVALID_CREDENTIALS);
-        }
-        if (seller.getStatus() == SellerStatus.SUSPENDED
-            || seller.getStatus() == SellerStatus.WITHDRAWN) {
-            throw new BusinessException(SellerAuthErrorCode.SELLER_SUSPENDED);
-        }
+        verifyPassword(request.password(), seller.getPasswordHash());
+        verifyActive(seller.getStatus());
 
-        String access = jwt.issueAccess(seller.getId());
-        String refresh = jwt.issueRefresh(seller.getId());
-        refreshStore.save(seller.getId(), refresh);
+        String access = jwtProvider.issueAccess(seller.getId());
+        String refresh = jwtProvider.issueRefresh(seller.getId());
+        refreshTokenStore.save(seller.getId(), refresh);
 
         return new SellerLoginResponse(
             seller.getId(),
@@ -85,5 +76,17 @@ public class SellerAuthService {
             access,
             refresh
         );
+    }
+
+    private void verifyPassword(String rawPassword, String storedHash) {
+        if (!passwordEncoder.matches(rawPassword, storedHash)) {
+            throw new BusinessException(SellerAuthErrorCode.INVALID_CREDENTIALS);
+        }
+    }
+
+    private void verifyActive(SellerStatus status) {
+        if (BLOCKED_STATUSES.contains(status)) {
+            throw new BusinessException(SellerAuthErrorCode.SELLER_SUSPENDED);
+        }
     }
 }

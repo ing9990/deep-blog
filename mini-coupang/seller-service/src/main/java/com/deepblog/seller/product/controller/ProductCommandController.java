@@ -7,7 +7,7 @@ import com.deepblog.seller.common.idempotency.Idempotent;
 import com.deepblog.seller.product.model.request.CreateProductRequest;
 import com.deepblog.seller.product.model.request.UpdateProductRequest;
 import com.deepblog.seller.product.model.response.ProductResponse;
-import com.deepblog.seller.product.service.ProductFacade;
+import com.deepblog.seller.product.service.ProductCommandService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ProductCommandController {
 
-    private final ProductFacade productFacade;
+    private final ProductCommandService commandService;
 
     @Idempotent
     @PostMapping("/stores/{storeId}/products")
@@ -35,7 +35,7 @@ public class ProductCommandController {
         @Valid @RequestBody CreateProductRequest request
     ) {
         ProductResponse data = ProductResponse.from(
-            productFacade.register(seller.sellerId(), storeId, request)
+            commandService.register(seller.sellerId(), storeId, request)
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(CommonResponse.ok(data));
     }
@@ -48,7 +48,7 @@ public class ProductCommandController {
         @Valid @RequestBody UpdateProductRequest request
     ) {
         ProductResponse data = ProductResponse.from(
-            productFacade.update(seller.sellerId(), productId, request)
+            commandService.update(seller.sellerId(), productId, request)
         );
         return ResponseEntity.ok(CommonResponse.ok(data));
     }
@@ -59,7 +59,7 @@ public class ProductCommandController {
         @PathVariable Long productId
     ) {
         ProductResponse data = ProductResponse.from(
-            productFacade.delete(seller.sellerId(), productId)
+            commandService.delete(seller.sellerId(), productId)
         );
         return ResponseEntity.ok(CommonResponse.ok(data));
     }

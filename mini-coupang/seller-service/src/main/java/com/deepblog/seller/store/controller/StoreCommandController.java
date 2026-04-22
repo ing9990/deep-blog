@@ -6,7 +6,7 @@ import com.deepblog.seller.common.auth.SellerContext;
 import com.deepblog.seller.store.model.request.CreateStoreRequest;
 import com.deepblog.seller.store.model.request.UpdateStoreRequest;
 import com.deepblog.seller.store.model.response.StoreResponse;
-import com.deepblog.seller.store.service.StoreFacade;
+import com.deepblog.seller.store.service.StoreCommandService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -24,14 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class StoreCommandController {
 
-    private final StoreFacade storeFacade;
+    private final StoreCommandService commandService;
 
     @PostMapping
     public ResponseEntity<CommonResponse<StoreResponse>> create(
         @AuthenticatedSeller SellerContext seller,
         @Valid @RequestBody CreateStoreRequest request
     ) {
-        StoreResponse data = StoreResponse.from(storeFacade.create(seller.sellerId(), request));
+        StoreResponse data = StoreResponse.from(commandService.create(seller.sellerId(), request));
         return ResponseEntity.status(HttpStatus.CREATED).body(CommonResponse.ok(data));
     }
 
@@ -42,7 +42,7 @@ public class StoreCommandController {
         @Valid @RequestBody UpdateStoreRequest request
     ) {
         StoreResponse data = StoreResponse.from(
-            storeFacade.update(seller.sellerId(), storeId, request)
+            commandService.update(seller.sellerId(), storeId, request)
         );
         return ResponseEntity.ok(CommonResponse.ok(data));
     }
@@ -52,7 +52,7 @@ public class StoreCommandController {
         @AuthenticatedSeller SellerContext seller,
         @PathVariable Long storeId
     ) {
-        StoreResponse data = StoreResponse.from(storeFacade.close(seller.sellerId(), storeId));
+        StoreResponse data = StoreResponse.from(commandService.close(seller.sellerId(), storeId));
         return ResponseEntity.ok(CommonResponse.ok(data));
     }
 }

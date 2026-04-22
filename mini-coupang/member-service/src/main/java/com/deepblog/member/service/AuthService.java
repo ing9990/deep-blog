@@ -9,56 +9,52 @@ import com.deepblog.member.model.request.LoginRequest;
 import com.deepblog.member.model.response.LoginResponse;
 import com.deepblog.member.repository.MemberRepository;
 import java.time.LocalDateTime;
-import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class AuthService {
 
-    private final MemberRepository repo;
-    private final PasswordEncoder encoder;
-    private final JwtProvider jwt;
-    private final RefreshTokenStore refreshStore;
+    private final MemberRepository memberRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtProvider jwtProvider;
+    private final RefreshTokenStore refreshTokenStore;
 
-    public AuthService(
-        MemberRepository repo,
-        PasswordEncoder encoder,
-        JwtProvider jwt,
-        RefreshTokenStore refreshStore
-    ) {
-        this.repo = repo;
-        this.encoder = encoder;
-        this.jwt = jwt;
-        this.refreshStore = refreshStore;
+    public LoginResponse login(LoginRequest request) {
+        Authenticated authenticated = memberRepository.findByEmail(request.email())
+            .map(existing -> authenticateExisting(existing, request.password()))
+            .orElseGet(() -> registerAndAuthenticate(request));
+
+        return issueTokens(authenticated);
     }
 
-    public LoginResponse login(LoginRequest req) {
-        Optional<Member> existing = repo.findByEmail(req.email());
-        Member member;
-        boolean newMember;
-        if (existing.isEmpty()) {
-            member = repo.save(Member.create(
-                req.email(),
-                encoder.encode(req.password()),
-                deriveName(req.email()),
-                null
-            ));
-            newMember = true;
-        } else {
-            member = existing.get();
-            if (!encoder.matches(req.password(), member.getPasswordHash())) {
-                throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
-            }
-            member.markLoggedIn(LocalDateTime.now());
-            newMember = false;
+    private Authenticated authenticateExisting(Member member, String rawPassword) {
+        if (!passwordEncoder.matches(rawPassword, member.getPasswordHash())) {
+            throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
         }
+        member.markLoggedIn(LocalDateTime.now());
+        return new Authenticated(member, false);
+    }
 
-        String access = jwt.issueAccess(member.getId());
-        String refresh = jwt.issueRefresh(member.getId());
-        refreshStore.save(member.getId(), refresh);
+    private Authenticated registerAndAuthenticate(LoginRequest request) {
+        Member member = memberRepository.save(Member.create(
+            request.email(),
+            passwordEncoder.encode(request.password()),
+            deriveName(request.email()),
+            null
+        ));
+        return new Authenticated(member, true);
+    }
+
+    private LoginResponse issueTokens(Authenticated authenticated) {
+        Member member = authenticated.member();
+        String access = jwtProvider.issueAccess(member.getId());
+        String refresh = jwtProvider.issueRefresh(member.getId());
+        refreshTokenStore.save(member.getId(), refresh);
 
         return new LoginResponse(
             member.getId(),
@@ -66,12 +62,15 @@ public class AuthService {
             member.getName(),
             access,
             refresh,
-            newMember
+            authenticated.newMember()
         );
     }
 
     private String deriveName(String email) {
         int at = email.indexOf('@');
         return at > 0 ? email.substring(0, at) : email;
+    }
+
+    private record Authenticated(Member member, boolean newMember) {
     }
 }

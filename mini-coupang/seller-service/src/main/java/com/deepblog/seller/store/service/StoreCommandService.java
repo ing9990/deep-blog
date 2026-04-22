@@ -1,11 +1,19 @@
 package com.deepblog.seller.store.service;
 
 import com.deepblog.common.error.BusinessException;
+import com.deepblog.common.event.BaseEvent;
+import com.deepblog.seller.outbox.entity.OutboxEvent;
+import com.deepblog.seller.outbox.repository.OutboxEventRepository;
 import com.deepblog.seller.store.common.exception.StoreErrorCode;
 import com.deepblog.seller.store.entity.Store;
+import com.deepblog.seller.store.event.payload.StoreClosedEvent;
+import com.deepblog.seller.store.event.payload.StoreCreatedEvent;
+import com.deepblog.seller.store.event.payload.StoreUpdatedEvent;
 import com.deepblog.seller.store.model.request.CreateStoreRequest;
 import com.deepblog.seller.store.model.request.UpdateStoreRequest;
 import com.deepblog.seller.store.repository.StoreRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -15,7 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class StoreCommandService {
 
+    private static final String AGGREGATE_TYPE = "seller.store";
+
     private final StoreRepository storeRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public Store create(Long sellerId, CreateStoreRequest request) {
@@ -30,11 +42,14 @@ public class StoreCommandService {
             request.logoImageUrl(),
             request.coverImageUrl()
         );
+        Store saved;
         try {
-            return storeRepository.save(store);
+            saved = storeRepository.save(store);
         } catch (DataIntegrityViolationException concurrent) {
             throw new BusinessException(StoreErrorCode.SLUG_ALREADY_EXISTS);
         }
+        recordOutbox(saved, StoreCreatedEvent.TYPE, new StoreCreatedEvent(saved));
+        return saved;
     }
 
     @Transactional
@@ -49,6 +64,7 @@ public class StoreCommandService {
             request.logoImageUrl(),
             request.coverImageUrl()
         );
+        recordOutbox(store, StoreUpdatedEvent.TYPE, new StoreUpdatedEvent(store));
         return store;
     }
 
@@ -59,6 +75,7 @@ public class StoreCommandService {
             throw new BusinessException(StoreErrorCode.STORE_ALREADY_CLOSED);
         }
         store.close();
+        recordOutbox(store, StoreClosedEvent.TYPE, new StoreClosedEvent(store));
         return store;
     }
 
@@ -69,5 +86,24 @@ public class StoreCommandService {
             throw new BusinessException(StoreErrorCode.STORE_FORBIDDEN);
         }
         return store;
+    }
+
+    private void recordOutbox(Store store, String eventType, BaseEvent<?> event) {
+        outboxEventRepository.save(OutboxEvent.of(
+            AGGREGATE_TYPE,
+            store.getId().toString(),
+            eventType,
+            serialize(event)
+        ));
+    }
+
+    private String serialize(BaseEvent<?> event) {
+        try {
+            return objectMapper.writeValueAsString(event.toEnvelope(objectMapper));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(
+                "failed to serialize event " + event.eventType(), e
+            );
+        }
     }
 }
