@@ -47,6 +47,8 @@ import { PACELCClassification } from '@/components/visualizations/PACELCClassifi
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
+import { RagPipeline } from '@/components/visualizations/RagPipeline'
+import { EmbeddingSpace } from '@/components/visualizations/EmbeddingSpace'
 import { RedundancyFailurePatterns } from '@/components/visualizations/RedundancyFailurePatterns'
 import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
 import { RestaurantIOSequence } from '@/components/visualizations/RestaurantIOSequence'
@@ -153,6 +155,8 @@ export const mdxComponents: MDXComponents = {
   PERBetaSlider,
   QuickSort,
   QuickSortPivot,
+  RagPipeline,
+  EmbeddingSpace,
   RedundancyFailurePatterns,
   RelatedPost,
   RemoteCallOutcomes,
