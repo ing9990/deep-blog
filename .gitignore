@@ -42,3 +42,9 @@ services/.volumes/
 # Planning artifacts (local-only; .claude/plans is covered by .claude/* above)
 docs/superpowers/plans/
 docs/superpowers/specs/
+
+# Playwright MCP session logs (local only)
+.playwright-mcp/
+
+# Playwright ad-hoc snapshot dumps
+snap.yml

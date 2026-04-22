@@ -1,4 +1,4 @@
-export type DomainId = 'order' | 'seller' | 'product' | 'member' | 'discovery'
+export type DomainId = 'seller' | 'product'
 
 export type FeatureStatus = 'done' | 'in-progress' | 'planned'
 
