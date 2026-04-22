@@ -72,7 +72,10 @@ export function SystemMap() {
           className="mt-14 rounded-xl border border-dashed border-border bg-muted/30 px-5 py-4 text-[length:var(--text-sm)] leading-[var(--leading-relaxed)] text-muted-foreground"
           style={{ fontFamily: 'var(--font-reading)' }}
         >
-          <b className="text-foreground">계속 추가됩니다.</b> 기능별 글은 블로그 <code className="rounded border border-border bg-background px-1 py-[1px] font-mono text-[length:var(--text-xs)] text-[color:var(--code-inline-fg)]">mini-coupang-backend</code> 카테고리로 묶입니다. 선택 사항과 근거는 실제 코드·커밋에 그대로 남아 있도록 관리합니다.
+          <b className="text-foreground">계속 추가됩니다.</b> 기능별 글은 블로그 <code
+            className="rounded border border-border bg-background px-1 py-[1px] font-mono text-[length:var(--text-xs)]"
+            style={{ color: 'var(--code-inline-fg)' }}
+          >mini-coupang-backend</code> 카테고리로 묶입니다. 선택 사항과 근거는 실제 코드·커밋에 그대로 남아 있도록 관리합니다.
         </footer>
       </div>
     </section>
