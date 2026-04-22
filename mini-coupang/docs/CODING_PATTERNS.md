@@ -23,6 +23,7 @@ com.deepblog.minicoupang
 │   │   ├── application/         # Service 인터페이스 + Impl
 │   │   ├── controller/          # @RestController
 │   │   │   └── dto/             # Request/Response record
+│   │   ├── context/             # (도메인 특화) AuthContext, AuthContextHolder, SessionKeys
 │   │   └── exception/           # 도메인 예외
 │   ├── member/                  # 일반 소비자 도메인
 │   └── seller/                  # 판매자 도메인
@@ -32,7 +33,7 @@ com.deepblog.minicoupang
     └── interceptor/             # AuthInterceptor 등 cross-cutting
 ```
 
-한 도메인 = 한 최상위 패키지. 도메인 내부는 위 6개 하위 패키지 고정.
+한 도메인 = 한 최상위 패키지. 도메인 내부에는 표준 레이어 하위 패키지(`domain/`, `repository/`, `application/`, `controller/`, `exception/`)만 둔다. 도메인에 고유한 개념 묶음(예: auth의 `context/`)이 생기면 하위 패키지로 분리하고 루트에는 `.java` 파일을 두지 않는다.
 
 ## 1. Entity (`domain/<domain>/domain/`)
 

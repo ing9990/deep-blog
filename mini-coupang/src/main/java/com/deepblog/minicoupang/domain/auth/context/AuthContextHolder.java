@@ -1,4 +1,4 @@
-package com.deepblog.minicoupang.domain.auth;
+package com.deepblog.minicoupang.domain.auth.context;
 
 import java.util.Optional;
 

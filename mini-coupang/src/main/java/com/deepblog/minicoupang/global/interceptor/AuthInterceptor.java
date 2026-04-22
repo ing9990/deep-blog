@@ -1,8 +1,8 @@
 package com.deepblog.minicoupang.global.interceptor;
 
-import com.deepblog.minicoupang.domain.auth.AuthContext;
-import com.deepblog.minicoupang.domain.auth.AuthContextHolder;
-import com.deepblog.minicoupang.domain.auth.SessionKeys;
+import com.deepblog.minicoupang.domain.auth.context.AuthContext;
+import com.deepblog.minicoupang.domain.auth.context.AuthContextHolder;
+import com.deepblog.minicoupang.domain.auth.context.SessionKeys;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;

@@ -2,8 +2,8 @@ package com.deepblog.minicoupang.domain.auth.controller;
 
 import static org.springframework.http.HttpStatus.CREATED;
 
-import com.deepblog.minicoupang.domain.auth.SessionKeys;
 import com.deepblog.minicoupang.domain.auth.application.AuthService;
+import com.deepblog.minicoupang.domain.auth.context.SessionKeys;
 import com.deepblog.minicoupang.domain.auth.controller.dto.LoginRequest;
 import com.deepblog.minicoupang.domain.auth.controller.dto.LoginResponse;
 import com.deepblog.minicoupang.domain.auth.controller.dto.SignupRequest;
