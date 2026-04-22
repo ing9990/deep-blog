@@ -4,21 +4,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.deepblog.minicoupang.domain.product.exception.InvalidProductException;
+import com.deepblog.minicoupang.domain.seller.domain.Seller;
 import org.junit.jupiter.api.Test;
 
 class ProductTest {
 
+    private static final Seller SELLER = Seller.builder().id(1L).build();
+
     @Test
     void create_valid_returnsDraftProduct() {
         Product product = Product.create(
-            1L,
+            SELLER,
             1L,
             "프리미엄 텀블러",
             "보온 24시간 유지",
             15_000L
         );
 
-        assertThat(product.getSellerId()).isEqualTo(1L);
+        assertThat(product.getSeller()).isSameAs(SELLER);
         assertThat(product.getCategoryId()).isEqualTo(1L);
         assertThat(product.getName()).isEqualTo("프리미엄 텀블러");
         assertThat(product.getDescription()).isEqualTo("보온 24시간 유지");
@@ -28,13 +31,13 @@ class ProductTest {
 
     @Test
     void create_nullDescription_isAllowed() {
-        Product product = Product.create(1L, 1L, "텀블러", null, 15_000L);
+        Product product = Product.create(SELLER, 1L, "텀블러", null, 15_000L);
 
         assertThat(product.getDescription()).isNull();
     }
 
     @Test
-    void create_nullSellerId_throws() {
+    void create_nullSeller_throws() {
         assertThatThrownBy(() -> Product.create(null, 1L, "텀블러", "설명", 15_000L))
             .isInstanceOf(InvalidProductException.class)
             .hasMessageContaining("판매자");
@@ -42,28 +45,28 @@ class ProductTest {
 
     @Test
     void create_nullCategoryId_throws() {
-        assertThatThrownBy(() -> Product.create(1L, null, "텀블러", "설명", 15_000L))
+        assertThatThrownBy(() -> Product.create(SELLER, null, "텀블러", "설명", 15_000L))
             .isInstanceOf(InvalidProductException.class)
             .hasMessageContaining("카테고리");
     }
 
     @Test
     void create_nullName_throws() {
-        assertThatThrownBy(() -> Product.create(1L, 1L, null, "설명", 15_000L))
+        assertThatThrownBy(() -> Product.create(SELLER, 1L, null, "설명", 15_000L))
             .isInstanceOf(InvalidProductException.class)
             .hasMessageContaining("상품명");
     }
 
     @Test
     void create_blankName_throws() {
-        assertThatThrownBy(() -> Product.create(1L, 1L, "   ", "설명", 15_000L))
+        assertThatThrownBy(() -> Product.create(SELLER, 1L, "   ", "설명", 15_000L))
             .isInstanceOf(InvalidProductException.class)
             .hasMessageContaining("상품명");
     }
 
     @Test
     void create_tooShortName_throws() {
-        assertThatThrownBy(() -> Product.create(1L, 1L, "a", "설명", 15_000L))
+        assertThatThrownBy(() -> Product.create(SELLER, 1L, "a", "설명", 15_000L))
             .isInstanceOf(InvalidProductException.class)
             .hasMessageContaining("상품명");
     }
@@ -71,28 +74,28 @@ class ProductTest {
     @Test
     void create_tooLongName_throws() {
         String longName = "a".repeat(201);
-        assertThatThrownBy(() -> Product.create(1L, 1L, longName, "설명", 15_000L))
+        assertThatThrownBy(() -> Product.create(SELLER, 1L, longName, "설명", 15_000L))
             .isInstanceOf(InvalidProductException.class)
             .hasMessageContaining("상품명");
     }
 
     @Test
     void create_nullBasePrice_throws() {
-        assertThatThrownBy(() -> Product.create(1L, 1L, "텀블러", "설명", null))
+        assertThatThrownBy(() -> Product.create(SELLER, 1L, "텀블러", "설명", null))
             .isInstanceOf(InvalidProductException.class)
             .hasMessageContaining("가격");
     }
 
     @Test
     void create_negativeBasePrice_throws() {
-        assertThatThrownBy(() -> Product.create(1L, 1L, "텀블러", "설명", -1L))
+        assertThatThrownBy(() -> Product.create(SELLER, 1L, "텀블러", "설명", -1L))
             .isInstanceOf(InvalidProductException.class)
             .hasMessageContaining("가격");
     }
 
     @Test
     void create_zeroBasePrice_isAllowed() {
-        Product product = Product.create(1L, 1L, "무료 샘플", "증정용", 0L);
+        Product product = Product.create(SELLER, 1L, "무료 샘플", "증정용", 0L);
 
         assertThat(product.getBasePrice()).isZero();
     }
@@ -382,6 +385,6 @@ class ProductTest {
     }
 
     private static Product draftProduct() {
-        return Product.create(1L, 1L, "텀블러", "설명", 15_000L);
+        return Product.create(SELLER, 1L, "텀블러", "설명", 15_000L);
     }
 }

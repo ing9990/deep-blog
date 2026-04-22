@@ -7,7 +7,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.deepblog.minicoupang.domain.product.domain.Product;
-import com.deepblog.minicoupang.domain.product.domain.ProductStatus;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.product.seller.application.RegisterProductCommand.ImageCommand;
 import com.deepblog.minicoupang.domain.product.seller.application.RegisterProductCommand.OptionCommand;
@@ -51,14 +50,14 @@ class SellerProductServiceImplTest {
             List.of(new ImageCommand("https://cdn.example.com/main.jpg", true))
         );
 
-        Product result = service.registerProduct(accountId, command);
+        RegisterProductResult result = service.registerProduct(accountId, command);
 
-        assertThat(result.getSellerId()).isEqualTo(42L);
-        assertThat(result.getCategoryId()).isEqualTo(1L);
-        assertThat(result.getName()).isEqualTo("프리미엄 텀블러");
-        assertThat(result.getStatus()).isEqualTo(ProductStatus.DRAFT);
-        assertThat(result.getOptions()).hasSize(1);
-        assertThat(result.getImages()).hasSize(1);
+        assertThat(result.sellerId()).isEqualTo(42L);
+        assertThat(result.categoryId()).isEqualTo(1L);
+        assertThat(result.name()).isEqualTo("프리미엄 텀블러");
+        assertThat(result.status()).isEqualTo("DRAFT");
+        assertThat(result.optionCount()).isEqualTo(1);
+        assertThat(result.imageCount()).isEqualTo(1);
     }
 
     @Test
@@ -72,10 +71,10 @@ class SellerProductServiceImplTest {
             1L, "텀블러", "설명", 15_000L, null, null
         );
 
-        Product result = service.registerProduct(accountId, command);
+        RegisterProductResult result = service.registerProduct(accountId, command);
 
-        assertThat(result.getOptions()).isEmpty();
-        assertThat(result.getImages()).isEmpty();
+        assertThat(result.optionCount()).isZero();
+        assertThat(result.imageCount()).isZero();
     }
 
     @Test
@@ -110,9 +109,9 @@ class SellerProductServiceImplTest {
             )
         );
 
-        Product result = service.registerProduct(accountId, command);
+        RegisterProductResult result = service.registerProduct(accountId, command);
 
-        assertThat(result.getOptions()).hasSize(2);
-        assertThat(result.getImages()).hasSize(2);
+        assertThat(result.optionCount()).isEqualTo(2);
+        assertThat(result.imageCount()).isEqualTo(2);
     }
 }

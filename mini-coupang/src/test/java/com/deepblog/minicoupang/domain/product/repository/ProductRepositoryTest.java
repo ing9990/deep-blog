@@ -2,9 +2,11 @@ package com.deepblog.minicoupang.domain.product.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.deepblog.minicoupang.domain.auth.domain.Account;
 import com.deepblog.minicoupang.domain.product.domain.Product;
 import com.deepblog.minicoupang.domain.product.domain.ProductOption;
 import com.deepblog.minicoupang.domain.product.domain.ProductStatus;
+import com.deepblog.minicoupang.domain.seller.domain.Seller;
 import com.deepblog.minicoupang.global.config.JpaConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,14 +33,15 @@ class ProductRepositoryTest {
 
     @Test
     void save_thenFindById_restoresFields() {
-        Product product = Product.create(1L, 1L, "텀블러", "보온 24h", 15_000L);
+        Seller seller = persistSeller("1000000001");
+        Product product = Product.create(seller, 1L, "텀블러", "보온 24h", 15_000L);
 
         Product saved = productRepository.save(product);
         em.flush();
         em.clear();
 
         Product found = productRepository.findById(saved.getId()).orElseThrow();
-        assertThat(found.getSellerId()).isEqualTo(1L);
+        assertThat(found.getSeller().getId()).isEqualTo(seller.getId());
         assertThat(found.getCategoryId()).isEqualTo(1L);
         assertThat(found.getName()).isEqualTo("텀블러");
         assertThat(found.getDescription()).isEqualTo("보온 24h");
@@ -49,7 +52,8 @@ class ProductRepositoryTest {
 
     @Test
     void save_withOptions_cascadePersists() {
-        Product product = Product.create(1L, 1L, "텀블러", "설명", 15_000L);
+        Seller seller = persistSeller("1000000001");
+        Product product = Product.create(seller, 1L, "텀블러", "설명", 15_000L);
         product.addOption("빨강-M", "TUMBLER-RED-M", 1_000L);
         product.addOption("파랑-L", "TUMBLER-BLUE-L", 2_000L);
 
@@ -66,7 +70,8 @@ class ProductRepositoryTest {
 
     @Test
     void save_withImages_cascadePersists() {
-        Product product = Product.create(1L, 1L, "텀블러", "설명", 15_000L);
+        Seller seller = persistSeller("1000000001");
+        Product product = Product.create(seller, 1L, "텀블러", "설명", 15_000L);
         product.addImage("https://cdn.example.com/main.jpg", true);
         product.addImage("https://cdn.example.com/side.jpg", false);
 
@@ -80,7 +85,8 @@ class ProductRepositoryTest {
 
     @Test
     void removeOption_orphanRemovalDeletes() {
-        Product product = Product.create(1L, 1L, "텀블러", "설명", 15_000L);
+        Seller seller = persistSeller("1000000001");
+        Product product = Product.create(seller, 1L, "텀블러", "설명", 15_000L);
         product.addOption("빨강-M", "TUMBLER-RED-M", 1_000L);
         product.addOption("파랑-L", "TUMBLER-BLUE-L", 2_000L);
         Product saved = productRepository.save(product);
@@ -101,22 +107,25 @@ class ProductRepositoryTest {
 
     @Test
     void findBySellerId_returnsOnlyMatching() {
-        productRepository.save(Product.create(10L, 1L, "A상품", "설명", 1_000L));
-        productRepository.save(Product.create(10L, 1L, "B상품", "설명", 1_000L));
-        productRepository.save(Product.create(20L, 1L, "C상품", "설명", 1_000L));
+        Seller sellerA = persistSeller("1000000010");
+        Seller sellerB = persistSeller("1000000020");
+        productRepository.save(Product.create(sellerA, 1L, "A상품", "설명", 1_000L));
+        productRepository.save(Product.create(sellerA, 1L, "B상품", "설명", 1_000L));
+        productRepository.save(Product.create(sellerB, 1L, "C상품", "설명", 1_000L));
         em.flush();
         em.clear();
 
-        assertThat(productRepository.findBySellerId(10L)).hasSize(2);
-        assertThat(productRepository.findBySellerId(20L)).hasSize(1);
-        assertThat(productRepository.findBySellerId(99L)).isEmpty();
+        assertThat(productRepository.findBySellerId(sellerA.getId())).hasSize(2);
+        assertThat(productRepository.findBySellerId(sellerB.getId())).hasSize(1);
+        assertThat(productRepository.findBySellerId(999L)).isEmpty();
     }
 
     @Test
     void findByCategoryId_returnsOnlyMatching() {
-        productRepository.save(Product.create(1L, 100L, "A상품", "설명", 1_000L));
-        productRepository.save(Product.create(1L, 100L, "B상품", "설명", 1_000L));
-        productRepository.save(Product.create(1L, 200L, "C상품", "설명", 1_000L));
+        Seller seller = persistSeller("1000000001");
+        productRepository.save(Product.create(seller, 100L, "A상품", "설명", 1_000L));
+        productRepository.save(Product.create(seller, 100L, "B상품", "설명", 1_000L));
+        productRepository.save(Product.create(seller, 200L, "C상품", "설명", 1_000L));
         em.flush();
         em.clear();
 
@@ -126,11 +135,12 @@ class ProductRepositoryTest {
 
     @Test
     void findByStatus_withPaging_returnsPage() {
+        Seller seller = persistSeller("1000000001");
         for (int i = 0; i < 5; i++) {
-            Product draft = Product.create(1L, 1L, "초안 " + i, "설명", 1_000L);
+            Product draft = Product.create(seller, 1L, "초안 " + i, "설명", 1_000L);
             productRepository.save(draft);
         }
-        Product selling = Product.create(1L, 1L, "판매중", "설명", 1_000L);
+        Product selling = Product.create(seller, 1L, "판매중", "설명", 1_000L);
         selling.publish();
         productRepository.save(selling);
         em.flush();
@@ -143,10 +153,12 @@ class ProductRepositoryTest {
 
     @Test
     void findBySellerIdAndStatus_returnsOnlyMatching() {
-        Product a = Product.create(1L, 1L, "상품A", "설명", 1_000L);
+        Seller sellerA = persistSeller("1000000001");
+        Seller sellerB = persistSeller("1000000002");
+        Product a = Product.create(sellerA, 1L, "상품A", "설명", 1_000L);
         a.publish();
-        Product b = Product.create(1L, 1L, "상품B", "설명", 1_000L);
-        Product c = Product.create(2L, 1L, "상품C", "설명", 1_000L);
+        Product b = Product.create(sellerA, 1L, "상품B", "설명", 1_000L);
+        Product c = Product.create(sellerB, 1L, "상품C", "설명", 1_000L);
         c.publish();
         productRepository.save(a);
         productRepository.save(b);
@@ -154,8 +166,22 @@ class ProductRepositoryTest {
         em.flush();
         em.clear();
 
-        assertThat(productRepository.findBySellerIdAndStatus(1L, ProductStatus.ON_SALE))
+        assertThat(productRepository.findBySellerIdAndStatus(sellerA.getId(), ProductStatus.ON_SALE))
             .extracting(Product::getName)
             .containsExactly("상품A");
+    }
+
+    private Seller persistSeller(String brn) {
+        Account account = Account.create("seller-" + brn + "@example.com", "hash");
+        em.persist(account);
+        Seller seller = Seller.create(
+            account,
+            "Biz-" + brn,
+            brn,
+            "대표자명",
+            "01012345678"
+        );
+        em.persist(seller);
+        return seller;
     }
 }

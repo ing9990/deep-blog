@@ -1,18 +1,22 @@
 package com.deepblog.minicoupang.domain.product.domain;
 
 import static jakarta.persistence.EnumType.STRING;
+import static jakarta.persistence.FetchType.LAZY;
 import static jakarta.persistence.GenerationType.IDENTITY;
 import static lombok.AccessLevel.PRIVATE;
 import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.minicoupang.domain.common.BaseEntity;
 import com.deepblog.minicoupang.domain.product.exception.InvalidProductException;
+import com.deepblog.minicoupang.domain.seller.domain.Seller;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
@@ -35,8 +39,9 @@ public class Product extends BaseEntity {
     @Column(name = "product_id")
     private Long id;
 
-    @Column(name = "seller_id", nullable = false)
-    private Long sellerId;
+    @ManyToOne(fetch = LAZY, optional = false)
+    @JoinColumn(name = "seller_id", nullable = false)
+    private Seller seller;
 
     @Column(name = "category_id", nullable = false)
     private Long categoryId;
@@ -63,19 +68,19 @@ public class Product extends BaseEntity {
     private List<ProductImage> images = new ArrayList<>();
 
     public static Product create(
-        Long sellerId,
+        Seller seller,
         Long categoryId,
         String name,
         String description,
         Long basePrice
     ) {
-        validateSellerId(sellerId);
+        validateSeller(seller);
         validateCategoryId(categoryId);
         validateName(name);
         validateBasePrice(basePrice);
 
         return Product.builder()
-            .sellerId(sellerId)
+            .seller(seller)
             .categoryId(categoryId)
             .name(name)
             .description(description)
@@ -84,8 +89,8 @@ public class Product extends BaseEntity {
             .build();
     }
 
-    private static void validateSellerId(Long sellerId) {
-        if (sellerId == null || sellerId <= 0) {
+    private static void validateSeller(Seller seller) {
+        if (seller == null) {
             throw new InvalidProductException("판매자 정보가 올바르지 않습니다.");
         }
     }
