@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package minicoupang.embed.v1;
+
+option java_package = "com.deepblog.minicoupang.embed.grpc";
+option java_multiple_files = true;
+option java_outer_classname = "EmbedProto";
+
+// EmbedService bridges Spring Boot (transactional core) and Python ML runtime.
+// Spring Boot never talks to Qdrant directly; all vector operations go through this service.
+service EmbedService {
+  // Called during product registration. Generates embedding from name + description
+  // and upserts into Qdrant with payload filters.
+  rpc EmbedAndIndex(EmbedAndIndexRequest) returns (EmbedAndIndexResponse);
+
+  // Called during product search. Embeds the query text and runs ANN search
+  // against Qdrant with optional payload filters.
+  rpc SearchByQuery(SearchByQueryRequest) returns (SearchByQueryResponse);
+
+  // Called for "similar products" recommendation. Uses an existing product's
+  // vector to find neighbors (excluding the source product itself).
+  rpc FindSimilar(FindSimilarRequest) returns (FindSimilarResponse);
+
+  // Called when a product is deleted or deactivated. Removes the point from Qdrant.
+  rpc RemoveFromIndex(RemoveFromIndexRequest) returns (RemoveFromIndexResponse);
+}
+
+// ---------------------------------------------------------------------------
+// EmbedAndIndex
+// ---------------------------------------------------------------------------
+
+message EmbedAndIndexRequest {
+  int64 product_id = 1;
+  string name = 2;
+  string description = 3;
+  ProductPayload payload = 4;
+}
+
+message ProductPayload {
+  int64 category_id = 1;
+  int64 base_price = 2;
+  string status = 3; // ACTIVE / INACTIVE / DELETED
+  int64 seller_id = 4;
+}
+
+message EmbedAndIndexResponse {
+  bool success = 1;
+  int32 vector_dim = 2;
+  int64 elapsed_ms = 3;
+  string error_message = 4;
+}
+
+// ---------------------------------------------------------------------------
+// SearchByQuery
+// ---------------------------------------------------------------------------
+
+message SearchByQueryRequest {
+  string query = 1;
+  int32 limit = 2;
+  SearchFilter filter = 3;
+}
+
+message SearchFilter {
+  optional int64 category_id = 1;
+  optional int64 max_price = 2;
+  optional int64 min_price = 3;
+  optional string status = 4; // default ACTIVE
+}
+
+message SearchByQueryResponse {
+  repeated SearchHit hits = 1;
+  int64 elapsed_ms = 2;
+}
+
+message SearchHit {
+  int64 product_id = 1;
+  float score = 2; // cosine similarity, [0.0, 1.0]
+}
+
+// ---------------------------------------------------------------------------
+// FindSimilar
+// ---------------------------------------------------------------------------
+
+message FindSimilarRequest {
+  int64 product_id = 1;
+  int32 limit = 2;
+  SearchFilter filter = 3;
+}
+
+message FindSimilarResponse {
+  repeated SearchHit hits = 1;
+  int64 elapsed_ms = 2;
+}
+
+// ---------------------------------------------------------------------------
+// RemoveFromIndex
+// ---------------------------------------------------------------------------
+
+message RemoveFromIndexRequest {
+  int64 product_id = 1;
+}
+
+message RemoveFromIndexResponse {
+  bool success = 1;
+}
