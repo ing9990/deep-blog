@@ -1,11 +1,11 @@
-package com.example.minicoupang.domain.auth.controller;
+package com.deepblog.minicoupang.domain.auth.controller;
 
-import com.example.minicoupang.domain.auth.SessionKeys;
-import com.example.minicoupang.domain.auth.application.AuthService;
-import com.example.minicoupang.domain.auth.controller.dto.LoginRequest;
-import com.example.minicoupang.domain.auth.controller.dto.LoginResponse;
-import com.example.minicoupang.domain.auth.controller.dto.SignupRequest;
-import com.example.minicoupang.domain.auth.controller.dto.SignupResponse;
+import com.deepblog.minicoupang.domain.auth.SessionKeys;
+import com.deepblog.minicoupang.domain.auth.application.AuthService;
+import com.deepblog.minicoupang.domain.auth.controller.dto.LoginRequest;
+import com.deepblog.minicoupang.domain.auth.controller.dto.LoginResponse;
+import com.deepblog.minicoupang.domain.auth.controller.dto.SignupRequest;
+import com.deepblog.minicoupang.domain.auth.controller.dto.SignupResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

@@ -1,4 +1,4 @@
-package com.example.minicoupang.domain.auth.application;
+package com.deepblog.minicoupang.domain.auth.application;
 
 public interface AuthService {
 

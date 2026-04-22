@@ -1,4 +1,4 @@
-package com.example.minicoupang.global.config;
+package com.deepblog.minicoupang.global.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

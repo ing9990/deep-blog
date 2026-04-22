@@ -1,4 +1,4 @@
-package com.example.minicoupang;
+package com.deepblog.minicoupang;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

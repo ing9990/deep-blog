@@ -1,4 +1,4 @@
-package com.example.minicoupang;
+package com.deepblog.minicoupang;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

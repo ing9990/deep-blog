@@ -1,6 +1,6 @@
-package com.example.minicoupang.domain.auth.repository;
+package com.deepblog.minicoupang.domain.auth.repository;
 
-import com.example.minicoupang.domain.auth.domain.Account;
+import com.deepblog.minicoupang.domain.auth.domain.Account;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 

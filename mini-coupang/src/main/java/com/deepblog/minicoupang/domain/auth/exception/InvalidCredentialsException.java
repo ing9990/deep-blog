@@ -1,4 +1,4 @@
-package com.example.minicoupang.domain.auth.exception;
+package com.deepblog.minicoupang.domain.auth.exception;
 
 public class InvalidCredentialsException extends RuntimeException {
 

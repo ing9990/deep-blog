@@ -1,4 +1,4 @@
-package com.example.minicoupang.domain.auth.domain;
+package com.deepblog.minicoupang.domain.auth.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

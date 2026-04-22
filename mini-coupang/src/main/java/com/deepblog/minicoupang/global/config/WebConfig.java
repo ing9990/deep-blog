@@ -1,6 +1,6 @@
-package com.example.minicoupang.global.config;
+package com.deepblog.minicoupang.global.config;
 
-import com.example.minicoupang.global.interceptor.AuthInterceptor;
+import com.deepblog.minicoupang.global.interceptor.AuthInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;

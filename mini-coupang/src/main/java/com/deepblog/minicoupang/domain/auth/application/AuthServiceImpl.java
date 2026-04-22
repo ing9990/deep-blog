@@ -1,9 +1,9 @@
-package com.example.minicoupang.domain.auth.application;
+package com.deepblog.minicoupang.domain.auth.application;
 
-import com.example.minicoupang.domain.auth.domain.Account;
-import com.example.minicoupang.domain.auth.exception.DuplicateEmailException;
-import com.example.minicoupang.domain.auth.exception.InvalidCredentialsException;
-import com.example.minicoupang.domain.auth.repository.AccountRepository;
+import com.deepblog.minicoupang.domain.auth.domain.Account;
+import com.deepblog.minicoupang.domain.auth.exception.DuplicateEmailException;
+import com.deepblog.minicoupang.domain.auth.exception.InvalidCredentialsException;
+import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

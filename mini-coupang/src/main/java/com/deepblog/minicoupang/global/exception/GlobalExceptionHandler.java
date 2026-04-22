@@ -1,7 +1,7 @@
-package com.example.minicoupang.global.exception;
+package com.deepblog.minicoupang.global.exception;
 
-import com.example.minicoupang.domain.auth.exception.DuplicateEmailException;
-import com.example.minicoupang.domain.auth.exception.InvalidCredentialsException;
+import com.deepblog.minicoupang.domain.auth.exception.DuplicateEmailException;
+import com.deepblog.minicoupang.domain.auth.exception.InvalidCredentialsException;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

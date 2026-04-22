@@ -1,11 +1,11 @@
-package com.example.minicoupang.domain.auth;
+package com.deepblog.minicoupang.domain.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.minicoupang.domain.auth.repository.AccountRepository;
+import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
