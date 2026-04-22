@@ -14,6 +14,7 @@ export const CATEGORY_COLORS: Record<CategoryId, CategoryColor> = {
   infrastructure:     { accent: '#DC2626', tint: '#FEF2F2', darkTint: '#2B0A0A' },
   ai:                 { accent: '#4F46E5', tint: '#EEF2FF', darkTint: '#1E1B4B' },
   knowledge:          { accent: '#D97706', tint: '#FFFBEB', darkTint: '#3B2D05' },
+  'mini-coupang-backend': { accent: '#0284C7', tint: '#F0F9FF', darkTint: '#0B2A3D' },
   etc:                { accent: '#DB2777', tint: '#FDF2F8', darkTint: '#2B0A1A' },
 }
 

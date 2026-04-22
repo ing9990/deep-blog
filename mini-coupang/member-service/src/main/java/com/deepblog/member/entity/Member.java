@@ -1,5 +1,6 @@
 package com.deepblog.member.entity;
 
+import com.deepblog.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -9,10 +10,20 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.springframework.util.StringUtils;
 
+@Getter
 @Entity
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Table(name = "members")
-public class Member {
+public class Member extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,51 +45,55 @@ public class Member {
     @Column(nullable = false, length = 32)
     private MemberStatus status;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
-    protected Member() {
-    }
-
     public static Member create(String email, String passwordHash, String name, String phone) {
-        Member m = new Member();
-        m.email = email;
-        m.passwordHash = passwordHash;
-        m.name = name;
-        m.phone = phone;
-        m.status = MemberStatus.ACTIVE;
-        m.createdAt = LocalDateTime.now();
-        return m;
+        validateEmail(email);
+        validatePasswordHash(passwordHash);
+        validateName(name);
+        validatePhone(phone);
+
+        return Member.builder()
+            .email(email)
+            .passwordHash(passwordHash)
+            .name(name)
+            .phone(phone)
+            .status(MemberStatus.ACTIVE)
+            .build();
     }
 
     public void markLoggedIn(LocalDateTime at) {
+        if (at == null) {
+            throw new IllegalArgumentException("lastLoginAt must not be null");
+        }
         this.lastLoginAt = at;
     }
 
-    public Long getId() {
-        return id;
+    private static void validateEmail(String email) {
+        if (!StringUtils.hasText(email) || email.length() > 255 || !email.contains("@")) {
+            throw new IllegalArgumentException("invalid email");
+        }
     }
 
-    public String getEmail() {
-        return email;
+    private static void validatePasswordHash(String passwordHash) {
+        if (!StringUtils.hasText(passwordHash) || passwordHash.length() > 255) {
+            throw new IllegalArgumentException("invalid password hash");
+        }
     }
 
-    public String getName() {
-        return name;
+    private static void validateName(String name) {
+        if (!StringUtils.hasText(name) || name.length() > 100) {
+            throw new IllegalArgumentException("invalid name");
+        }
     }
 
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public MemberStatus getStatus() {
-        return status;
-    }
-
-    public LocalDateTime getLastLoginAt() {
-        return lastLoginAt;
+    private static void validatePhone(String phone) {
+        if (phone == null) {
+            return;
+        }
+        if (phone.length() > 20 || !phone.matches("^[0-9-]{9,20}$")) {
+            throw new IllegalArgumentException("invalid phone");
+        }
     }
 }

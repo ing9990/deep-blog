@@ -51,6 +51,10 @@
 
   --font-sans: var(--font-paperlogy), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Reading-optimized stack for long-form Korean copy outside .prose-kr
+     (landing sections, marketing pages). Pairs Pretendard Variable for
+     Korean with the blog's standard fallbacks. */
+  --font-reading: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   /* ------------------------------------------------------------------
      Typography primitives — T-shirt scale. All sizes multiply through
@@ -352,9 +356,12 @@
   --callout-success-icon:   #6EE7B7;
 
   /* Code block — dark mode.
-     --code-bg matches the one-dark-pro Shiki theme background. */
-  --code-bg:             #282C34;
-  --code-line-number:    #4B5363;
+     Uses a neutral near-black (#0E0E10) rather than Shiki's one-dark-pro
+     background so the code card reads as a sleek dark surface without the
+     blue-gray cast of #282C34. Shiki preset overrides further down keep
+     per-preset tuning; those also lean toward neutral black now. */
+  --code-bg:             #0E0E10;
+  --code-line-number:    #52525B;
 
   /* Code chip (pill) — dark mode. Desaturated grey so the pill reads
      distinctly from the teal inline code surface outside <Note>. */
@@ -852,15 +859,17 @@ html[data-theme="dark"][data-syntax-theme="vitesse"] .prose-kr pre code[data-the
 /* Container backgrounds matched to each preset's native palette.
    Overrides the :root / [data-theme="dark"] --code-bg set earlier. */
 html[data-syntax-theme="github"]                       { --code-bg: #F6F8FA; }
-html[data-theme="dark"][data-syntax-theme="github"]    { --code-bg: #0D1117; }
+html[data-theme="dark"][data-syntax-theme="github"]    { --code-bg: #0A0A0B; }
 html[data-syntax-theme="vitesse"]                      { --code-bg: #F7F7F3; }
-html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
+html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #0E0E10; }
 
 /* ================================================================
    Code block — baseline is `flat` (Vercel-docs style): single frame,
    filename header bar with a language badge + copy button, no line
-   numbers. `floating` and `rail` remain as user-selectable overrides
-   under html[data-code-theme=...].
+   numbers. `floating` is the only user-selectable alternate, applied
+   under html[data-code-theme="floating"] and sharing the baseline
+   chrome with a softer border. (The earlier `rail` variant was
+   retired on 2026-04-22.)
 
    rehype-pretty-code emits:
      <figure data-rehype-pretty-code-figure>
@@ -882,7 +891,13 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
    in a client component that injects a copy button.
    ================================================================ */
 
-/* ---------- Shared baseline (flat) ---------- */
+/* ---------- Shared baseline (flat + floating share this chrome) ----------
+   Windowed "tab" look matching Next.js / Vercel docs: outer rounded
+   frame with 1px border, figcaption acts as a header bar (file-type
+   icon + filename on the left, copy button on the right), 1px divider,
+   code area below. Header bg matches the code area so the Shiki
+   palette isn't broken by an off-tint band — only the divider marks
+   the header edge. */
 .prose-kr figure[data-rehype-pretty-code-figure] {
   position: relative;
   margin: 2em 0;
@@ -895,44 +910,51 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
   overflow: hidden;
 }
 
-/* Figcaption becomes a header bar: language badge on the left,
-   filename text, copy button slot on the right. */
 .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title] {
   margin: 0;
-  padding: 10px 44px 10px 14px;
-  background-color: color-mix(in oklab, var(--muted) 40%, var(--code-bg));
+  padding: 10px 48px 10px 12px;
+  background-color: transparent;
   border-bottom: 1px solid var(--border);
-  color: var(--muted-foreground);
+  color: var(--foreground);
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 500;
+  letter-spacing: -0.01em;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-/* Language badge derived from data-language via `attr()`. The rehype
-   plugin normalizes values so this renders short tokens like "TS" or
-   "PY". When no data-language is present, the badge is hidden by the
-   empty-attr fallback. */
-.prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title]::before {
-  content: attr(data-language);
+/* File-type icon — injected as the first child of figcaption by
+   plugins/rehype-code-language-badge.ts. A small rounded square on a
+   muted surface with the normalized language token in the center,
+   styled to echo the VS Code / Next.js docs file-icon look. Font-size
+   is bucketed by data-len so 2- through 4-character tokens all stay
+   legible inside the fixed 22x22 frame. */
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background-color: var(--primary);
-  color: var(--primary-foreground);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background-color: color-mix(in oklab, var(--foreground) 18%, var(--code-bg));
+  color: var(--foreground);
   font-family: var(--font-mono);
-  line-height: 1.2;
+  font-weight: 700;
+  line-height: 1;
+  font-size: 10px;
+  letter-spacing: 0;
+  user-select: none;
 }
-
-.prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title]:not([data-language])::before,
-.prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title][data-language=""]::before {
-  display: none;
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-len="3"] {
+  font-size: 8px;
+  letter-spacing: -0.02em;
+}
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-len="4"] {
+  font-size: 6.5px;
+  letter-spacing: -0.04em;
 }
 
 .prose-kr figure[data-rehype-pretty-code-figure] pre {
@@ -990,8 +1012,8 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
    and over the bare pre when absent. */
 .prose-kr figure[data-rehype-pretty-code-figure] .code-copy-button {
   position: absolute;
-  top: 7px;
-  right: 8px;
+  top: 9px;
+  right: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1011,89 +1033,21 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #121212; }
   color: var(--foreground);
 }
 
-/* ---------- Theme: floating (alternate, opt-in) ----------
-   Minimalist look: no frame border, no header bar. The figcaption
-   reverts to a small pre-block label. Language badge is suppressed
-   since there's no header surface to anchor it. */
+/* ---------- Theme: floating ----------
+   Same window/header chrome as the baseline; floating differentiates
+   itself with a softer visual weight — the hard 1px border fades into
+   a subtle tint, and the header divider dims to match. Gives the code
+   block a framed-but-recessed feel rather than a sharp card edge.
+   Older "caption-above, no frame" behavior has been retired since the
+   user wants a header here too. */
 html[data-code-theme="floating"] .prose-kr figure[data-rehype-pretty-code-figure] {
-  border: 0;
-  background-color: color-mix(in oklab, var(--muted) 40%, var(--background));
-  border-radius: 10px;
-}
-
-html[data-code-theme="floating"] .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title]::before,
-html[data-code-theme="rail"]     .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title]::before {
-  display: none;
-}
-
-html[data-code-theme="floating"]
-  .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title] {
-  margin: 0 0 6px 2px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-  display: block;
-}
-
-/* Lift the caption visually out of the figure by pushing the pre up. */
-html[data-code-theme="floating"]
-  .prose-kr figure[data-rehype-pretty-code-figure]:has(figcaption[data-rehype-pretty-code-title]) {
-  background-color: transparent;
-  overflow: visible;
-}
-
-html[data-code-theme="floating"]
-  .prose-kr figure[data-rehype-pretty-code-figure]:has(figcaption[data-rehype-pretty-code-title]) pre {
-  background-color: color-mix(in oklab, var(--muted) 40%, var(--background));
-  border-radius: 10px;
-}
-
-/* ---------- Theme: rail ----------
-   Left 2px accent rail, otherwise bare. Filename as caption above. The
-   rail ties visually to highlighted-line left-accent; we suppress the
-   highlighted line's inset shadow to avoid a double accent. */
-html[data-code-theme="rail"] .prose-kr figure[data-rehype-pretty-code-figure] {
-  border: 0;
-  border-left: 2px solid var(--primary);
-  border-radius: 0 10px 10px 0;
-  background-color: color-mix(in oklab, var(--muted) 45%, var(--background));
-}
-
-html[data-code-theme="rail"]
-  .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title] {
-  margin: 0 0 6px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-  display: block;
-}
-
-html[data-code-theme="rail"]
-  .prose-kr figure[data-rehype-pretty-code-figure]:has(figcaption[data-rehype-pretty-code-title]) {
-  background-color: transparent;
-  overflow: visible;
-  border-left: 0;
-}
-
-html[data-code-theme="rail"]
-  .prose-kr figure[data-rehype-pretty-code-figure]:has(figcaption[data-rehype-pretty-code-title]) pre {
-  background-color: color-mix(in oklab, var(--muted) 45%, var(--background));
-  border-left: 2px solid var(--primary);
-  border-radius: 0 10px 10px 0;
-}
-
-html[data-code-theme="rail"]
-  .prose-kr figure[data-rehype-pretty-code-figure] pre code span[data-line].highlighted {
+  border-color: color-mix(in oklab, var(--foreground) 8%, transparent);
   box-shadow: none;
-  background-color: color-mix(in oklab, var(--primary) 10%, transparent);
+}
+
+html[data-code-theme="floating"]
+  .prose-kr figure[data-rehype-pretty-code-figure] figcaption[data-rehype-pretty-code-title] {
+  border-bottom-color: color-mix(in oklab, var(--foreground) 8%, transparent);
 }
 
 /* ================================================================

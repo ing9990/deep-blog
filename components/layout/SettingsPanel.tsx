@@ -40,7 +40,6 @@ const FONT_SIZE_OPTIONS: { value: FontSize; labelKey: MessageKey }[] = [
 const CODE_THEME_OPTIONS: { value: CodeTheme; labelKey: MessageKey }[] = [
   { value: 'flat',     labelKey: 'settings.code.flat' },
   { value: 'floating', labelKey: 'settings.code.floating' },
-  { value: 'rail',     labelKey: 'settings.code.rail' },
 ]
 
 const SYNTAX_THEME_OPTIONS: { value: SyntaxTheme; labelKey: MessageKey }[] = [
@@ -312,29 +311,16 @@ function CodeThemeMiniIcon({ theme, active }: { theme: CodeTheme; active: boolea
     )
   }
 
-  if (theme === 'floating') {
-    // Detached caption above + borderless tinted block
-    return (
-      <div className="flex h-7 w-9 flex-col gap-1">
-        <div className={cn('h-[2px] w-2 rounded-full', captionColor)} />
-        <div className={cn('flex flex-1 flex-col justify-center gap-[3px] rounded px-1', active ? 'bg-primary/15' : 'bg-muted-foreground/15')}>
-          <div className={cn('h-[2px] w-full rounded-full', lineColor)} />
-          <div className={cn('h-[2px] w-3/4 rounded-full', lineColor, 'opacity-60')} />
-        </div>
-      </div>
-    )
-  }
-
-  // rail — caption above + left accent rail
+  // floating — same chrome as flat but with softer border and no shadow
   return (
-    <div className="flex h-7 w-9 flex-col gap-1">
-      <div className={cn('h-[2px] w-2 rounded-full', captionColor)} />
-      <div className="flex flex-1 items-stretch">
-        <div className={cn('w-[2px] shrink-0', active ? 'bg-primary' : 'bg-muted-foreground/50')} />
-        <div className={cn('flex flex-1 flex-col justify-center gap-[3px] rounded-r pl-1.5 pr-1', active ? 'bg-primary/10' : 'bg-muted-foreground/10')}>
-          <div className={cn('h-[2px] w-full rounded-full', lineColor)} />
-          <div className={cn('h-[2px] w-3/4 rounded-full', lineColor, 'opacity-60')} />
-        </div>
+    <div className="flex h-7 w-9 flex-col overflow-hidden rounded border border-muted-foreground/40">
+      <div className={cn('flex h-[9px] items-center gap-[2px] px-1', active ? 'bg-primary/10' : 'bg-muted-foreground/10')}>
+        <div className={cn('h-[4px] w-[5px] rounded-sm', active ? 'bg-primary' : 'bg-muted-foreground/60')} />
+        <div className={cn('h-[2px] w-2 rounded-full', captionColor, 'opacity-80')} />
+      </div>
+      <div className="flex flex-1 flex-col justify-center gap-[3px] px-1">
+        <div className={cn('h-[2px] w-full rounded-full', lineColor)} />
+        <div className={cn('h-[2px] w-3/4 rounded-full', lineColor, 'opacity-60')} />
       </div>
     </div>
   )

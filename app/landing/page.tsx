@@ -1,19 +1,7 @@
 import Link from 'next/link'
-import {
-  ArrowRight,
-  BookOpen,
-  Code2,
-  CreditCard,
-  Cpu,
-  Database,
-  Mail,
-  Package,
-  Server,
-  ShoppingBag,
-  ShoppingCart,
-  Sparkles,
-  Zap,
-} from 'lucide-react'
+import { ArrowRight, BookOpen, Mail, Sparkles } from 'lucide-react'
+
+import { SystemMap } from '@/components/landing/system-map/SystemMap'
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -46,20 +34,6 @@ const GITHUB_URL = 'https://github.com/ing9990/deep-blog'
 const LINKEDIN_URL = 'https://www.linkedin.com/in/ing9990'
 const EMAIL = 'gimgau0218@naver.com'
 
-const BLOG_TOPICS = [
-  { icon: Database, label: 'Database Index' },
-  { icon: Server, label: 'Distributed Systems' },
-  { icon: Cpu, label: 'JVM Internals' },
-  { icon: Zap, label: 'Cache & Stampede' },
-]
-
-const SERVICES = [
-  { icon: ShoppingBag, label: 'product-service', status: 'in progress' },
-  { icon: ShoppingCart, label: 'order-service', status: 'planned' },
-  { icon: CreditCard, label: 'payment-service', status: 'planned' },
-  { icon: Package, label: 'data-ingestion', status: 'planned' },
-]
-
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
@@ -90,7 +64,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="mx-auto max-w-3xl px-6 pt-16 pb-20 md:pt-24 md:pb-28">
+      <section className="mx-auto max-w-4xl px-6 pt-16 pb-10 md:pt-24 md:pb-14">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
           <span>blog · sandbox · engineering</span>
@@ -127,103 +101,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Two cards */}
-      <section className="mx-auto max-w-4xl px-6 pb-20">
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Card 1 — Blog */}
-          <article className="flex flex-col rounded-2xl border border-border bg-card p-7 shadow-sm">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <BookOpen className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <div className="text-[length:var(--text-caption)] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Deep Dive
-                </div>
-                <h2 className="text-lg font-bold">이론을 쉽게 정리합니다</h2>
-              </div>
-            </div>
-            <p className="mb-5 flex-1 text-sm leading-relaxed text-muted-foreground">
-              데이터베이스 인덱스, 트랜잭션 격리, 분산 시스템, JVM 내부, 캐시·메시지 큐 같은
-              주제를 &quot;왜 이렇게 생겼는지&quot; 중심으로 풀어냅니다. 외우는 대신 감각적으로
-              이해하는 데 초점을 맞춥니다.
-            </p>
-            <ul className="mb-6 space-y-2">
-              {BLOG_TOPICS.map(({ icon: Icon, label }) => (
-                <li
-                  key={label}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
-                >
-                  <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <span>{label}</span>
-                </li>
-              ))}
-            </ul>
-            <Link
-              href={BLOG_URL}
-              className="group mt-auto inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-            >
-              <span>deep.ing9990.com</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-            </Link>
-          </article>
-
-          {/* Card 2 — Backend Sandbox */}
-          <article className="flex flex-col rounded-2xl border border-border bg-card p-7 shadow-sm">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Code2 className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <div className="text-[length:var(--text-caption)] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Build In Public
-                </div>
-                <h2 className="text-lg font-bold">이커머스 백엔드를 쌓아갑니다</h2>
-              </div>
-            </div>
-            <p className="mb-5 flex-1 text-sm leading-relaxed text-muted-foreground">
-              상품·주문·결제·데이터 수집 같은 실제 도메인을 Spring Boot + Kotlin으로
-              구현합니다. 블로그가 다룬 기술 과제는 이 저장소의 어딘가에 코드와 테스트로
-              남습니다.
-            </p>
-            <ul className="mb-5 space-y-2">
-              {SERVICES.map(({ icon: Icon, label, status }) => (
-                <li
-                  key={label}
-                  className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                >
-                  <span className="flex items-center gap-2 font-mono text-xs text-foreground">
-                    <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    {label}
-                  </span>
-                  <span
-                    className={
-                      status === 'in progress'
-                        ? 'text-[length:var(--text-caption)] font-medium text-primary'
-                        : 'text-[length:var(--text-caption)] text-muted-foreground'
-                    }
-                  >
-                    {status}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mb-6 text-xs text-muted-foreground">
-              현재 로컬 전용으로 성장 중. 배포는 서비스가 공개할 만큼 자라면 열 예정입니다.
-            </p>
-            <Link
-              href={GITHUB_URL}
-              className="group mt-auto inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <GithubIcon className="h-4 w-4" />
-              <span>github.com/ing9990/deep-blog</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-            </Link>
-          </article>
-        </div>
-      </section>
+      {/* System map — feature-level wiki */}
+      <div className="w-full pb-16 md:pb-24">
+        <SystemMap />
+      </div>
 
       {/* Footer */}
       <footer className="border-t border-border">

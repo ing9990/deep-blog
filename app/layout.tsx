@@ -82,7 +82,7 @@ export default function RootLayout({
     <html lang="ko" className={`${paperlogy.variable} ${pretendard.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body>
         <Script id="settings-init" strategy="beforeInteractive">
-          {`try{var d=document.documentElement;var s=localStorage.getItem('deep-settings');if(s){var p=JSON.parse(s);var f=p.fontSize;if(f==='small'||f==='large'||f==='normal'){d.dataset.fontSize=f}d.dataset.codeTheme=(p.codeTheme==='rail')?'rail':'floating';var y=p.syntaxTheme;d.dataset.syntaxTheme=(y==='github'||y==='vitesse')?y:'atom'}else{d.dataset.codeTheme='floating';d.dataset.syntaxTheme='atom'}}catch(e){document.documentElement.dataset.codeTheme='floating';document.documentElement.dataset.syntaxTheme='atom'}`}
+          {`try{var d=document.documentElement;var s=localStorage.getItem('deep-settings');if(s){var p=JSON.parse(s);var f=p.fontSize;if(f==='small'||f==='large'||f==='normal'){d.dataset.fontSize=f}d.dataset.codeTheme=(p.codeTheme==='floating')?'floating':'flat';var y=p.syntaxTheme;d.dataset.syntaxTheme=(y==='atom'||y==='vitesse')?y:'github'}else{d.dataset.codeTheme='flat';d.dataset.syntaxTheme='github'}}catch(e){document.documentElement.dataset.codeTheme='flat';document.documentElement.dataset.syntaxTheme='github'}`}
         </Script>
         <ThemeProvider>
           <SettingsProvider>

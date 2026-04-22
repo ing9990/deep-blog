@@ -5,6 +5,7 @@ import {
   Cpu,
   Database,
   Lightbulb,
+  Package,
   Server,
   Sparkles,
 } from 'lucide-react'
@@ -17,5 +18,6 @@ export const CATEGORY_ICONS: Record<CategoryId, LucideIcon> = {
   infrastructure: Server,
   ai: Brain,
   knowledge: Lightbulb,
+  'mini-coupang-backend': Package,
   etc: Sparkles,
 }

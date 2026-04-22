@@ -7,6 +7,7 @@ export const CATEGORY_IDS = [
   'infrastructure',
   'ai',
   'knowledge',
+  'mini-coupang-backend',
   'etc',
 ] as const
 
@@ -48,6 +49,11 @@ export const CATEGORIES: readonly CategoryMeta[] = [
     id: 'knowledge',
     label:       { en: 'Knowledge', ko: '지식' },
     description: { en: 'Terms, concepts, fundamentals', ko: '용어, 개념, 기초 지식' },
+  },
+  {
+    id: 'mini-coupang-backend',
+    label:       { en: 'Mini Coupang Backend', ko: '미니쿠팡 백엔드' },
+    description: { en: 'Implementation-origin posts from the mini-coupang sandbox (design decisions with measurements)', ko: '미니쿠팡 샌드박스 구현에서 나온 설계 결정과 측정 기반 기록' },
   },
   {
     id: 'etc',

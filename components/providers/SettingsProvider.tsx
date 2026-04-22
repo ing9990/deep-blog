@@ -12,7 +12,7 @@ import {
 export type CardLayout = 'editorial' | 'timeline' | 'floating'
 export type Language = 'en' | 'ko'
 export type FontSize = 'small' | 'normal' | 'large'
-export type CodeTheme = 'flat' | 'floating' | 'rail'
+export type CodeTheme = 'flat' | 'floating'
 export type SyntaxTheme = 'atom' | 'github' | 'vitesse'
 
 export interface Settings {
@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS: Settings = {
   language: 'ko',
   fontSize: 'normal',
   codeTheme: 'flat',
-  syntaxTheme: 'atom',
+  syntaxTheme: 'github',
 }
 
 const STORAGE_KEY = 'deep-settings'
@@ -66,12 +66,15 @@ export function normalizeFontSize(value: unknown): FontSize {
 }
 
 export function normalizeCodeTheme(value: unknown): CodeTheme {
-  if (value === 'rail' || value === 'floating' || value === 'flat') return value
+  // 'rail' is a retired variant — legacy localStorage entries collapse to
+  // the current default.
+  if (value === 'floating' || value === 'flat') return value
   return 'flat'
 }
 
 export function normalizeSyntaxTheme(value: unknown): SyntaxTheme {
-  return value === 'github' || value === 'vitesse' ? value : 'atom'
+  if (value === 'github' || value === 'vitesse' || value === 'atom') return value
+  return 'github'
 }
 
 function loadSettings(): Settings {
