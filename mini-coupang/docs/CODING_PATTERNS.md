@@ -8,6 +8,7 @@ mini-coupang 모놀리스가 따르는 레이어별 파일 구성 규칙. 신규
 - **Service에서 Optional 체이닝**. `findById().orElseThrow()`, `.filter(...).map(...).orElseThrow(...)`를 우선. 명령형 `if (opt.isPresent())` 분기는 지양.
 - **DTO는 record**. 요청/응답 모두 불변 레코드.
 - **도메인 예외는 RuntimeException 상속**. `GlobalExceptionHandler`가 HTTP 상태로 매핑.
+- **Enum 상수는 static import 기본**. 어노테이션 인자·메서드 인자 모두 해당. 예: `AccessLevel.PROTECTED` → `PROTECTED`, `FetchType.LAZY` → `LAZY`, `GenerationType.IDENTITY` → `IDENTITY`, `HttpStatus.CREATED` → `CREATED`. import 순서는 static import 블록 → 빈 줄 → 일반 import.
 
 ## 패키지 구조
 
@@ -38,16 +39,22 @@ com.deepblog.minicoupang
 ### 레이아웃
 
 ```java
+import static jakarta.persistence.GenerationType.IDENTITY;
+import static lombok.AccessLevel.PRIVATE;
+import static lombok.AccessLevel.PROTECTED;
+
+// ...
+
 @Entity
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@NoArgsConstructor(access = PROTECTED)
+@AllArgsConstructor(access = PRIVATE)
 @Builder
 @Table(name = "xxx")   // 복수형 스네이크 케이스
 public class Xxx extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = IDENTITY)
     @Column(name = "xxx_id")
     private Long id;
 
@@ -81,10 +88,10 @@ public class Xxx extends BaseEntity {
   - `length`: VARCHAR 크기. 문자열 필드는 반드시 지정.
   - `unique`: 유니크일 때만 `true`.
 - 예: `@Column(name = "email", nullable = false, length = 255, unique = true)`
-- 연관관계 FK:
-  - `@OneToOne(fetch = FetchType.LAZY, optional = false)`
+- 연관관계 FK (`FetchType.LAZY`는 `LAZY`로 static import):
+  - `@OneToOne(fetch = LAZY, optional = false)`
   - `@JoinColumn(name = "xxx_id", nullable = false, unique = true)` (1:1일 때 unique)
-  - `@ManyToOne(fetch = FetchType.LAZY)` + `@JoinColumn(name = "xxx_id", nullable = false)` (N:1)
+  - `@ManyToOne(fetch = LAZY)` + `@JoinColumn(name = "xxx_id", nullable = false)` (N:1)
 - 모든 연관관계 기본값은 `LAZY`. `EAGER` 금지.
 
 ### 공통 필드 — `BaseEntity`
