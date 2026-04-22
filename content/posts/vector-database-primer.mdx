@@ -1,0 +1,158 @@
+---
+title:
+  ko: "Vector Database 입문"
+  en: "Vector Database Primer"
+slug: "vector-database-primer"
+date: 2026-04-23
+tags:
+  - backend
+  - database
+  - ai
+  - vector-database
+keywords:
+  - Vector Database
+  - Vector DB
+  - 벡터 데이터베이스
+  - Embedding
+  - 임베딩
+  - ANN
+  - Approximate Nearest Neighbor
+  - HNSW
+  - IVF
+summary:
+  ko: "Vector Database가 왜 기존 B+Tree 인덱스로는 풀 수 없는 고차원 유사도 검색 문제에 특화되었는지 이해합니다. cosine·L2·dot 거리 메트릭과 HNSW·IVF·PQ ANN 인덱스가 recall과 latency를 어떻게 trade-off하는지 메커니즘 감각으로 파악합니다."
+  en: "Understand why Vector Databases specialize for high-dimensional similarity search that B+Tree indexes cannot solve. See how distance metrics (cosine, L2, dot) and ANN indexes (HNSW, IVF, PQ) trade recall for latency at the mechanism level."
+category: infrastructure
+draft: false
+---
+
+임베딩 기반 검색은 "의미가 비슷한 것 찾기"라는 질의를 "벡터 공간에서 가까운 점 찾기"로 바꿉니다. 하지만 기존 B+Tree 인덱스는 여기에 쓸 수 있는 도구를 주지 않고, 고차원에서는 KD-Tree 같은 공간 분할 인덱스도 차원의 저주로 무너집니다. 이 글에서는 Vector Database가 왜 필요하고, ANN 인덱스가 어떻게 이 문제를 풀었는지 메커니즘 감각으로 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - Vector Database가 왜 기존 인덱스로는 풀 수 없는 문제를 푸는지 이해한다
+  - HNSW, IVF, PQ 세 가지 ANN 인덱스가 각각 어떤 거래를 하는지 구분할 수 있다
+  - 자기 서비스가 Vector DB에 맞는 상황인지 판단하는 기준을 얻는다
+</Note>
+
+## Vector DB란
+
+Vector Database는 고차원 숫자 벡터를 저장하고, 주어진 질의 벡터에 가장 가까운 top-k 벡터를 빠르게 찾는 것에 특화된 데이터베이스입니다. 저장 단위는 보통 `(id, vector: float[D], metadata)` 삼종이고, 핵심 연산은 등호나 범위가 아니라 **두 벡터 사이의 거리 계산**입니다. 거리를 재는 방식은 cosine (방향), L2 (절대 거리), dot product (정규화된 벡터에서는 cosine과 등가) 셋이 대부분입니다.
+
+여기서 "벡터"는 그냥 숫자 배열이 아니라 embedding입니다. Embedding은 모델이 텍스트, 이미지, 오디오 같은 입력을 고정 차원의 벡터로 매핑한 결과로, 학습을 통해 의미적으로 비슷한 것들이 벡터 공간에서도 서로 가깝게 배치되도록 만들어집니다. 이 성질 덕분에, 의미적으로 비슷한 것을 찾는 일이 **벡터 공간에서 가까운 점을 찾는 일**로 환원됩니다.
+
+이 구조가 중요한 이유는 질의의 형태 자체가 기존 데이터베이스와 다르기 때문입니다. RDB가 다루는 질의는 `WHERE id = 42` 처럼 **순서 위에서** 정의됩니다. Vector DB의 질의는 "이 쿼리 벡터에 가장 가까운 10개를 달라"처럼 **거리 함수 위에서** 정의됩니다. 이 차이가 인덱스 구조의 근본을 바꿉니다.
+
+## 왜 필요한가
+
+기존 DB 인덱스, 대표적으로 B+Tree는 **전순서(total order)** 위에서만 힘을 발휘합니다. 숫자나 문자열처럼 "작다/크다"가 자연스럽게 정의되는 값을 정렬해 두고, $O(\log N)$ 시간에 등호와 범위 질의를 풀어냅니다. 그런데 고차원 벡터에는 "이 벡터가 저 벡터보다 크다" 같은 자연스러운 전순서가 없습니다. `[0.12, -0.34, ...]` 과 `[0.08, 0.21, ...]` 사이에는 등호나 범위가 아니라 거리만 의미가 있습니다.
+
+<RelatedPost slug="database-index-deep-dive" type="deep-dive" />
+
+인덱스 없이 kNN을 풀면 전체 벡터와 한 번씩 거리를 계산해야 해서 비용이 $O(N \cdot D)$ 로 쌓입니다. 수백만 개 벡터가 768차원이면 한 번의 검색이 수백 ms에서 초 단위로 번집니다. 실서비스 요청당 수십 ms 예산으로는 감당이 어렵습니다.
+
+공간을 쪼개는 전통적 인덱스(KD-Tree, R-Tree)도 답이 되지 않습니다. 저차원 (2D, 3D)에서는 잘 동작하지만, 차원이 커지면 **차원의 저주 (curse of dimensionality)** 가 나타납니다. 고차원 공간에서는 "가까운 점"과 "먼 점"의 거리 차이가 상대적으로 줄어들고, 공간을 쪼개도 쿼리 지점 근처 셀이 거의 모든 셀과 겹쳐서 가지치기(pruning)가 무의미해집니다. 차원이 20에서 30을 넘으면 KD-Tree는 사실상 full scan과 비슷한 비용으로 수렴합니다. Embedding은 보통 수백에서 수천 차원이라 이 영역에 정면으로 들어갑니다.
+
+그래서 Vector DB는 **exact 검색을 포기하는 대신 sub-linear 시간을 얻는 거래**, 즉 Approximate Nearest Neighbor (ANN) 인덱스를 택합니다. "정확히 가장 가까운 10개" 대신 "거의 가장 가까운 10개"를 훨씬 빠른 속도로 돌려줍니다. 품질은 recall@k (상위 k개 중 정답 비율)로 수치화해서 관리합니다. 이 거래를 받아들이지 않으면 고차원 유사도 검색은 구조적으로 빠르게 풀 방법이 없습니다.
+
+## 동작 원리
+
+<Callout type="warning" title="이 구조를 이해하는 핵심">
+  Vector DB의 ANN 인덱스는 **고차원 공간의 전순서 부재**와 **차원의 저주**라는
+  두 제약 위에서 설계됐습니다. 그래서 정확성을 부분적으로 포기하는 대신
+  그래프 탐색(HNSW)이나 공간 분할(IVF), 벡터 압축(PQ) 같은 근사 기법으로
+  sub-linear 시간을 확보합니다.
+</Callout>
+
+<Callout type="error" title="핵심 통찰: ANN은 정확성과 속도의 거래다">
+  ANN 인덱스는 고성능 마술이 아니라 의도적인 거래입니다. 일부 정답 벡터를
+  놓칠 위험을 받아들이는 대신, 검색 비용을 $O(N)$에서 $O(\log N)$ 또는 그
+  근처로 끌어내립니다. recall@k를 낮추지 않으려면 튜닝 파라미터가 필요하고,
+  그 파라미터가 곧 운영 손잡이가 됩니다.
+</Callout>
+
+먼저 거리 메트릭부터 짚고, 그 다음 세 가지 대표 ANN 인덱스 (HNSW, IVF, PQ)가 각각 어떻게 동작하는지 살펴봅니다. 아래 시각화는 2D 공간에서 exact kNN과 ANN이 어떻게 다른 결과를 내는지를 보여줍니다.
+
+<VectorSearchSpace />
+
+### 거리 메트릭
+
+거리 계산 방식은 세 가지가 거의 전부입니다.
+
+| 메트릭 | 의미 | 언제 쓰는가 |
+|---|---|---|
+| Cosine similarity | 두 벡터의 방향 차이 | 문장 embedding 같이 방향이 의미를 담는 경우. 기본값 |
+| L2 (Euclidean) distance | 두 벡터 사이 절대 거리 | 이미지 embedding처럼 크기가 의미를 가지는 경우 |
+| Dot product | 내적. 정규화된 벡터에서는 cosine과 등가 | 사전에 L2 정규화를 해둔 경우, 정규화 비용 절감용 |
+
+ANN 인덱스는 구축 시 선택된 메트릭 위에서 동작합니다. 구축 메트릭과 질의 메트릭이 다르면 결과가 무의미해지므로, 저장 단계부터 일관되게 관리해야 합니다.
+
+### HNSW 그래프 탐색
+
+HNSW (Hierarchical Navigable Small World)는 현재 가장 널리 쓰이는 ANN 인덱스입니다. 핵심 아이디어는 벡터들을 그래프 노드로 연결하되, 이 그래프를 여러 레벨로 쌓는 것입니다. 상위 레벨은 벡터 중 극히 일부만 남겨 긴 엣지로 듬성듬성 연결하고, 레벨을 내려갈수록 더 많은 벡터와 더 짧은 엣지로 촘촘해집니다.
+
+질의가 들어오면 최상위 레벨의 어떤 진입점에서 시작해 **greedy search**로 "더 가까워지는 이웃이 있으면 이동"을 반복합니다. 더 나아갈 곳이 없으면 한 레벨 내려가서 같은 과정을 더 세밀하게 반복합니다. 상위 레벨의 긴 엣지가 공간을 빠르게 가로지르는 "고속도로" 역할을 하고, 하위 레벨의 짧은 엣지가 "골목길"에서 정밀 탐색을 맡습니다. 평균 탐색 비용이 약 $O(\log N)$ 로 수렴합니다.
+
+<HNSWLevelWalk />
+
+그 대신 비용은 메모리입니다. 각 노드가 여러 이웃 포인터를 들고 있어야 해서, 벡터 자체보다 그래프 구조가 더 큰 공간을 차지하는 경우가 흔합니다. 구축 단계에서 `M` (노드당 이웃 수)과 `efConstruction` (삽입 시 탐색 폭) 같은 파라미터가 그래프의 품질과 메모리 사용량을 결정합니다.
+
+### IVF 공간 분할
+
+IVF (Inverted File Index)는 다른 각도의 해법입니다. 전체 벡터 집합을 k-means로 `nlist`개 cluster로 나눈 뒤, 각 cluster의 centroid만 먼저 기억해 둡니다. 질의 시에는 쿼리 벡터와 centroid들만 먼저 비교해서 가까운 `nprobe`개 cluster를 고르고, 그 cluster 안의 벡터들에 대해서만 실제 거리 계산을 수행합니다.
+
+`nprobe`가 작으면 검사하는 cluster 수가 적어 빠르지만, 정답이 다른 cluster에 있으면 놓칩니다. 크면 recall이 오르는 대신 비용이 커집니다. `nprobe`가 바로 recall과 latency 트레이드오프를 사용자가 직접 잡는 손잡이입니다.
+
+<IVFNprobe />
+
+HNSW와 비교하면 IVF는 구조가 단순하고 메모리가 적게 듭니다. 대신 cluster 경계 근처의 벡터가 잘못된 cluster로 분류되면 recall이 흔들리고, `nprobe` 튜닝 감각이 필요합니다. k-means cluster 품질 자체도 데이터 분포에 민감합니다.
+
+### PQ 벡터 압축
+
+PQ (Product Quantization)는 HNSW, IVF와 직교하는 기법입니다. 벡터를 여러 부분 벡터로 쪼갠 뒤 각 부분을 작은 코드북 (centroid 집합)에 대한 인덱스로 근사합니다. 768차원 float 벡터 (3072 바이트)가 수십 바이트 수준으로 줄어들고, 거리 계산도 코드북 조회 테이블로 바뀌어 빨라집니다.
+
+대신 값이 근사치로 저장되므로 정확도가 떨어집니다. 실무에서는 IVF+PQ 또는 HNSW+PQ처럼 조합해서 대용량과 저메모리를 동시에 얻습니다. IVF로 후보 cluster를 좁히고 그 안은 PQ 코드로 빠르게 거리 계산을 하는 패턴이 대표적입니다.
+
+세 도구의 역할을 한 번에 정리하면 다음과 같습니다.
+
+| 인덱스 | 기반 | 강점 | 약점 |
+|---|---|---|---|
+| HNSW | 계층형 그래프 + greedy search | 높은 recall, 빠른 쿼리 | 메모리 사용량이 큼 |
+| IVF | k-means cluster 분할 | 메모리 효율, `nprobe`로 세밀한 튜닝 | cluster 경계 문제, 튜닝 감각 필요 |
+| PQ | 부분 벡터 코드북 근사 | 수십에서 수백 배 메모리 압축 | 근사 저장으로 정확도 손실 |
+
+이 세 개의 조합으로 대부분의 Vector DB 제품이 빌드됩니다. pgvector, Pinecone, Weaviate, Milvus, Qdrant 같은 서로 다른 제품들도 내부 인덱스 선택과 파라미터 노출 방식이 다를 뿐, 근본 메커니즘은 위 세 가지에서 크게 벗어나지 않습니다.
+
+## 어디서 마주치는가
+
+### 맞는 상황
+
+- **RAG (Retrieval-Augmented Generation)**: LLM 답변 생성을 위해 관련 문서 청크를 embedding 유사도로 찾는 전형적 사용처.
+- **의미 검색**: 키워드 매칭을 넘어 문장의 의미가 비슷한 결과를 돌려주는 검색 UX.
+- **추천 시스템의 후보 생성**: 사용자 벡터와 아이템 벡터의 유사도로 수천만 후보 중 수백 개를 추립니다.
+- **이미지, 오디오 유사도 검색**: 시각/청각 embedding으로 "비슷한 콘텐츠 찾기"가 필요한 경우.
+- **이상 탐지**: 평균 벡터 분포에서 크게 벗어난 샘플을 거리 기반으로 식별.
+
+공통점은 질의가 "거리 기반 top-k"로 정의된다는 점입니다. 벡터 수가 수십만을 넘어서면 full scan 비용이 체감되고, 수백만 이상부터는 ANN 인덱스가 사실상 필수가 됩니다.
+
+### 피하는 상황
+
+- **등호/범위 질의 중심 워크로드**: 기존 RDB 인덱스가 Vector DB보다 훨씬 빠르고 정확합니다. 벡터 연산을 끼워 넣을 이유가 없습니다.
+- **벡터 수가 수천 개 이하**: 별도 시스템을 도입할 이득이 작습니다. numpy 배열에 담아 in-memory로 전체 거리 계산을 돌리는 쪽이 더 단순하고 결과도 정확합니다.
+- **recall 요건이 100%에 가까운 도메인**: ANN은 설계상 근사를 허용하므로 특정 질의에서 정답을 놓칠 수 있습니다. 법적, 의료적 검색처럼 정답을 절대 놓치면 안 되는 경우는 exact kNN 또는 다른 검증된 방식을 써야 합니다.
+
+실무에서는 Vector DB를 단독으로 쓰기보다 기존 RDB나 검색 엔진과 결합해, 벡터 유사도로 후보를 좁히고 구조화 필터 또는 정확 매칭으로 최종 결과를 다듬는 하이브리드 패턴이 흔합니다. 대부분의 Vector DB 제품이 metadata filter를 함께 제공하는 것도 이런 이유입니다.
+
+## 마무리
+
+Vector Database는 "더 좋은 DB"가 아니라 **다른 문제를 푸는 DB**입니다. 고차원 벡터 공간에 자연스러운 전순서가 없기 때문에 B+Tree가 통하지 않고, 차원의 저주 때문에 전통적 공간 분할도 무너집니다. 이 제약 위에서 ANN 인덱스가 "exact를 조금 포기하고 sub-linear를 얻는 거래"를 제시했고, HNSW, IVF, PQ가 각각 그래프 탐색, 공간 분할, 벡터 압축이라는 서로 다른 축으로 그 거래를 구현합니다.
+
+도구 선택의 기준은 속도가 아니라 질의의 형태입니다. 거리 기반 top-k가 질의의 본질이라면 Vector DB를 고려하고, 그렇지 않으면 기존 도구를 먼저 쓰는 것이 합리적입니다. 내부 인덱스 선택과 파라미터 튜닝은 구체 제품을 도입할 때의 과제이지만, 왜 이런 선택지가 생겼는지를 알면 어떤 제품을 고르든 같은 언어로 의사결정할 수 있습니다.
+
+## 참고 자료
+
+- [Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs (Malkov, Yashunin, 2016)](https://arxiv.org/abs/1603.09320)
+- [Product Quantization for Nearest Neighbor Search (Jégou, Douze, Schmid, 2010)](https://inria.hal.science/inria-00514462v2/document)
+- [Billion-scale similarity search with GPUs (Johnson, Douze, Jégou, 2017 · FAISS 논문)](https://arxiv.org/abs/1702.08734)
+- [FAISS 공식 문서](https://faiss.ai/)
+- [pgvector 공식 저장소](https://github.com/pgvector/pgvector)
+- [Pinecone: What is a Vector Database?](https://www.pinecone.io/learn/vector-database/)

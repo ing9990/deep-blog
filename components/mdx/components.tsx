@@ -58,6 +58,9 @@ import { ThreadLocalMapStructure } from '@/components/visualizations/ThreadLocal
 import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
 import { TrieDeleteSnapshot } from '@/components/visualizations/TrieDeleteSnapshot'
 import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
+import { VectorSearchSpace } from '@/components/visualizations/VectorSearchSpace'
+import { HNSWLevelWalk } from '@/components/visualizations/HNSWLevelWalk'
+import { IVFNprobe } from '@/components/visualizations/IVFNprobe'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   'data-keyword-link'?: string
@@ -166,5 +169,8 @@ export const mdxComponents: MDXComponents = {
   TrieBuilder,
   TrieDeleteSnapshot,
   TwoGeneralsMessenger,
+  VectorSearchSpace,
+  HNSWLevelWalk,
+  IVFNprobe,
   Tabs,
 }
