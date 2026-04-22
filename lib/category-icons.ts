@@ -1,6 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  Brain,
   Code2,
   Cpu,
   Database,
@@ -16,7 +15,6 @@ export const CATEGORY_ICONS: Record<CategoryId, LucideIcon> = {
   'language-backend': Code2,
   database: Database,
   infrastructure: Server,
-  ai: Brain,
   knowledge: Lightbulb,
   'mini-coupang-backend': Package,
   etc: Sparkles,

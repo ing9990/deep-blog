@@ -5,7 +5,6 @@ export const CATEGORY_IDS = [
   'language-backend',
   'database',
   'infrastructure',
-  'ai',
   'knowledge',
   'mini-coupang-backend',
   'etc',
@@ -39,11 +38,6 @@ export const CATEGORIES: readonly CategoryMeta[] = [
     id: 'infrastructure',
     label:       { en: 'Infrastructure', ko: '인프라' },
     description: { en: 'Middleware and infra products (Redis, Kafka, RabbitMQ)', ko: '미들웨어·인프라 제품 (Redis, Kafka, RabbitMQ)' },
-  },
-  {
-    id: 'ai',
-    label:       { en: 'AI', ko: 'AI' },
-    description: { en: 'LLM, machine learning, AI engineering', ko: 'LLM, 머신러닝, AI 엔지니어링' },
   },
   {
     id: 'knowledge',
