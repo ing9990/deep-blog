@@ -53,6 +53,7 @@ import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndex
 import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
 import { SoaVsKafkaTopology } from '@/components/visualizations/SoaVsKafkaTopology'
 import { SyscallFlow } from '@/components/visualizations/SyscallFlow'
+import { ThreadLocalMapStructure } from '@/components/visualizations/ThreadLocalMapStructure'
 import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
 import { TrieDeleteSnapshot } from '@/components/visualizations/TrieDeleteSnapshot'
 import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
@@ -159,6 +160,7 @@ export const mdxComponents: MDXComponents = {
   SoaVsKafkaTopology,
   SyscallFlow,
   Tab,
+  ThreadLocalMapStructure,
   TrieBuilder,
   TrieDeleteSnapshot,
   TwoGeneralsMessenger,

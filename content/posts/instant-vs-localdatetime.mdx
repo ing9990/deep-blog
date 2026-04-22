@@ -1,0 +1,378 @@
+---
+title:
+  ko: "Instant vs LocalDateTime"
+  en: "Instant vs LocalDateTime"
+slug: "instant-vs-localdatetime"
+date: 2026-04-22
+tags:
+  - Backend
+  - Java
+  - JPA
+keywords:
+  - "Instant"
+  - "LocalDateTime"
+  - "ZonedDateTime"
+  - "OffsetDateTime"
+  - "Java Time"
+  - "MySQL DATETIME"
+  - "serverTimezone"
+summary:
+  ko: "Instant · LocalDateTime · ZonedDateTime · OffsetDateTime 네 가지 Java Time 타입이 각각 무엇을 모델링하는지 이해하고, Hibernate와 MySQL을 거치는 세 층의 타임존 해석을 따라가며, 감사 필드 · 예약 시각 · 국제 일정에서 어느 타입을 고를지 기준을 얻을 수 있습니다."
+  en: "Understand what each of Java Time's four types (Instant, LocalDateTime, ZonedDateTime, OffsetDateTime) models, follow the three layers of timezone interpretation through Hibernate and MySQL, and learn how to choose the right type for audit fields, reservations, and cross-timezone schedules."
+category: language-backend
+draft: false
+---
+
+시간은 프로그래밍에서 가장 쉬워 보이지만 가장 미묘한 주제 중 하나입니다. Java 8은 `Date` 하나가 담당하던 역할을 `Instant` / `LocalDateTime` / `ZonedDateTime` / `OffsetDateTime` 네 개로 쪼갰고, 각 타입이 Hibernate와 MySQL을 거쳐 저장될 때 **독립적인 타임존 해석**을 겪습니다. 이 글은 네 타입이 모델링하는 것, 저장 경로의 세 층, 그리고 실제로 어느 타입을 언제 써야 하는지를 따라갑니다.
+
+<Note title="이 글의 학습 목표">
+  - `Instant` / `LocalDateTime` / `ZonedDateTime` / `OffsetDateTime`이 각각 무엇을 모델링하는지 이해한다.
+  - Java 타입이 Hibernate → JDBC 드라이버 → MySQL 컬럼으로 내려가는 세 층의 타임존 해석을 구분할 수 있다.
+  - 감사 필드·예약 시각·국제 일정 같은 상황에서 어느 타입을 고를지 기준을 얻는다.
+</Note>
+
+## 네 가지 시간 타입
+
+### Instant
+
+Unix epoch 이후 흘러간 초·나노초로 표현되는 **절대 시점**입니다. 타임존 개념이 없습니다. `2026-04-22T06:30:00Z` 같은 UTC 표기나 내부적으로 long 값으로 생각하는 편이 맞습니다.
+
+벽시계를 보지 않고 오직 "우주적으로 몇 번째 nano인가"만 신경 씁니다. 두 `Instant`를 비교하면 어느 쪽이 먼저 일어났는지가 항상 확정됩니다. 타임존이 개입할 여지가 없기 때문입니다.
+
+쓰임: 이벤트 발생 시각, 로그 타임스탬프, 감사 필드, "몇 초 전" 계산처럼 "언제 일어난 사건인가"가 핵심인 모든 곳.
+
+### LocalDateTime
+
+`2026-04-22 15:30:00`이라는 **벽시계 읽기**만을 표현합니다. 타임존 정보가 없어서 이 값만으로는 어느 순간에 해당하는지 정해지지 않습니다. 서울 오후 3시 30분인지 뉴욕 오후 3시 30분인지 알 수 없습니다.
+
+"부동의 벽시계 약속" 모델입니다. 생일은 태어난 지역이 어디든 4월 22일이고, 회의를 "Tokyo 3시"라고 잡으면 Tokyo 사람 입장에서 3시입니다. 사건의 **절대적인 순간**보다 **지역 벽시계에 박힌 값**이 중요한 경우에 씁니다.
+
+쓰임: 생일, 예약 시각(지역 시간 기준 약속), 영업 시간, 폼 입력의 기본 표현.
+
+### ZonedDateTime
+
+`LocalDateTime` + `ZoneId`(예: `Asia/Seoul`, `America/New_York`). 벽시계 읽기와 **어느 지역의 벽시계인지** 모두 가집니다. 따라서 `Instant`로 정확히 환산할 수 있습니다.
+
+`ZoneId`는 단순 오프셋이 아니라 **DST 규칙을 포함한 지역의 이름**입니다. `Asia/Seoul`은 DST 없음, `America/New_York`은 매년 두 차례 오프셋이 바뀝니다. `ZonedDateTime`은 이 규칙을 자동으로 따라 해석됩니다.
+
+쓰임: 여러 타임존 사용자가 공유하는 일정, 국제 회의 시각, 지역 규정에 따라 동작하는 시스템.
+
+### OffsetDateTime
+
+`LocalDateTime` + **고정 오프셋**(`+09:00`). `ZonedDateTime`과 비슷해 보이지만, DST 같은 지역 규칙을 모릅니다. `+09:00`는 영원히 `+09:00`입니다.
+
+ISO-8601 문자열(`2026-04-22T15:30:00+09:00`)과 1:1 대응됩니다. 직렬화 포맷이 ISO-8601이면 자연스럽게 이 타입을 거치게 됩니다. 또한 PostgreSQL의 `TIMESTAMP WITH TIME ZONE`(`TIMESTAMPTZ`) 컬럼과 궁합이 잘 맞습니다.
+
+쓰임: REST API의 날짜 직렬화, ISO 8601 로그, `TIMESTAMPTZ` 컬럼.
+
+### 네 타입 한 줄 요약
+
+| 타입 | 절대 시점인가 | 지역 정보 | 주용도 |
+|---|---|---|---|
+| `Instant` | 있음 | 없음 | 사건의 발생 시각 |
+| `LocalDateTime` | 없음 (결정 불가) | 없음 | 벽시계 약속 |
+| `ZonedDateTime` | 있음 | 지역명 (DST 포함) | 타임존 간 일정 공유 |
+| `OffsetDateTime` | 있음 | 고정 오프셋 (DST 없음) | ISO 8601, TIMESTAMPTZ |
+
+## 왜 네 개가 필요한가
+
+### 시간의 두 얼굴
+
+프로그램이 시간을 다룰 때 답해야 하는 두 가지 **독립적인 질문**이 있습니다.
+
+- **(A) 벽시계 질문**: "이 값이 읽히는 대로 `2026-04-22 15:30`인가?" 달력과 시계가 만들어내는 숫자.
+- **(B) 시점 질문**: "이 값이 UTC 타임라인의 어느 점에 해당하는가?" 우주적으로 유일하게 결정 가능한 순간.
+
+두 질문이 항상 함께 답해지는 것은 아닙니다.
+
+- 생일은 (A)만 중요합니다. "4월 22일"이 어느 타임존인지 묻는 게 의미가 없습니다.
+- 서버 로그 타임스탬프는 (B)만 중요합니다. 로그가 우주적으로 언제 찍혔는지가 핵심이지 "벽시계상 몇 시"는 조회 시에 지역별로 변환하면 됩니다.
+- 국제 회의 시각은 (A)와 (B) 모두 필요합니다. 뉴욕 측에선 `2026-04-22 10:00 EDT`를, 서울 측에선 `2026-04-22 23:00 KST`를 보면서 두 값이 UTC 타임라인 상 **같은 순간**이어야 합니다.
+
+한 타입이 이 두 축을 모두 뭉뚱그리면, 쓰는 쪽은 "지금 나는 (A)를 묻는 건지 (B)를 묻는 건지" 구분이 사라집니다. Java 8 이전의 문제가 정확히 그것이었습니다.
+
+### Date 타입의 혼선
+
+Java 8 이전은 `java.util.Date`와 `Calendar`가 시간을 담당했습니다. `Date`는 이름과 다르게 내부적으로 **epoch millis만 저장**합니다. 즉 실제로는 `Instant`에 가깝습니다. 그런데 `Date.getYear()`, `Date.getHours()` 같은 메서드가 "벽시계 숫자"를 반환합니다. 시스템 기본 타임존을 암묵적으로 적용해서.
+
+결과적으로 `Date` 하나가 다음 세 가지 역할을 뒤섞어 수행했습니다.
+
+1. 절대 시점(`Instant`) 저장
+2. 시스템 TZ 기반 벽시계 읽기
+3. 벽시계 값 set/get (mutable)
+
+쓰는 쪽은 "내가 지금 어느 축 위에서 이 값을 다루는가"를 매번 기억해야 했고, 자주 틀렸습니다. 시스템 TZ가 환경마다 다르게 잡히면 같은 코드가 다른 값을 반환합니다.
+
+Joda-Time 라이브러리가 이 문제를 해결한 설계를 제시했고, JSR-310으로 표준화되어 Java 8의 `java.time` 패키지가 되었습니다. 원칙은 단순합니다. **한 타입이 한 축만 다루게 한다.**
+
+### 네 타입의 좌표
+
+(A) 벽시계를 포함하는가, (B) 절대 시점을 결정할 수 있는가. 이 두 질문의 답으로 네 타입이 놓이는 자리가 드러납니다.
+
+| 축 | 절대 시점 있음 | 절대 시점 없음 |
+|---|---|---|
+| **벽시계 포함** | `ZonedDateTime`, `OffsetDateTime` | `LocalDateTime` |
+| **벽시계 없음** | `Instant` | (의미 없음) |
+
+우측 하단 "벽시계도 없고 시점도 모름"은 아무 정보도 없는 값이라 타입으로 존재할 이유가 없습니다. 나머지 세 자리 중 "벽시계 + 절대 시점 가능" 칸에 두 타입이 들어 있는 게 눈에 띄는 대목입니다.
+
+### Zone vs Offset
+
+두 타입은 "벽시계 값을 가지면서 절대 시점도 결정 가능"이라는 점에서 같은 칸에 놓이지만, **지역 정보를 어떤 형태로 기억하는가**가 다릅니다.
+
+- `ZonedDateTime`은 `Asia/Seoul` 같은 **지역명**을 가집니다. 지역명 안에는 DST 규칙, 역사적 오프셋 변경(표준시 개정 등)이 전부 포함되어 있습니다. `America/New_York`로 설정된 값은 매년 두 번 자동으로 오프셋이 바뀝니다.
+- `OffsetDateTime`은 `+09:00` 같은 **고정 오프셋**만 가집니다. 오프셋이 언제 바뀌는지 모르고, 바뀌지도 않습니다. ISO-8601 문자열(`2026-04-22T15:30:00+09:00`)과 자연스럽게 대응됩니다.
+
+같은 "벽시계 + 절대 시점" 값을 저장하더라도:
+
+- 미래의 예약 시각: `ZonedDateTime`. DST가 내년에 바뀌더라도 "뉴욕 기준 오후 3시"는 자동으로 올바른 절대 시점으로 환산됩니다.
+- 과거의 ISO 8601 기록: `OffsetDateTime`. 이미 일어난 사건은 DST 변화에 영향받을 이유가 없고, "그때 오프셋이 얼마였다"를 그대로 기록하는 게 맞습니다.
+
+실전에서는 두 타입 모두 자주 등장하지만, 용도가 다르다는 점이 잘 알려지지 않습니다. 예약·스케줄링 로직에 `OffsetDateTime`을 쓰면 미래 DST 변화를 놓칠 수 있습니다.
+
+## DB로 가는 경로
+
+<Callout type="warning" title="이 섹션의 핵심 포인트">
+  Java 타입이 DB에 저장되는 경로는 **세 층**을 거칩니다(Hibernate → JDBC 드라이버 → MySQL 컬럼). 각 층마다 타임존 해석이 독립적으로 일어나고, 한 층이라도 가정이 어긋나면 저장값이 달라집니다.
+</Callout>
+
+### 저장 경로의 세 층
+
+"내 코드에서 `Instant.now()` 찍고 `repository.save()` 호출하면 DB에 어떤 값이 들어가는가"를 따라가면 세 개의 층을 거칩니다.
+
+```
+Java 타입  ──(층 1)──→  JDBC 타입  ──(층 2)──→  wire protocol  ──(층 3)──→  MySQL 컬럼
+```
+
+이 소절은 세 층의 동작을 차례로 따라갑니다.
+
+### 층 1: Hibernate
+
+Hibernate 6의 Java Time → JDBC 기본 매핑입니다.
+
+| Java 타입 | 기본 JDBC 타입 |
+|---|---|
+| `Instant` | `TIMESTAMP` |
+| `LocalDateTime` | `TIMESTAMP` |
+| `OffsetDateTime` | `TIMESTAMP` (UTC로 normalize) |
+| `ZonedDateTime` | `TIMESTAMP` (UTC로 normalize) |
+
+네 타입 모두 결국 JDBC `TIMESTAMP`로 내려갑니다. `OffsetDateTime` / `ZonedDateTime`은 **UTC로 정규화된 뒤** 저장된다는 점만 다릅니다.
+
+Hibernate는 zone 정보를 어떻게 다룰지 `hibernate.timezone.default_storage` 설정으로 제어합니다.
+
+- `NORMALIZE` (기본): 타임존을 UTC로 변환 후 저장. 원래의 zone 정보는 **버려집니다**.
+- `NATIVE`: DB가 `TIMESTAMP_WITH_TIMEZONE`을 지원하면 그걸 사용.
+- `COLUMN`: zone 이름을 별도 컬럼에 저장.
+- `AUTO`: `NATIVE` 시도 후 실패 시 `COLUMN`.
+
+MySQL은 `TIMESTAMP_WITH_TIMEZONE`을 지원하지 않습니다. 그래서 `NATIVE`를 선택해도 결과적으로 `NORMALIZE` 동작이 됩니다. **MySQL을 쓰면 `ZonedDateTime` 필드를 선언하더라도 DB에서 읽어온 값의 zone은 `UTC`(또는 system default)로 고정**됩니다. zone 정보를 보존하려면 DB 컬럼을 추가로 만들거나 애초에 zone 의존적인 컬럼 타입을 지원하는 DB(PostgreSQL `TIMESTAMPTZ` 등)로 가야 합니다.
+
+개별 필드 단위로 JDBC 타입을 바꾸고 싶으면 `@JdbcTypeCode`를 붙입니다.
+
+```java
+@JdbcTypeCode(SqlTypes.TIMESTAMP_UTC)
+private Instant createdAt;
+```
+
+### 층 2: JDBC 드라이버
+
+Hibernate가 내보낸 JDBC `TIMESTAMP`를 MySQL Connector/J가 wire protocol로 변환해 서버로 보냅니다. 이 단계에서 타임존 해석이 한 번 더 일어납니다.
+
+핵심 JDBC 파라미터는 Connector/J 8.0+ 기준으로 이렇습니다.
+
+- `connectionTimeZone` (구 `serverTimezone`): 드라이버가 MySQL 세션의 타임존으로 간주할 값.
+- `forceConnectionTimeZoneToSession`: 드라이버가 세션의 `@@session.time_zone`을 명시적으로 지정할지 여부.
+
+여기서 흔한 착시 하나가 생깁니다. `application.yaml`에 `serverTimezone=Asia/Seoul`을 써두면 많은 사람이 "DB가 KST로 동작한다"로 받아들이는데, 실제로는 **드라이버가 세션 TZ를 KST로 간주할 뿐 DB 서버의 실제 TZ를 바꾸지 않습니다**. DB 서버의 TZ는 MySQL 프로세스 기동 시 결정됩니다.
+
+읽기·쓰기 경로는 이렇게 흐릅니다.
+
+- `DATETIME` 컬럼: MySQL이 TZ 변환을 하지 않음 → 드라이버가 세션 TZ 기준으로 해석해 `Instant`로 환산.
+- `TIMESTAMP` 컬럼: MySQL이 UTC → 세션 TZ로 변환해 보냄 → 드라이버가 다시 UTC `Instant`로 환산.
+
+### 층 3: MySQL 컬럼
+
+MySQL은 시간을 저장할 때 두 가지 컬럼 타입이 있습니다. 이름이 비슷해서 혼용되지만 **내부 저장 방식이 근본적으로 다릅니다**.
+
+| 컬럼 타입 | 내부 저장 | 범위 | 세션 TZ 변환 |
+|---|---|---|---|
+| `DATETIME(6)` | 연·월·일·시·분·초·마이크로초를 문자열처럼 그대로 | 1000-01-01부터 9999-12-31 | 없음 (읽기·쓰기 그대로) |
+| `TIMESTAMP(6)` | epoch 기반 UTC 정수 | 1970-01-01부터 2038-01-19 | 자동 (세션 TZ ↔ UTC) |
+
+**(a) `DATETIME`**은 벽시계 숫자를 그대로 기록합니다. `2026-04-22 15:30:00`을 서울에서 써도, 도쿄에서 읽어도 `2026-04-22 15:30:00`이 나옵니다. 세션 TZ는 무시됩니다.
+
+**(b) `TIMESTAMP`**는 UTC 정수로 저장합니다. `2026-04-22 15:30:00 KST`를 서울에서 쓰면 MySQL이 UTC `2026-04-22 06:30:00`으로 변환 후 저장. 도쿄(JST, KST와 동일)에서 읽으면 `2026-04-22 15:30:00`이 나오고, 뉴욕(EDT)에서 읽으면 `2026-04-22 02:30:00`이 나옵니다.
+
+<Callout type="error" title="핵심 통찰: Instant도 DATETIME 컬럼을 만나면 벽시계 값이 된다">
+  Java 쪽에서 `Instant`는 UTC 절대 시각이라 안전해 보입니다. 하지만 Hibernate의 MySQL Dialect가 JDBC `TIMESTAMP`를 MySQL `DATETIME(6)`으로 매핑하는 순간, TZ 자동 변환은 없어지고 **JVM 기본 TZ의 벽시계 값**이 그대로 저장됩니다. `Instant`의 TZ-free 보장이 DB 층에서 증발하는 지점이 여기입니다.
+</Callout>
+
+중요한 사실: **Hibernate의 MySQL Dialect는 JDBC `TIMESTAMP`를 MySQL `DATETIME(6)` 컬럼으로 매핑합니다**. JDBC `TIMESTAMP` ≠ MySQL `TIMESTAMP`인 셈입니다. Hibernate가 이렇게 정한 이유는 MySQL `TIMESTAMP`의 2038 한계와 좁은 범위를 피하려는 것이고, 그 대가로 **자동 TZ 변환을 포기**했습니다.
+
+즉 `@CreatedDate private Instant createdAt`이 `ddl-auto=update`로 만들어 내는 컬럼은 MySQL `DATETIME(6)`입니다.
+
+```sql title="ddl-auto=update 결과"
+CREATE TABLE accounts (
+    account_id    BIGINT NOT NULL AUTO_INCREMENT,
+    email         VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(100) NOT NULL,
+    created_at    DATETIME(6) NOT NULL,
+    updated_at    DATETIME(6) NOT NULL,
+    PRIMARY KEY (account_id)
+);
+```
+
+### 정리: Instant의 여행
+
+```
+앱 JVM의 시스템 default TZ = Asia/Seoul이라 가정
+
+(1) Instant.now()
+    → 2026-04-22T06:30:00Z  (UTC)
+
+(2) Hibernate → JDBC TIMESTAMP
+    → 드라이버에 "2026-04-22 06:30:00" 전달
+      (UTC 기준 LocalDateTime으로 변환되어 전달됨)
+
+(3) JDBC 드라이버 (connectionTimeZone=Asia/Seoul)
+    → 세션 TZ를 KST로 간주
+    → "2026-04-22 15:30:00"으로 해석 후 wire로 전송
+
+(4) MySQL DATETIME(6) 컬럼
+    → "2026-04-22 15:30:00.000000" 그대로 저장
+```
+
+같은 코드를 UTC로 띄운 컨테이너에서 실행하면 (3) 단계가 사라지고 `created_at`에 `2026-04-22 06:30:00`이 저장됩니다. **앱 컨테이너의 TZ가 DB 저장 값에 직접 영향**을 주는 이유가 여기서 드러납니다.
+
+## 고려할 점
+
+앞 세 섹션을 이해하면 다음 네 가지 지점이 모두 같은 뿌리(두 축의 혼선 + 층 간 TZ 가정 어긋남)에서 나온다는 게 보입니다. 공통점은 "`LocalDateTime` 한 줄이면 끝"이라는 기대가 깨지는 경계에 있다는 점입니다.
+
+**(1) `LocalDateTime`의 은밀한 리전 종속성**
+
+`LocalDateTime`은 타임존 정보를 갖지 않습니다. 같은 값 `2026-04-22 15:30`이 서울 오후 3시 30분인지, 런던 오후 3시 30분인지 값 자체로는 알 수 없습니다. 해석하려면 컨텍스트(서버 TZ, 사용자 TZ)가 필요합니다.
+
+문제는 **그 컨텍스트가 시간이 지나면 잊힌다**는 점입니다.
+
+- 앱이 `Asia/Seoul` TZ의 컨테이너에서 몇 년간 돌았다고 해봅시다. `LocalDateTime.now()`를 `created_at`에 저장. 값은 `2026-04-22 15:30`.
+- 클라우드 이전으로 `UTC` 컨테이너로 재배포. 이제 `LocalDateTime.now()`가 `2026-04-22 06:30`을 반환합니다.
+- 결과: 같은 컬럼에 "KST의 15:30"과 "UTC의 06:30"이 섞여 저장됩니다. 두 값은 실제로는 같은 순간을 가리키지만, 컬럼만 봐서는 구분이 안 됩니다.
+- 통계 쿼리에서 `WHERE created_at BETWEEN ...`을 쓰면 이전·이후 기록이 9시간씩 어긋나 집계됩니다.
+
+"언제 일어난 사건"을 기록해야 한다면 처음부터 `Instant`를 씁니다. `LocalDateTime`은 "어느 TZ의 벽시계 시각"이 의미 있는 값(예약 시각, 영업 시간, 생일)에만 씁니다.
+
+**(2) `serverTimezone`의 착시**
+
+`application.yaml`에 `serverTimezone=Asia/Seoul`(또는 Connector/J 8.0+의 `connectionTimeZone=Asia/Seoul`)을 써두면 "DB 서버가 KST로 동작한다"로 이해하는 경우가 많습니다. 실제로는 **드라이버가 세션 TZ를 KST로 간주할 뿐** DB 서버 프로세스의 기동 TZ(`mysqld --default-time-zone`)를 바꾸지 않습니다.
+
+이게 문제되는 시나리오:
+
+- DB 서버: UTC로 기동
+- 드라이버: `connectionTimeZone=Asia/Seoul`로 설정
+- 앱이 `TIMESTAMP` 컬럼에 `Instant` 저장
+  - MySQL 서버는 "세션 TZ = UTC"로 간주 (서버 TZ를 기본으로 씀)
+  - 드라이버는 "세션 TZ = KST"로 해석
+  - 두 관점의 불일치로 변환이 어긋나 최대 9시간 차이 발생
+
+대응은 단순합니다. **앱·DB·드라이버 모두 UTC로 통일**하고, KST 표기가 필요한 건 UI 레이어에서 변환합니다. 어정쩡하게 세션 TZ만 KST로 맞추려 하지 말 것.
+
+**(3) DST 전환 구간: 없는 시각과 중복된 시각**
+
+DST가 있는 지역(`America/New_York`, `Europe/London` 등)에서는 1년에 두 번 시계가 점프합니다.
+
+- Spring forward: 봄에 오전 2시가 3시로 건너뜀. 그 사이의 `02:30`은 **존재하지 않는 벽시계 시각**입니다.
+- Fall back: 가을에 오전 2시가 1시로 되돌아감. 같은 `01:30`이 **두 번** 등장합니다.
+
+`LocalDateTime`으로 저 구간의 값을 다루면 조용히 잘못 해석됩니다. 예: `LocalDateTime.of(2026, 3, 8, 2, 30).atZone(ZoneId.of("America/New_York"))`는 "그 시각은 없지만 가까운 유효 시각으로 옮긴다"로 처리됩니다. 경고도 예외도 없습니다.
+
+`ZonedDateTime`은 이 해석을 명시적으로 합니다. `ZoneId.of("America/New_York")`은 해당 해의 DST 규칙을 알고 있어, `ZonedDateTime`을 `Instant`로 변환할 때 올바른 오프셋을 씁니다. 예약·스케줄링 시스템이 `LocalDateTime` + 별도 `ZoneId` 필드로 저장해두고 읽을 때 수동으로 `atZone`을 부르는 패턴이 이 지점을 가장 쉽게 만나는 자리입니다. 저장 시점에 **`ZonedDateTime`으로 유효성을 검증**해야 합니다.
+
+**(4) MySQL `TIMESTAMP`의 2038 벽**
+
+MySQL `TIMESTAMP`의 내부 표현은 **32-bit 부호 있는 정수**(epoch seconds)라 `2038-01-19 03:14:07 UTC`가 최댓값입니다. 이 값을 넘으면 overflow가 발생해 잘못된 값이 저장되거나 오류가 납니다.
+
+현재 시각에 가까운 감사·로그 필드는 당장 문제될 일이 없지만, **미래 시각을 저장하는 필드**가 위험합니다.
+
+- 구독 만료일(30년 멤버십)
+- 약관 유효기간, 법률 보존 시한
+- 먼 미래에 실행 예정인 스케줄 작업
+
+Hibernate의 MySQL Dialect가 JDBC `TIMESTAMP`를 `DATETIME(6)`으로 매핑하는 기본 결정(앞 섹션 참고)은 이 문제를 회피하기 위한 것입니다. 직접 `TIMESTAMP` 컬럼을 지정하고 싶을 때도, 미래 시각을 저장할 가능성이 있다면 `DATETIME`으로 피해 가는 게 안전합니다.
+
+## 선택 기준
+
+### 결정의 첫 질문
+
+타입을 고르기 전에 스스로에게 묻습니다: **이 값은 무엇을 표현하는가**.
+
+- "이 사건이 우주적 시간선의 어느 점에서 일어났는가"가 중요 → **시점형**
+- "어느 지역의 벽시계가 몇 시였는가"가 중요 → **벽시계형**
+- "어느 타임존에서 해석해야 하는가"가 값 자체의 일부 → **타임존 포함형**
+
+이 셋 중 하나만 확정되면 타입은 거의 자동으로 정해집니다.
+
+### 네 타입의 쓰임
+
+**`Instant`: 사건의 시점**
+
+사용 영역: 감사 필드(`created_at` / `updated_at`), 이벤트 발생 시각, 로그 타임스탬프, "몇 초 전" 계산, 캐시 TTL, 토큰 만료 시각. 공통점은 **어느 타임존에서 읽어도 같은 순간을 가리켜야 하는 값**이라는 것입니다.
+
+DB 컬럼: MySQL이면 Hibernate 기본 그대로 `DATETIME(6)`, PostgreSQL이면 `TIMESTAMPTZ`. MySQL을 쓸 때는 JVM 컨테이너의 TZ를 반드시 UTC로 고정합니다. 그래야 `DATETIME` 컬럼의 벽시계 값이 UTC의 벽시계와 일치해 장기 해석이 일관됩니다.
+
+**`LocalDateTime`: 벽시계 약속**
+
+사용 영역: 생일, 매장 영업 시간, 특정 지역 기준의 예약 시각("서울 오후 3시에 만나자"), 폼 입력의 기본 표현. **"같은 15:30"이라는 값 자체에 의미**가 있고, 그게 어느 타임존의 15:30인지는 값 바깥의 맥락(사용자 지역, 매장 위치)으로 결정되는 경우입니다.
+
+DB 컬럼: MySQL `DATETIME(6)`, PostgreSQL `TIMESTAMP` (WITHOUT TIME ZONE). TZ 자동 변환이 **없는** 컬럼을 쓰는 게 포인트입니다. 변환이 개입하면 "같은 15:30"이 지역별로 흩어집니다.
+
+함께 결정해야 할 것: **지역 정보를 어떻게 복원할 것인가**. 옵션은 세 가지입니다.
+
+- 도메인 맥락으로 고정 (예: "매장의 TZ는 매장 레코드가 안다")
+- 별도 `ZoneId` 컬럼으로 저장
+- 사용자 TZ를 프로필에 저장
+
+**`ZonedDateTime`: 지역 간 일정 공유**
+
+사용 영역: 국제 회의, 글로벌 알림 발송 시각, DST가 있는 지역의 미래 예약. 값 자체에 "어느 지역 기준인지"가 포함되어야 하는 경우입니다.
+
+DB 컬럼: PostgreSQL이면 `TIMESTAMPTZ` + 별도 `zone_id` 컬럼이 가장 깔끔합니다. MySQL은 `TIMESTAMP_WITH_TIMEZONE`을 지원하지 않아, 실무에서는 **로직 레이어에서는 `ZonedDateTime`으로 다루되 DB에는 `Instant` + `zone_id` 두 컬럼으로 분리 저장**하는 타협이 일반적입니다.
+
+**`OffsetDateTime`: ISO 직렬화와 과거 기록**
+
+사용 영역: REST API의 날짜 페이로드(`2026-04-22T15:30:00+09:00`), 이미 일어난 사건을 그때의 오프셋과 함께 보존해야 하는 감사 기록. DST 규칙을 알 필요가 없는(과거이거나 고정 오프셋이면 충분한) 경우입니다.
+
+DB 컬럼: PostgreSQL `TIMESTAMPTZ`가 자연스럽고, MySQL이면 `DATETIME(6)` + 오프셋 컬럼 분리 저장.
+
+### 한 표로
+
+| 표현 대상 | Java 타입 | 주 컬럼 선택 |
+|---|---|---|
+| 사건의 발생 시각 | `Instant` | MySQL `DATETIME(6)` / PostgreSQL `TIMESTAMPTZ` |
+| 지역 벽시계 시각 | `LocalDateTime` | `DATETIME(6)` (지역은 별도 맥락) |
+| 미래 예약(DST 고려) | `ZonedDateTime` | PG `TIMESTAMPTZ` + `zone_id` / MySQL `DATETIME(6)` + `zone_id` |
+| ISO 직렬화 포맷 | `OffsetDateTime` | PG `TIMESTAMPTZ` / MySQL `DATETIME(6)` + offset |
+
+### 마지막 한 줄
+
+"**이 필드는 어느 타임존에서 읽어야 말이 되는 값인가**"를 먼저 답합니다.
+
+- "어느 타임존에서든 같은 의미" → `Instant`
+- "특정 지역의 벽시계가 중요" → `LocalDateTime` + 지역 컨텍스트
+- "타임존 자체가 의미의 일부" → `ZonedDateTime` 또는 `OffsetDateTime`
+
+## 마무리
+
+Java의 네 가지 시간 타입은 "**시간의 두 얼굴(절대 시점 vs 벽시계) × 타임존 정보 유무**" 축에서 자기 자리를 가집니다. 한 타입이 두 축을 뭉뚱그렸던 `Date`의 실패가 JSR-310을 만든 동기였고, 그 이후로 타입 선택 자체가 설계의 일부가 되었습니다.
+
+그 선택이 DB까지 내려가는 경로는 일직선이 아닙니다. Hibernate → JDBC 드라이버 → MySQL 컬럼 세 층에서 타임존 해석이 독립적으로 일어나고, Hibernate의 MySQL Dialect는 JDBC `TIMESTAMP`를 MySQL `DATETIME(6)`으로 매핑하면서 TZ 자동 변환을 포기합니다. 그래서 `Instant` 한 줄이 안전을 보장하지 않습니다. "이 필드는 어느 타임존에서 읽어야 말이 되는 값인가"라는 한 질문을 먼저 답하고, 그 답에 맞는 타입·컬럼·JVM TZ 정책을 함께 결정하는 것이 시간을 정확히 다루는 유일한 길입니다.
+
+<RelatedPost slug="jpa-auditing" type="parallel" />
+
+## 참고 자료
+
+- [Java SE Documentation: java.time package](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/time/package-summary.html)
+- [Hibernate User Guide: Date and time types, and time zones](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#basic-temporal)
+- [MySQL Reference Manual: The DATE, DATETIME, and TIMESTAMP Types](https://dev.mysql.com/doc/refman/8.0/en/datetime.html)
+- [MySQL Connector/J Reference: Configuration Properties (connectionTimeZone)](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-datetime-types-processing.html)
+- [JSR-310: Date and Time API](https://jcp.org/en/jsr/detail?id=310)
