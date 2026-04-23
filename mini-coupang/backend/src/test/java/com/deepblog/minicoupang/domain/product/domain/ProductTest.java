@@ -12,7 +12,7 @@ class ProductTest {
     private static final Seller SELLER = Seller.builder().id(1L).build();
 
     @Test
-    void create_valid_returnsDraftProduct() {
+    void create_valid_returnsActiveProduct() {
         Product product = Product.create(
             SELLER,
             1L,
@@ -26,7 +26,7 @@ class ProductTest {
         assertThat(product.getName()).isEqualTo("프리미엄 텀블러");
         assertThat(product.getDescription()).isEqualTo("보온 24시간 유지");
         assertThat(product.getBasePrice()).isEqualTo(15_000L);
-        assertThat(product.getStatus()).isEqualTo(ProductStatus.DRAFT);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.ACTIVE);
     }
 
     @Test
@@ -101,39 +101,8 @@ class ProductTest {
     }
 
     @Test
-    void publish_fromDraft_movesToOnSale() {
-        Product product = draftProduct();
-
-        product.publish();
-
-        assertThat(product.getStatus()).isEqualTo(ProductStatus.ON_SALE);
-    }
-
-    @Test
-    void publish_fromOnSale_throws() {
-        Product product = draftProduct();
-        product.publish();
-
-        assertThatThrownBy(product::publish)
-            .isInstanceOf(InvalidProductException.class)
-            .hasMessageContaining("초안");
-    }
-
-    @Test
-    void publish_fromSuspended_throws() {
-        Product product = draftProduct();
-        product.publish();
-        product.suspend();
-
-        assertThatThrownBy(product::publish)
-            .isInstanceOf(InvalidProductException.class)
-            .hasMessageContaining("초안");
-    }
-
-    @Test
-    void suspend_fromOnSale_movesToSuspended() {
-        Product product = draftProduct();
-        product.publish();
+    void suspend_fromActive_movesToSuspended() {
+        Product product = activeProduct();
 
         product.suspend();
 
@@ -141,8 +110,9 @@ class ProductTest {
     }
 
     @Test
-    void suspend_fromDraft_throws() {
-        Product product = draftProduct();
+    void suspend_fromSuspended_throws() {
+        Product product = activeProduct();
+        product.suspend();
 
         assertThatThrownBy(product::suspend)
             .isInstanceOf(InvalidProductException.class)
@@ -150,19 +120,18 @@ class ProductTest {
     }
 
     @Test
-    void resume_fromSuspended_movesToOnSale() {
-        Product product = draftProduct();
-        product.publish();
+    void resume_fromSuspended_movesToActive() {
+        Product product = activeProduct();
         product.suspend();
 
         product.resume();
 
-        assertThat(product.getStatus()).isEqualTo(ProductStatus.ON_SALE);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.ACTIVE);
     }
 
     @Test
-    void resume_fromDraft_throws() {
-        Product product = draftProduct();
+    void resume_fromActive_throws() {
+        Product product = activeProduct();
 
         assertThatThrownBy(product::resume)
             .isInstanceOf(InvalidProductException.class)
@@ -170,9 +139,8 @@ class ProductTest {
     }
 
     @Test
-    void markSoldOut_fromOnSale_movesToSoldOut() {
-        Product product = draftProduct();
-        product.publish();
+    void markSoldOut_fromActive_movesToSoldOut() {
+        Product product = activeProduct();
 
         product.markSoldOut();
 
@@ -180,18 +148,8 @@ class ProductTest {
     }
 
     @Test
-    void markSoldOut_fromDraft_throws() {
-        Product product = draftProduct();
-
-        assertThatThrownBy(product::markSoldOut)
-            .isInstanceOf(InvalidProductException.class)
-            .hasMessageContaining("판매 중");
-    }
-
-    @Test
     void markSoldOut_fromSuspended_throws() {
-        Product product = draftProduct();
-        product.publish();
+        Product product = activeProduct();
         product.suspend();
 
         assertThatThrownBy(product::markSoldOut)
@@ -201,7 +159,7 @@ class ProductTest {
 
     @Test
     void addOption_valid_addedToOptions() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         product.addOption("색상-빨강, 사이즈-M", "TUMBLER-RED-M", 1_000L);
 
@@ -214,7 +172,7 @@ class ProductTest {
 
     @Test
     void addOption_multipleDifferentSkus_allAdded() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         product.addOption("빨강-M", "TUMBLER-RED-M", 1_000L);
         product.addOption("파랑-L", "TUMBLER-BLUE-L", 2_000L);
@@ -226,7 +184,7 @@ class ProductTest {
 
     @Test
     void addOption_duplicateSku_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
         product.addOption("빨강-M", "TUMBLER-RED-M", 1_000L);
 
         assertThatThrownBy(() -> product.addOption("빨강-M-v2", "TUMBLER-RED-M", 1_500L))
@@ -236,7 +194,7 @@ class ProductTest {
 
     @Test
     void addOption_nullOptionName_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption(null, "TUMBLER-RED-M", 1_000L))
             .isInstanceOf(InvalidProductException.class)
@@ -245,7 +203,7 @@ class ProductTest {
 
     @Test
     void addOption_tooShortOptionName_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("a", "TUMBLER-RED-M", 1_000L))
             .isInstanceOf(InvalidProductException.class)
@@ -254,7 +212,7 @@ class ProductTest {
 
     @Test
     void addOption_tooLongOptionName_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
         String longName = "a".repeat(101);
 
         assertThatThrownBy(() -> product.addOption(longName, "TUMBLER-RED-M", 1_000L))
@@ -264,7 +222,7 @@ class ProductTest {
 
     @Test
     void addOption_nullSku_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("빨강-M", null, 1_000L))
             .isInstanceOf(InvalidProductException.class)
@@ -273,7 +231,7 @@ class ProductTest {
 
     @Test
     void addOption_blankSku_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("빨강-M", "   ", 1_000L))
             .isInstanceOf(InvalidProductException.class)
@@ -282,7 +240,7 @@ class ProductTest {
 
     @Test
     void addOption_tooLongSku_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
         String longSku = "S".repeat(51);
 
         assertThatThrownBy(() -> product.addOption("빨강-M", longSku, 1_000L))
@@ -292,7 +250,7 @@ class ProductTest {
 
     @Test
     void addOption_nullAdditionalPrice_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("빨강-M", "TUMBLER-RED-M", null))
             .isInstanceOf(InvalidProductException.class)
@@ -301,7 +259,7 @@ class ProductTest {
 
     @Test
     void addOption_negativeAdditionalPrice_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("빨강-M", "TUMBLER-RED-M", -1L))
             .isInstanceOf(InvalidProductException.class)
@@ -310,7 +268,7 @@ class ProductTest {
 
     @Test
     void addOption_zeroAdditionalPrice_isAllowed() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         product.addOption("기본", "TUMBLER-DEFAULT", 0L);
 
@@ -319,7 +277,7 @@ class ProductTest {
 
     @Test
     void addImage_primary_isAddedAtOrderZero() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         product.addImage("https://cdn.example.com/tumbler-main.jpg", true);
 
@@ -332,7 +290,7 @@ class ProductTest {
 
     @Test
     void addImage_secondary_getsNextOrdering() {
-        Product product = draftProduct();
+        Product product = activeProduct();
         product.addImage("https://cdn.example.com/main.jpg", true);
 
         product.addImage("https://cdn.example.com/side.jpg", false);
@@ -348,7 +306,7 @@ class ProductTest {
 
     @Test
     void addImage_secondPrimary_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
         product.addImage("https://cdn.example.com/main.jpg", true);
 
         assertThatThrownBy(() -> product.addImage("https://cdn.example.com/another.jpg", true))
@@ -358,7 +316,7 @@ class ProductTest {
 
     @Test
     void addImage_nullUrl_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addImage(null, true))
             .isInstanceOf(InvalidProductException.class)
@@ -367,7 +325,7 @@ class ProductTest {
 
     @Test
     void addImage_blankUrl_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addImage("   ", true))
             .isInstanceOf(InvalidProductException.class)
@@ -376,7 +334,7 @@ class ProductTest {
 
     @Test
     void addImage_tooLongUrl_throws() {
-        Product product = draftProduct();
+        Product product = activeProduct();
         String longUrl = "https://cdn.example.com/" + "a".repeat(500);
 
         assertThatThrownBy(() -> product.addImage(longUrl, true))
@@ -384,7 +342,7 @@ class ProductTest {
             .hasMessageContaining("이미지");
     }
 
-    private static Product draftProduct() {
+    private static Product activeProduct() {
         return Product.create(SELLER, 1L, "텀블러", "설명", 15_000L);
     }
 }

@@ -8,6 +8,7 @@ import com.deepblog.minicoupang.domain.product.domain.ProductOption;
 import com.deepblog.minicoupang.domain.product.domain.ProductStatus;
 import com.deepblog.minicoupang.domain.seller.domain.Seller;
 import com.deepblog.minicoupang.global.config.JpaConfig;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -46,7 +47,7 @@ class ProductRepositoryTest {
         assertThat(found.getName()).isEqualTo("텀블러");
         assertThat(found.getDescription()).isEqualTo("보온 24h");
         assertThat(found.getBasePrice()).isEqualTo(15_000L);
-        assertThat(found.getStatus()).isEqualTo(ProductStatus.DRAFT);
+        assertThat(found.getStatus()).isEqualTo(ProductStatus.ACTIVE);
         assertThat(found.getCreatedAt()).isNotNull();
     }
 
@@ -137,18 +138,48 @@ class ProductRepositoryTest {
     void findByStatus_withPaging_returnsPage() {
         Seller seller = persistSeller("1000000001");
         for (int i = 0; i < 5; i++) {
-            Product draft = Product.create(seller, 1L, "초안 " + i, "설명", 1_000L);
-            productRepository.save(draft);
+            Product active = Product.create(seller, 1L, "상품 " + i, "설명", 1_000L);
+            productRepository.save(active);
         }
-        Product selling = Product.create(seller, 1L, "판매중", "설명", 1_000L);
-        selling.publish();
-        productRepository.save(selling);
+        Product suspended = Product.create(seller, 1L, "정지된 상품", "설명", 1_000L);
+        suspended.suspend();
+        productRepository.save(suspended);
         em.flush();
         em.clear();
 
-        Page<Product> page = productRepository.findByStatus(ProductStatus.DRAFT, PageRequest.of(0, 3));
+        Page<Product> page = productRepository.findByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 3));
         assertThat(page.getTotalElements()).isEqualTo(5);
         assertThat(page.getContent()).hasSize(3);
+    }
+
+    @Test
+    void searchIdsByKeyword_matchesNameAndDescription_respectsFilters() {
+        Seller seller = persistSeller("1000000005");
+        Product tumbler = Product.create(seller, 1L, "프리미엄 텀블러", "보온 24시간 유지", 15_000L);
+        Product bag = Product.create(seller, 2L, "레더 백팩", "가죽 소재 통학용", 80_000L);
+        Product suspended = Product.create(seller, 1L, "정지된 텀블러", "회수됨", 15_000L);
+        suspended.suspend();
+        productRepository.save(tumbler);
+        productRepository.save(bag);
+        productRepository.save(suspended);
+        em.flush();
+        em.clear();
+
+        List<Long> activeOnly = productRepository.searchIdsByKeyword(
+            "텀블러", null, null, null, ProductStatus.ACTIVE, PageRequest.of(0, 50));
+        assertThat(activeOnly).containsExactly(tumbler.getId());
+
+        List<Long> anyStatus = productRepository.searchIdsByKeyword(
+            "텀블러", null, null, null, null, PageRequest.of(0, 50));
+        assertThat(anyStatus).containsExactlyInAnyOrder(tumbler.getId(), suspended.getId());
+
+        List<Long> categoryFiltered = productRepository.searchIdsByKeyword(
+            "가죽", 2L, null, null, ProductStatus.ACTIVE, PageRequest.of(0, 50));
+        assertThat(categoryFiltered).containsExactly(bag.getId());
+
+        List<Long> priceFiltered = productRepository.searchIdsByKeyword(
+            "텀블러", null, 1_000L, 10_000L, ProductStatus.ACTIVE, PageRequest.of(0, 50));
+        assertThat(priceFiltered).isEmpty();
     }
 
     @Test
@@ -156,17 +187,16 @@ class ProductRepositoryTest {
         Seller sellerA = persistSeller("1000000001");
         Seller sellerB = persistSeller("1000000002");
         Product a = Product.create(sellerA, 1L, "상품A", "설명", 1_000L);
-        a.publish();
         Product b = Product.create(sellerA, 1L, "상품B", "설명", 1_000L);
+        b.suspend();
         Product c = Product.create(sellerB, 1L, "상품C", "설명", 1_000L);
-        c.publish();
         productRepository.save(a);
         productRepository.save(b);
         productRepository.save(c);
         em.flush();
         em.clear();
 
-        assertThat(productRepository.findBySellerIdAndStatus(sellerA.getId(), ProductStatus.ON_SALE))
+        assertThat(productRepository.findBySellerIdAndStatus(sellerA.getId(), ProductStatus.ACTIVE))
             .extracting(Product::getName)
             .containsExactly("상품A");
     }

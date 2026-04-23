@@ -121,14 +121,13 @@ def test_filter_excludes_ids(store: QdrantStore) -> None:
     assert 2 in ids
 
 
-def test_default_filter_hides_inactive(store: QdrantStore) -> None:
+def test_no_filter_returns_all_statuses(store: QdrantStore) -> None:
     store.upsert(1, _random_vector(1), _payload(status="ACTIVE"))
     store.upsert(2, _random_vector(2), _payload(status="INACTIVE"))
 
     hits = store.search(vector=_random_vector(1), limit=5)
     ids = [h.product_id for h in hits]
-    assert 1 in ids
-    assert 2 not in ids
+    assert set(ids) == {1, 2}
 
 
 def test_explicit_status_filter(store: QdrantStore) -> None:

@@ -85,7 +85,7 @@ public class Product extends BaseEntity {
             .name(name)
             .description(description)
             .basePrice(basePrice)
-            .status(ProductStatus.DRAFT)
+            .status(ProductStatus.ACTIVE)
             .build();
     }
 
@@ -119,15 +119,8 @@ public class Product extends BaseEntity {
         }
     }
 
-    public void publish() {
-        if (this.status != ProductStatus.DRAFT) {
-            throw new InvalidProductException("초안 상태의 상품만 판매를 시작할 수 있습니다.");
-        }
-        this.status = ProductStatus.ON_SALE;
-    }
-
     public void suspend() {
-        if (this.status != ProductStatus.ON_SALE) {
+        if (this.status != ProductStatus.ACTIVE) {
             throw new InvalidProductException("판매 중인 상품만 정지할 수 있습니다.");
         }
         this.status = ProductStatus.SUSPENDED;
@@ -137,11 +130,11 @@ public class Product extends BaseEntity {
         if (this.status != ProductStatus.SUSPENDED) {
             throw new InvalidProductException("정지된 상품만 판매를 재개할 수 있습니다.");
         }
-        this.status = ProductStatus.ON_SALE;
+        this.status = ProductStatus.ACTIVE;
     }
 
     public void markSoldOut() {
-        if (this.status != ProductStatus.ON_SALE) {
+        if (this.status != ProductStatus.ACTIVE) {
             throw new InvalidProductException("판매 중인 상품만 품절 처리할 수 있습니다.");
         }
         this.status = ProductStatus.SOLD_OUT;

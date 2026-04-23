@@ -167,15 +167,20 @@ class QdrantStore:
         filter_: SearchFilter | None,
         exclude_ids: Sequence[int],
     ) -> qm.Filter | None:
+        """Build a Qdrant filter from optional domain criteria.
+
+        None fields mean "no constraint on this axis" - including status.
+        The caller is responsible for restricting to visible statuses
+        (e.g. ACTIVE only) via an explicit SearchFilter.
+        """
         must: list[qm.FieldCondition] = []
         must_not: list[qm.HasIdCondition] = []
 
-        status = (filter_.status if filter_ and filter_.status else "ACTIVE")
-        must.append(
-            qm.FieldCondition(key="status", match=qm.MatchValue(value=status))
-        )
-
         if filter_ is not None:
+            if filter_.status is not None:
+                must.append(
+                    qm.FieldCondition(key="status", match=qm.MatchValue(value=filter_.status))
+                )
             if filter_.category_id is not None:
                 must.append(
                     qm.FieldCondition(
@@ -197,4 +202,6 @@ class QdrantStore:
         if exclude_ids:
             must_not.append(qm.HasIdCondition(has_id=list(exclude_ids)))
 
-        return qm.Filter(must=must, must_not=must_not or None)
+        if not must and not must_not:
+            return None
+        return qm.Filter(must=must or None, must_not=must_not or None)

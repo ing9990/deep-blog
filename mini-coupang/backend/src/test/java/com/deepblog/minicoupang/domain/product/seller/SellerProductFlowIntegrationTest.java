@@ -49,7 +49,7 @@ class SellerProductFlowIntegrationTest {
     }
 
     @Test
-    void register_asSeller_returns201WithDraftProduct() throws Exception {
+    void register_asSeller_returns201WithActiveProduct() throws Exception {
         Long accountId = createSellerAccount("seller@example.com");
         MockHttpSession session = sessionFor(accountId);
 
@@ -75,7 +75,7 @@ class SellerProductFlowIntegrationTest {
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.productId").isNumber())
             .andExpect(jsonPath("$.name").value("프리미엄 텀블러"))
-            .andExpect(jsonPath("$.status").value("DRAFT"))
+            .andExpect(jsonPath("$.status").value("ACTIVE"))
             .andExpect(jsonPath("$.optionCount").value(1))
             .andExpect(jsonPath("$.imageCount").value(1));
     }

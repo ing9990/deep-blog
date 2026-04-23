@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.deepblog.minicoupang.domain.product.application.event.ProductRegistered;
 import com.deepblog.minicoupang.domain.product.domain.Product;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.product.seller.application.RegisterProductCommand.ImageCommand;
@@ -17,21 +20,29 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 
-class SellerProductServiceImplTest {
+class SellerProductServiceTest {
 
     private ProductRepository productRepository;
     private SellerRepository sellerRepository;
-    private SellerProductServiceImpl service;
+    private ApplicationEventPublisher eventPublisher;
+    private SellerProductService service;
 
     @BeforeEach
     void setUp() {
         productRepository = mock(ProductRepository.class);
         sellerRepository = mock(SellerRepository.class);
-        service = new SellerProductServiceImpl(productRepository, sellerRepository);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        service = new SellerProductService(productRepository, sellerRepository, eventPublisher);
 
-        when(productRepository.save(any(Product.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> {
+            Product persisted = invocation.getArgument(0);
+            ReflectionTestUtils.setField(persisted, "id", 99L);
+            return persisted;
+        });
     }
 
     @Test
@@ -55,7 +66,7 @@ class SellerProductServiceImplTest {
         assertThat(result.sellerId()).isEqualTo(42L);
         assertThat(result.categoryId()).isEqualTo(1L);
         assertThat(result.name()).isEqualTo("프리미엄 텀블러");
-        assertThat(result.status()).isEqualTo("DRAFT");
+        assertThat(result.status()).isEqualTo("ACTIVE");
         assertThat(result.optionCount()).isEqualTo(1);
         assertThat(result.imageCount()).isEqualTo(1);
     }
@@ -88,6 +99,33 @@ class SellerProductServiceImplTest {
         assertThatThrownBy(() -> service.registerProduct(100L, command))
             .isInstanceOf(SellerNotRegisteredException.class)
             .hasMessageContaining("판매자");
+
+        verify(eventPublisher, never()).publishEvent(any(ProductRegistered.class));
+    }
+
+    @Test
+    void registerProduct_valid_publishesProductRegisteredEvent() {
+        Long accountId = 100L;
+        Seller seller = mock(Seller.class);
+        when(seller.getId()).thenReturn(42L);
+        when(sellerRepository.findByAccountId(accountId)).thenReturn(Optional.of(seller));
+
+        RegisterProductCommand command = new RegisterProductCommand(
+            1L, "텀블러", "보온 24시간", 15_000L, List.of(), List.of()
+        );
+
+        service.registerProduct(accountId, command);
+
+        ArgumentCaptor<ProductRegistered> captor = ArgumentCaptor.forClass(ProductRegistered.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        ProductRegistered event = captor.getValue();
+        assertThat(event.productId()).isEqualTo(99L);
+        assertThat(event.name()).isEqualTo("텀블러");
+        assertThat(event.description()).isEqualTo("보온 24시간");
+        assertThat(event.categoryId()).isEqualTo(1L);
+        assertThat(event.basePrice()).isEqualTo(15_000L);
+        assertThat(event.status()).isEqualTo("ACTIVE");
+        assertThat(event.sellerId()).isEqualTo(42L);
     }
 
     @Test
