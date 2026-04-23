@@ -1,0 +1,143 @@
+---
+title:
+  ko: "BM25"
+  en: "BM25"
+slug: "bm25"
+date: 2026-04-23
+tags:
+  - cs
+  - algorithm
+keywords:
+  - BM25
+  - "Okapi BM25"
+  - "Best Match 25"
+  - TF-IDF
+  - IDF
+summary:
+  ko: "BM25가 왜 TF-IDF를 넘어섰는지, TF 포화와 문서 길이 정규화라는 두 축이 어떻게 작동하는지 이해할 수 있습니다. 파라미터 k1과 b가 각 축의 강도를 어떻게 돌리는지, 하이브리드 검색에서 어디에 자리 잡는지까지 수식 감각으로 정리합니다."
+  en: "Understand why BM25 supersedes TF-IDF and how its two axes (TF saturation and document length normalization) work. Covers what the k1 and b parameters dial, and where BM25 sits in a modern hybrid search stack."
+category: knowledge
+draft: false
+---
+
+BM25는 Lucene, Elasticsearch, OpenSearch가 기본 스코어러로 쓰는 정보 검색의 표준 랭킹 함수입니다. 수식이 복잡해 보이지만 "같은 단어가 반복되면 기여도가 포화한다"와 "긴 문서가 무조건 유리해지는 것을 막는다" 두 가지 감각을 수학으로 인코딩한 것입니다. 이 글에서는 공식이 왜 이 모양을 갖게 되었는지, 파라미터 $k_1$과 $b$가 각각 무엇을 조절하는지 따라가며 BM25의 수식 감각을 잡아봅니다.
+
+<Note title="이 글의 학습 목표">
+  - BM25가 TF-IDF의 어떤 한계를 보정하려고 만들어졌는지 이해한다
+  - TF 포화와 문서 길이 정규화라는 두 축이 수식 안에서 어떻게 분리되어 있는지 읽을 수 있다
+  - 파라미터 $k_1$과 $b$를 어떤 기준으로 조정해야 하는지, 그리고 BM25가 하이브리드 검색에서 어디에 자리 잡는지 판단 기준을 얻는다
+</Note>
+
+## BM25란
+
+BM25는 **Best Match 25**의 약자로, 쿼리와 문서의 관련성을 점수로 매기는 스코어링 함수입니다. 정식 명칭은 **Okapi BM25**입니다. 1980~90년대에 런던 City University의 Stephen Robertson 팀이 Okapi라는 정보 검색 시스템을 실험하면서 발전시킨 일련의 "Best Match" 공식 중 25번째 버전이 가장 좋은 성능을 보여 이름으로 굳었습니다.
+
+오늘날 Apache Lucene 기반의 Elasticsearch, OpenSearch, Solr가 전부 기본 스코어러로 BM25를 씁니다. 쿼리를 던져서 `_score` 필드로 돌아오는 값은 특별히 설정을 바꾸지 않는 한 BM25 스코어입니다. Python 진영에서는 `rank_bm25`, `bm25s` 같은 라이브러리가 같은 공식을 구현해 두고 있고, 키워드 검색과 의미 검색을 합치는 하이브리드 검색(hybrid search)에서 **lexical** 축을 담당하는 표준이기도 합니다.
+
+수식으로 보면 한 줄이지만 감각으로는 두 가지 질문의 답입니다. 쿼리 단어가 문서 안에 **얼마나** 자주 나오나(TF)와 그 단어가 전체 코퍼스에서 **얼마나 드문가**(IDF)를 곱해 합산하는 구조는 TF-IDF와 같지만, BM25는 여기에 TF 포화와 문서 길이 정규화라는 두 가지 보정을 더합니다. 이 두 보정이 왜 필요한지가 다음 섹션의 핵심이고, 수식 자체의 동작은 그다음에서 축 단위로 분해합니다.
+
+## 왜 필요한가
+
+TF-IDF의 아이디어는 단순합니다. 문서 안에서 자주 등장하되(TF), 전체 코퍼스에서는 드문(IDF) 단어에 높은 가중치를 줍니다. 방향은 맞지만 순수 TF(raw count)를 그대로 쓰면 두 가지가 틀어집니다.
+
+첫 번째는 **TF의 선형 증가** 문제입니다. 사용자가 "결제"를 찾고 있을 때, 어떤 문서에 "결제"가 20번 나오는 것이 2번 나오는 것보다 10배 관련성이 높다고 말하기는 어렵습니다. 사람이 느끼는 관련성은 어느 지점을 넘으면 **포화**합니다. 반복 등장의 한계 효용이 줄어드는 것이죠. 생 TF는 이 감각을 반영하지 못해 스팸 문서(같은 단어 수십 번 반복)에 점수를 부풀려 줍니다.
+
+두 번째는 **문서 길이** 문제입니다. 1,000 단어짜리 긴 문서와 100 단어짜리 짧은 문서가 있으면, 긴 문서는 거의 모든 쿼리 단어를 한두 번씩 포함할 가능성이 높습니다. TF만으로 순위를 매기면 긴 문서가 무조건 유리해져서 **짧고 정확한 문서**가 뒤로 밀립니다. 반대로 길이를 과도하게 벌하면 정보가 풍부한 문서가 억울하게 낮은 점수를 받습니다. 길이 보정은 존재 여부가 아니라 강도를 **조절할 수 있어야** 합니다.
+
+BM25는 이 두 지점을 정면으로 겨냥합니다. TF가 커지면 기여도가 선형이 아니라 점근선에 수렴하는 곡선으로 증가하도록 만들고(**TF 포화**, 파라미터 $k_1$), 문서 길이에 따라 TF 기여도를 부풀리거나 깎되 그 강도를 조절 가능하게 합니다(**길이 정규화**, 파라미터 $b$). IDF도 극단 케이스에서 음수가 되지 않도록 보정판으로 교체됩니다. 세 축을 합쳐서 다음 섹션에서 공식을 펼쳐봅니다.
+
+## 동작 원리
+
+<Callout type="warning" title="이 수식을 이해하는 핵심">
+  BM25 공식은 복잡해 보이지만 결국 세 조각의 곱입니다. **IDF 항**이 드문 단어에 가중치를 주고, **TF 포화 항**이 반복 등장의 한계 효용을 반영하며, **길이 정규화 항**이 문서 길이 편차를 보정합니다. 세 조각을 따로 떼서 보면 공식 전체가 자연스럽게 풀립니다.
+</Callout>
+
+BM25 스코어는 쿼리 $Q$와 문서 $D$에 대해 다음과 같이 계산됩니다. 쿼리에 포함된 각 단어 $q_i$의 기여도를 합산하는 구조입니다.
+
+$$
+\text{score}(D, Q) = \sum_{q_i \in Q} \text{IDF}(q_i) \cdot \frac{f(q_i, D) \cdot (k_1 + 1)}{f(q_i, D) + k_1 \cdot \left(1 - b + b \cdot \dfrac{|D|}{\text{avgdl}}\right)}
+$$
+
+여기서 $f(q_i, D)$는 문서 $D$ 안에서 $q_i$의 등장 횟수, $|D|$는 문서 길이(토큰 수), $\text{avgdl}$은 코퍼스 평균 문서 길이입니다. 이제 세 축을 하나씩 분해합니다.
+
+<Callout type="error" title="핵심 통찰: BM25는 이론적 최적해가 아니라 체화된 감각의 수식화">
+  BM25는 "확률론적 관련성 모델에서 유도된 최적해"가 아닙니다. "같은 단어 반복에는 수확 체감이 있다"와 "문서 길이 프리미엄은 강도 조절이 가능해야 한다"라는 두 가지 인간의 관련성 감각을 파라미터 두 개로 끌어올 수 있게 수식화한 **경험적 공식**입니다. 그래서 수십 년간 살아남았고, 그래서 $k_1$과 $b$가 튜닝 대상으로 노출되어 있습니다.
+</Callout>
+
+### TF 포화 축
+
+문서 길이 보정을 잠시 덮어두고 ($b = 0$이거나 문서 길이가 평균과 같다고 가정) TF 항만 보면 $\frac{f(k_1+1)}{f + k_1}$ 꼴이 됩니다. 이 식은 $f = 0$이면 0, $f$가 무한히 커지면 $(k_1 + 1)$에 수렴하는 **포화 곡선**입니다. 즉 단어가 5번 나오는 것과 50번 나오는 것의 score 차이는 5번과 2번의 차이보다 훨씬 작아집니다. $k_1$이 이 포화가 얼마나 빨리 오는지를 조절합니다. $k_1$이 작으면 빠르게 포화(스팸에 강함), 크면 천천히 포화(TF에 민감). Lucene과 Elasticsearch 기본값은 $k_1 = 1.2$입니다.
+
+<Bm25Saturation />
+
+그래프에서 같은 곡선 모양이 $k_1$ 값에 따라 기울기가 달라지는 걸 볼 수 있습니다. $k_1 = 0.5$(빨강)는 $f = 3$ 근처에서 이미 포화에 가깝게 붙고, $k_1 = 2.0$(파랑)은 $f = 10$이 되어서야 비슷한 수준으로 올라옵니다. Lucene 기본값 $k_1 = 1.2$(노랑, 강조)가 이 둘 사이의 타협점입니다.
+
+### 길이 정규화 축
+
+분모 안쪽의 $(1 - b + b \cdot \frac{|D|}{\text{avgdl}})$ 항은 문서 길이에 따라 $k_1$을 **부풀리거나 깎는** 역할을 합니다. 문서가 평균보다 길면 ($|D|/\text{avgdl} > 1$) 분모가 커져 TF 기여도가 줄어들고, 평균보다 짧으면 반대로 기여도가 커집니다. 파라미터 $b$가 이 보정의 강도입니다.
+
+| $b$ 값 | 의미 | 문서 길이에 따른 스코어 |
+|---|---|---|
+| $b = 0$ | 길이 무시 | 길든 짧든 동일 취급 |
+| $b = 0.75$ | Lucene 기본 | 길이를 약하게 벌함 |
+| $b = 1$ | 완전 정규화 | 평균 길이 기준으로 완전히 rescaling |
+
+$b = 0.75$는 "긴 문서를 조금 벌하되 완전히 죽이지는 않는" 실무적 타협점입니다. 뉴스나 블로그처럼 문서 길이 편차가 큰 코퍼스에서는 이 값을 높이고, 제품 설명처럼 길이가 비슷한 코퍼스에서는 낮추는 방향으로 조정합니다.
+
+### IDF 축
+
+BM25가 쓰는 IDF는 표준 $\log(N/df)$가 아니라 Robertson-Sparck Jones의 보정판입니다.
+
+$$
+\text{IDF}(q_i) = \log\left(\frac{N - df(q_i) + 0.5}{df(q_i) + 0.5} + 1\right)
+$$
+
+$N$은 전체 문서 수, $df(q_i)$는 $q_i$가 나오는 문서 수입니다. 분자분모의 `+0.5`와 바깥의 `+1`은 $df$가 $N$의 절반을 넘는 흔한 단어에서 IDF가 음수가 되는 것을 막기 위한 장치입니다. 순수 Robertson 공식은 음수 IDF가 가능해 "너무 흔한 단어"가 오히려 점수를 깎는 부작용이 있었는데, 현대 구현은 이 보정판을 쓰거나 0 이하로 clip합니다.
+
+### 세 축 정리
+
+```python title="bm25_minimal.py"
+import math
+from collections import Counter
+
+def bm25_score(doc_tokens, query_tokens, N, df, avgdl, k1=1.2, b=0.75):
+    tf = Counter(doc_tokens)
+    D = len(doc_tokens)
+    score = 0.0
+    for q in query_tokens:
+        if q not in tf:
+            continue
+        idf = math.log((N - df[q] + 0.5) / (df[q] + 0.5) + 1)  # [!code highlight]
+        num = tf[q] * (k1 + 1)
+        denom = tf[q] + k1 * (1 - b + b * D / avgdl)  # [!code highlight]
+        score += idf * num / denom
+    return score
+```
+
+요약하면 IDF가 "얼마나 드문 단어인가"로 가중치의 틀을 잡고, TF 포화가 "같은 단어 반복에 얼마나 민감할지"를 정하고, 길이 정규화가 "긴 문서 프리미엄을 얼마나 허용할지"를 결정합니다. $k_1$과 $b$는 이 두 축의 강도를 각자 돌릴 수 있는 손잡이입니다.
+
+## 어디에 쓰이는가
+
+BM25는 "쿼리와 문서의 **단어 겹침**을 스코어링"하는 lexical search의 사실상 표준입니다. Lucene 가족(Elasticsearch, OpenSearch, Solr)이 기본 스코어러로 채택하고 있어 별도 설정 없이 `_score`를 받으면 그 값은 BM25입니다. Python에서는 `rank_bm25`나 `bm25s`로 동일 공식을 직접 쓸 수 있습니다.
+
+잘 맞는 상황은 명확합니다. 쿼리가 짧고(2~3단어) 사용자가 **특정 용어**를 정확히 알고 있을 때, 도메인 사전이 있고 어휘가 일관될 때(법률, 의료, 상품 SKU 등), 필터링에 가까운 검색("이 단어가 반드시 있어야 함")일 때. 반대로 약해지는 지점도 수식에서 직접 따라 나옵니다. BM25는 **문자열 일치**가 기본이라 의미적 유사성은 보지 않습니다. 사용자가 "노트북"을 찾는데 문서가 "랩탑"만 담고 있으면 IDF도 TF도 계산되지 않아 점수 0입니다. 동의어, 형태 변형, 맥락적 유사성이 필요하면 벡터 임베딩 기반 의미 검색이 빈자리를 메꿉니다.
+
+그래서 현대적 검색 설계는 BM25 단독이 아니라 **BM25 + 벡터 검색의 하이브리드**로 갑니다. BM25가 "정확한 용어 매칭"을 책임지고 의미 검색이 "표현의 변주"를 커버하는 보완 조합입니다. 두 점수를 합칠 때는 단순 가중합, RRF(Reciprocal Rank Fusion), learning-to-rank 리스코어링 같은 여러 방식이 쓰입니다.
+
+<RelatedPost slug="rag" type="parallel" />
+
+한국어, 일본어, 중국어 같은 CJK 언어에서는 한 가지 주의가 있습니다. BM25 자체는 언어 중립적이지만 입력이 "토큰의 집합"이라 **토크나이저 선택이 BM25의 파라미터보다 결과에 훨씬 크게 영향**을 줍니다. 한국어의 경우 공백 단순 분리는 조사·어미 때문에 리콜이 무너지고, 형태소 분석기(`mecab-ko`, `nori`) 없이는 BM25의 수학적 우수성이 드러나지 않습니다. "BM25가 한국어에서 잘 안 된다"는 체감은 대개 토크나이저 문제이지 BM25 문제가 아닙니다.
+
+<RelatedPost slug="vector-database-primer" type="parallel" />
+
+## 마무리
+
+BM25가 수십 년을 버틴 이유는 수학적으로 아름다워서가 아니라, "같은 단어 반복에는 수확 체감이 있다"와 "문서 길이 프리미엄은 강도 조절이 가능해야 한다"라는 인간의 관련성 감각을 파라미터 두 개로 그대로 돌릴 수 있게 수식화했기 때문입니다. $k_1$은 TF 포화 속도를, $b$는 길이 정규화의 강도를 조절하고, IDF가 드문 단어의 가중치를 깔아 줍니다. 공식을 마주할 때 이 세 축을 분리해서 읽으면 어떤 구현, 어떤 튜닝 가이드를 만나도 구조가 흔들리지 않습니다.
+
+## 참고 자료
+
+- [Stephen Robertson, Hugo Zaragoza. "The Probabilistic Relevance Framework: BM25 and Beyond" (2009)](https://www.nowpublishers.com/article/Details/INR-019)
+- [Elasticsearch: Practical BM25](https://www.elastic.co/blog/practical-bm25-part-2-the-bm25-algorithm-and-its-variables)
+- [Apache Lucene BM25Similarity 소스](https://github.com/apache/lucene/blob/main/lucene/core/src/java/org/apache/lucene/search/similarities/BM25Similarity.java)
+- [rank_bm25 (Python)](https://github.com/dorianbrown/rank_bm25)
+- [bm25s: Ultrafast Lexical Search with BM25 (Lù, 2024)](https://arxiv.org/abs/2407.03618)

@@ -41,6 +41,7 @@ import { KafkaReplicationFlow } from '@/components/visualizations/KafkaReplicati
 import { KYCVerificationFlow } from '@/components/visualizations/KYCVerificationFlow'
 import { AMLTermsHierarchy } from '@/components/visualizations/AMLTermsHierarchy'
 import { BackpressureStrategyMatrix } from '@/components/visualizations/BackpressureStrategyMatrix'
+import { Bm25Saturation } from '@/components/visualizations/Bm25Saturation'
 import { OffsetVsCursorScan } from '@/components/visualizations/OffsetVsCursorScan'
 import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline'
 import { PACELCClassification } from '@/components/visualizations/PACELCClassification'
@@ -151,6 +152,7 @@ export const mdxComponents: MDXComponents = {
   KYCVerificationFlow,
   AMLTermsHierarchy,
   BackpressureStrategyMatrix,
+  Bm25Saturation,
   Note,
   OffsetVsCursorScan,
   OptimizerPipeline,
