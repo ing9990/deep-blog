@@ -6,8 +6,12 @@ import com.deepblog.minicoupang.domain.auth.application.AuthService;
 import com.deepblog.minicoupang.domain.auth.context.SessionKeys;
 import com.deepblog.minicoupang.domain.auth.controller.dto.LoginRequest;
 import com.deepblog.minicoupang.domain.auth.controller.dto.LoginResponse;
+import com.deepblog.minicoupang.domain.auth.controller.dto.MemberSignupRequest;
+import com.deepblog.minicoupang.domain.auth.controller.dto.MemberSignupResponse;
 import com.deepblog.minicoupang.domain.auth.controller.dto.SignupRequest;
 import com.deepblog.minicoupang.domain.auth.controller.dto.SignupResponse;
+import com.deepblog.minicoupang.domain.member.application.MemberSignupResult;
+import com.deepblog.minicoupang.domain.member.application.MemberSignupService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +27,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final MemberSignupService memberSignupService;
+
+    @PostMapping("/signup/member")
+    public ResponseEntity<MemberSignupResponse> signupMember(
+        @Valid @RequestBody MemberSignupRequest request
+    ) {
+        MemberSignupResult result = memberSignupService.signup(request.toCommand());
+        return ResponseEntity.status(CREATED).body(MemberSignupResponse.from(result));
+    }
 
     @PostMapping("/signup")
     public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
