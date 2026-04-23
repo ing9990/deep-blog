@@ -2,16 +2,18 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useMyProducts } from '../api/use-my-products';
 import { ProductList } from '../components/ProductList';
+import { RegisterProductDialog } from '../components/RegisterProductDialog';
 
 export function SellerProductsPage() {
   const [page, setPage] = useState(0);
+  const [openDialog, setOpenDialog] = useState(false);
   const { data, isLoading } = useMyProducts(page, 20);
 
   return (
     <div>
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">내 상품</h1>
-        <Button disabled>상품 등록</Button>
+        <Button onClick={() => setOpenDialog(true)}>상품 등록</Button>
       </header>
       {isLoading && <p>로딩 중...</p>}
       {data && <ProductList items={data.items} />}
@@ -32,6 +34,7 @@ export function SellerProductsPage() {
           </Button>
         </div>
       )}
+      <RegisterProductDialog open={openDialog} onOpenChange={setOpenDialog} />
     </div>
   );
 }
