@@ -17,6 +17,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Page<Product> findByStatus(ProductStatus status, Pageable pageable);
 
+    @Query("SELECT p FROM Product p WHERE p.seller.id = :sellerId ORDER BY p.createdAt DESC, p.id DESC")
+    Page<Product> findBySellerIdOrderByCreatedAtDesc(@Param("sellerId") Long sellerId, Pageable pageable);
+
     List<Product> findBySellerIdAndStatus(Long sellerId, ProductStatus status);
 
     /**

@@ -11,6 +11,8 @@ import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,5 +50,25 @@ public class SellerProductService {
         Product saved = productRepository.save(product);
         eventPublisher.publishEvent(ProductRegistered.from(saved));
         return RegisterProductResult.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public ListMyProductsResult listMyProducts(Long accountId, Pageable pageable) {
+        Seller seller = sellerRepository.findByAccountId(accountId)
+            .orElseThrow(() -> new SellerNotRegisteredException("판매자 등록이 필요합니다."));
+        Page<Product> products = productRepository.findBySellerIdOrderByCreatedAtDesc(seller.getId(), pageable);
+        List<ListMyProductsResult.Item> items = products.stream()
+            .map(p -> new ListMyProductsResult.Item(
+                p.getId(),
+                p.getCategoryId(),
+                p.getName(),
+                p.getBasePrice(),
+                p.getStatus().name(),
+                p.getOptions() == null ? 0 : p.getOptions().size(),
+                p.getImages() == null ? 0 : p.getImages().size(),
+                p.getCreatedAt()))
+            .toList();
+        return new ListMyProductsResult(items, pageable.getPageNumber(), pageable.getPageSize(),
+            products.getTotalElements());
     }
 }
