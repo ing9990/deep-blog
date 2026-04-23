@@ -11,6 +11,8 @@ import { SellerSignupPage } from './features/auth/pages/SellerSignupPage';
 import { LandingPage } from './features/search/pages/LandingPage';
 import { SearchPage } from './features/search/pages/SearchPage';
 import { SellerProductsPage } from './features/seller-products/pages/SellerProductsPage';
+import { MePage } from './features/me/pages/MePage';
+import { SellerMePage } from './features/me/pages/SellerMePage';
 
 export function App() {
   return (
@@ -24,7 +26,7 @@ export function App() {
         <Route index         element={<LandingPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route element={<RequireBuyer />}>
-          <Route path="me"   element={<PlaceholderPage title="내 정보" />} />
+          <Route path="me" element={<MePage />} />
         </Route>
       </Route>
 
@@ -32,7 +34,7 @@ export function App() {
         <Route index element={<Navigate to="/seller/products" replace />} />
         <Route element={<RequireSeller />}>
           <Route path="products" element={<SellerProductsPage />} />
-          <Route path="me"       element={<PlaceholderPage title="판매자 내 정보" />} />
+          <Route path="me" element={<SellerMePage />} />
         </Route>
       </Route>
 
