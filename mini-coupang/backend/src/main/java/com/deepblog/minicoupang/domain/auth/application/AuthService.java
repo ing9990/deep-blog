@@ -1,7 +1,6 @@
 package com.deepblog.minicoupang.domain.auth.application;
 
 import com.deepblog.minicoupang.domain.auth.domain.Account;
-import com.deepblog.minicoupang.domain.auth.exception.DuplicateEmailException;
 import com.deepblog.minicoupang.domain.auth.exception.InvalidCredentialsException;
 import com.deepblog.minicoupang.domain.auth.exception.NotAMemberException;
 import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
@@ -26,25 +25,6 @@ public class AuthService {
 
     public record LoginAsMemberResult(Long accountId, Long memberId) {}
     public record LoginAsSellerResult(Long accountId, Long sellerId) {}
-
-    @Transactional
-    public Long signup(String email, String rawPassword) {
-        accountRepository.findByEmail(email).ifPresent(existing -> {
-            throw new DuplicateEmailException(email);
-        });
-
-        return accountRepository
-            .save(Account.create(email, passwordEncoder.encode(rawPassword)))
-            .getId();
-    }
-
-    @Transactional(readOnly = true)
-    public Long login(String email, String rawPassword) {
-        return accountRepository.findByEmail(email)
-            .filter(account -> passwordEncoder.matches(rawPassword, account.getPasswordHash()))
-            .map(Account::getId)
-            .orElseThrow(InvalidCredentialsException::new);
-    }
 
     @Transactional(readOnly = true)
     public LoginAsMemberResult loginAsMember(String email, String rawPassword) {

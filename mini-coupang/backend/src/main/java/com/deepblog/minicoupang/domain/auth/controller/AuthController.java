@@ -11,8 +11,6 @@ import com.deepblog.minicoupang.domain.auth.controller.dto.SellerLoginResponse;
 import com.deepblog.minicoupang.domain.auth.controller.dto.MemberSignupResponse;
 import com.deepblog.minicoupang.domain.auth.controller.dto.SellerSignupRequest;
 import com.deepblog.minicoupang.domain.auth.controller.dto.SellerSignupResponse;
-import com.deepblog.minicoupang.domain.auth.controller.dto.SignupRequest;
-import com.deepblog.minicoupang.domain.auth.controller.dto.SignupResponse;
 import com.deepblog.minicoupang.domain.member.application.MemberSignupResult;
 import com.deepblog.minicoupang.domain.member.application.MemberSignupService;
 import com.deepblog.minicoupang.domain.seller.application.SellerSignupResult;
@@ -49,13 +47,6 @@ public class AuthController {
     ) {
         SellerSignupResult result = sellerSignupService.signup(request.toCommand());
         return ResponseEntity.status(CREATED).body(SellerSignupResponse.from(result));
-    }
-
-    @PostMapping("/signup")
-    public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
-        Long accountId = authService.signup(request.email(), request.password());
-        return ResponseEntity.status(CREATED)
-            .body(new SignupResponse(accountId, request.email()));
     }
 
     @PostMapping("/login")

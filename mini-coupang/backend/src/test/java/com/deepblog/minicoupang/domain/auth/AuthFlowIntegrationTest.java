@@ -75,15 +75,15 @@ class AuthFlowIntegrationTest {
     @Test
     void signup_duplicate_email_returns_409() throws Exception {
         String body = """
-            {"email": "bob@example.com", "password": "password123"}
+            {"email":"bob@example.com","password":"password123","name":"홍길동","phoneNumber":"01011112222"}
             """;
 
-        mockMvc.perform(post("/auth/signup")
+        mockMvc.perform(post("/auth/signup/member")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
             .andExpect(status().isCreated());
 
-        mockMvc.perform(post("/auth/signup")
+        mockMvc.perform(post("/auth/signup/member")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
             .andExpect(status().isConflict())
@@ -92,11 +92,10 @@ class AuthFlowIntegrationTest {
 
     @Test
     void login_wrong_password_returns_401() throws Exception {
-        // Account-only signup is sufficient — password check runs before member-profile check
-        mockMvc.perform(post("/auth/signup")
+        mockMvc.perform(post("/auth/signup/member")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"email": "carol@example.com", "password": "password123"}
+                    {"email":"carol@example.com","password":"password123","name":"홍길동","phoneNumber":"01011112222"}
                     """))
             .andExpect(status().isCreated());
 
@@ -122,10 +121,10 @@ class AuthFlowIntegrationTest {
 
     @Test
     void signup_invalid_email_returns_400() throws Exception {
-        mockMvc.perform(post("/auth/signup")
+        mockMvc.perform(post("/auth/signup/member")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"email": "not-an-email", "password": "password123"}
+                    {"email":"not-an-email","password":"password123","name":"홍길동","phoneNumber":"01011112222"}
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -133,10 +132,10 @@ class AuthFlowIntegrationTest {
 
     @Test
     void signup_short_password_returns_400() throws Exception {
-        mockMvc.perform(post("/auth/signup")
+        mockMvc.perform(post("/auth/signup/member")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"email": "dave@example.com", "password": "short"}
+                    {"email":"dave@example.com","password":"short","name":"홍길동","phoneNumber":"01011112222"}
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));

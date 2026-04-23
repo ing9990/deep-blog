@@ -13,7 +13,7 @@ export function useLogout() {
     mutationFn: () => apiClient.post<void>('/auth/logout'),
     onSuccess: (_data, variables) => {
       qc.setQueryData(['me'], null);
-      qc.invalidateQueries();
+      qc.removeQueries();  // drop cached data without triggering refetch
       const vars = variables ?? {};
       nav(vars.toSellerPortal ? '/seller/login' : '/login');
     },
