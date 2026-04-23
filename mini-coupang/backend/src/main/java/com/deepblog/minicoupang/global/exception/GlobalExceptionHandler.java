@@ -2,6 +2,7 @@ package com.deepblog.minicoupang.global.exception;
 
 import com.deepblog.minicoupang.domain.auth.exception.DuplicateEmailException;
 import com.deepblog.minicoupang.domain.auth.exception.InvalidCredentialsException;
+import com.deepblog.minicoupang.domain.auth.exception.NotAMemberException;
 import com.deepblog.minicoupang.domain.auth.exception.UnauthenticatedException;
 import com.deepblog.minicoupang.domain.product.exception.InvalidProductException;
 import com.deepblog.minicoupang.domain.seller.exception.InvalidSellerException;
@@ -32,6 +33,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnauthenticated(UnauthenticatedException e) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
             .body(new ErrorResponse("UNAUTHENTICATED", e.getMessage()));
+    }
+
+    @ExceptionHandler(NotAMemberException.class)
+    public ResponseEntity<ErrorResponse> handleNotAMember(NotAMemberException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(new ErrorResponse("NOT_A_MEMBER", e.getMessage()));
     }
 
     @ExceptionHandler(SellerNotRegisteredException.class)
