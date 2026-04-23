@@ -4,12 +4,14 @@ import { SellerLayout } from './layouts/SellerLayout';
 import { RequireBuyer } from './guards/RequireBuyer';
 import { RequireSeller } from './guards/RequireSeller';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { LoginPage } from './features/auth/pages/LoginPage';
+import { SignupPage } from './features/auth/pages/SignupPage';
 
 export function App() {
   return (
     <Routes>
-      <Route path="/login"         element={<PlaceholderPage title="구매자 로그인" />} />
-      <Route path="/signup"        element={<PlaceholderPage title="구매자 가입" />} />
+      <Route path="/login"         element={<LoginPage />} />
+      <Route path="/signup"        element={<SignupPage />} />
       <Route path="/seller/login"  element={<PlaceholderPage title="판매자 로그인" />} />
       <Route path="/seller/signup" element={<PlaceholderPage title="판매자 가입" />} />
 
