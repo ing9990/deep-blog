@@ -7,6 +7,7 @@ import com.deepblog.minicoupang.domain.auth.context.SessionKeys;
 import com.deepblog.minicoupang.domain.auth.controller.dto.LoginRequest;
 import com.deepblog.minicoupang.domain.auth.controller.dto.LoginResponse;
 import com.deepblog.minicoupang.domain.auth.controller.dto.MemberSignupRequest;
+import com.deepblog.minicoupang.domain.auth.controller.dto.SellerLoginResponse;
 import com.deepblog.minicoupang.domain.auth.controller.dto.MemberSignupResponse;
 import com.deepblog.minicoupang.domain.auth.controller.dto.SellerSignupRequest;
 import com.deepblog.minicoupang.domain.auth.controller.dto.SellerSignupResponse;
@@ -62,9 +63,19 @@ public class AuthController {
         @Valid @RequestBody LoginRequest request,
         HttpSession session
     ) {
-        Long accountId = authService.login(request.email(), request.password());
-        session.setAttribute(SessionKeys.AUTH_ACCOUNT_ID, accountId);
-        return ResponseEntity.ok(new LoginResponse(accountId));
+        AuthService.LoginAsMemberResult r = authService.loginAsMember(request.email(), request.password());
+        session.setAttribute(SessionKeys.AUTH_ACCOUNT_ID, r.accountId());
+        return ResponseEntity.ok(new LoginResponse(r.accountId(), r.memberId()));
+    }
+
+    @PostMapping("/login/seller")
+    public ResponseEntity<SellerLoginResponse> loginSeller(
+        @Valid @RequestBody LoginRequest request,
+        HttpSession session
+    ) {
+        AuthService.LoginAsSellerResult r = authService.loginAsSeller(request.email(), request.password());
+        session.setAttribute(SessionKeys.AUTH_ACCOUNT_ID, r.accountId());
+        return ResponseEntity.ok(new SellerLoginResponse(r.accountId(), r.sellerId()));
     }
 
     @PostMapping("/logout")
