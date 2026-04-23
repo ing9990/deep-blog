@@ -9,6 +9,7 @@ import { SignupPage } from './features/auth/pages/SignupPage';
 import { SellerLoginPage } from './features/auth/pages/SellerLoginPage';
 import { SellerSignupPage } from './features/auth/pages/SellerSignupPage';
 import { LandingPage } from './features/search/pages/LandingPage';
+import { SearchPage } from './features/search/pages/SearchPage';
 
 export function App() {
   return (
@@ -20,7 +21,7 @@ export function App() {
 
       <Route element={<BuyerLayout />}>
         <Route index         element={<LandingPage />} />
-        <Route path="search" element={<PlaceholderPage title="검색" />} />
+        <Route path="search" element={<SearchPage />} />
         <Route element={<RequireBuyer />}>
           <Route path="me"   element={<PlaceholderPage title="내 정보" />} />
         </Route>
