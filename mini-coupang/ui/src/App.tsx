@@ -10,6 +10,7 @@ import { SellerLoginPage } from './features/auth/pages/SellerLoginPage';
 import { SellerSignupPage } from './features/auth/pages/SellerSignupPage';
 import { LandingPage } from './features/search/pages/LandingPage';
 import { SearchPage } from './features/search/pages/SearchPage';
+import { SellerProductsPage } from './features/seller-products/pages/SellerProductsPage';
 
 export function App() {
   return (
@@ -30,7 +31,7 @@ export function App() {
       <Route path="/seller" element={<SellerLayout />}>
         <Route index element={<Navigate to="/seller/products" replace />} />
         <Route element={<RequireSeller />}>
-          <Route path="products" element={<PlaceholderPage title="내 상품" />} />
+          <Route path="products" element={<SellerProductsPage />} />
           <Route path="me"       element={<PlaceholderPage title="판매자 내 정보" />} />
         </Route>
       </Route>
