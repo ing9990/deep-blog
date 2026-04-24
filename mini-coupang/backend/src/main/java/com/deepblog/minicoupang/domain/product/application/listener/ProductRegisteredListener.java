@@ -4,7 +4,10 @@ import com.deepblog.minicoupang.domain.product.application.event.ProductRegister
 import com.deepblog.minicoupang.domain.product.application.port.out.EmbedPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
+import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -13,9 +16,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * Forwards product registration events to the semantic search index.
  *
  * Runs after the surrounding transaction commits so a failed commit never
- * leaves the index with a phantom row. Phase 1 treats indexing as best-effort:
- * adapter failures are logged, not rethrown, so a transient ML outage does
- * not block product registration.
+ * leaves the index with a phantom row. Indexing is handed off to
+ * {@code productIndexingExecutor} so gRPC latency to the ML service stays out
+ * of the seller-facing HTTP response path. Adapter failures are logged, not
+ * rethrown, so a transient ML outage does not block product registration.
  *
  * Each invocation records {@code embed.index.latency} (tag outcome=success|failure)
  * so the indexing path can be observed independently of API latency.
@@ -27,6 +31,8 @@ public class ProductRegisteredListener {
     private final EmbedPort embedPort;
     private final Timer successTimer;
     private final Timer failureTimer;
+    private final Timer queueWaitTimer;
+    private final Timer e2eTimer;
 
     public ProductRegisteredListener(EmbedPort embedPort, MeterRegistry meterRegistry) {
         this.embedPort = embedPort;
@@ -37,10 +43,20 @@ public class ProductRegisteredListener {
         this.failureTimer = Timer.builder("embed.index.latency")
             .tag("outcome", "failure")
             .register(meterRegistry);
+        this.queueWaitTimer = Timer.builder("product.indexing.queue.wait")
+            .description("Delay between event publication and listener execution start")
+            .register(meterRegistry);
+        this.e2eTimer = Timer.builder("product.indexing.e2e")
+            .description("End-to-end indexing latency from commit to Qdrant upsert")
+            .register(meterRegistry);
     }
 
+    @Async("productIndexingExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(ProductRegistered event) {
+        Instant enteredAt = Instant.now();
+        queueWaitTimer.record(Duration.between(event.publishedAt(), enteredAt));
+
         Timer.Sample sample = Timer.start();
         try {
             embedPort.indexProduct(event.toIndexCommand());
@@ -48,6 +64,8 @@ public class ProductRegisteredListener {
         } catch (Exception e) {
             sample.stop(failureTimer);
             log.warn("Failed to index product {} after commit", event.productId(), e);
+        } finally {
+            e2eTimer.record(Duration.between(event.publishedAt(), Instant.now()));
         }
     }
 }

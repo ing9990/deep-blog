@@ -12,6 +12,7 @@ import com.deepblog.minicoupang.domain.product.application.port.out.EmbedPort;
 import com.deepblog.minicoupang.domain.product.application.port.out.dto.ProductIndexCommand;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ class ProductRegisteredListenerTest {
     @DisplayName("handle forwards event to EmbedPort as ProductIndexCommand")
     void handle_forwardsAsIndexCommand() {
         ProductRegistered event = new ProductRegistered(
-            1L, "bag", "leather bag", 10L, 50000L, "ACTIVE", 7L);
+            1L, "bag", "leather bag", 10L, 50000L, "ACTIVE", 7L, Instant.now());
 
         listener.handle(event);
 
@@ -54,7 +55,7 @@ class ProductRegisteredListenerTest {
     @DisplayName("handle swallows EmbedPort exceptions so the commit is not undone")
     void handle_swallowsPortException() {
         ProductRegistered event = new ProductRegistered(
-            1L, "bag", "leather bag", 10L, 50000L, "ACTIVE", 7L);
+            1L, "bag", "leather bag", 10L, 50000L, "ACTIVE", 7L, Instant.now());
         doThrow(new RuntimeException("grpc unavailable")).when(embedPort).indexProduct(any());
 
         assertThatCode(() -> listener.handle(event)).doesNotThrowAnyException();

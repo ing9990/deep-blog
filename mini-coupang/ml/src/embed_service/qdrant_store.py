@@ -3,6 +3,23 @@
 Wraps the Qdrant client so the rest of the service (gRPC servicer, tests)
 doesn't leak Qdrant-specific types. Replacing the vector DB later means
 rewriting only this module.
+
+한국어 메모:
+- Qdrant 의존성을 전부 이 파일 안에 가둔다. servicer/테스트는 `QdrantStore`,
+  `ProductPayload`, `SearchHit`, `SearchFilter` 네 개 dataclass만 본다.
+- `ensure_collection`은 컬렉션이 없을 때만 생성한다. 생성 시 category_id,
+  status, base_price에 payload index를 건다. 인덱스 없이 filter를 걸면
+  Qdrant가 전체 포인트를 순회(full scan)하므로 `SearchFilter`가 실전 성능을
+  내려면 이 세 필드에 인덱스가 필수다.
+- `status` 필드에 대한 정책은 의도적으로 느슨하다. `_build_filter`는
+  status가 None이면 제약을 걸지 않는다. "ACTIVE만 노출" 같은 규칙은
+  호출자(gRPC servicer)가 명시적으로 SearchFilter.status="ACTIVE"를
+  넣어서 강제한다. 저장소 레벨에서 기본값을 가정하면 관리자 검색 같은
+  예외 경로에서 우회하기 어려워진다.
+- vectors_config는 `Distance.COSINE`이라 embedder가 반드시 정규화된 벡터를
+  올려야 한다. 정규화 안 된 벡터로도 저장은 되지만 점수가 오염된다.
+- upsert는 product_id 자체를 Qdrant point id로 사용한다. DB 상의 PK와 동일
+  키를 쓰므로 "이 상품의 벡터"를 찾을 때 매핑 테이블이 필요 없다.
 """
 from __future__ import annotations
 

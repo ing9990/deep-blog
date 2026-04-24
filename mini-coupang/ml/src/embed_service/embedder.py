@@ -2,6 +2,17 @@
 
 The default model is BAAI/bge-m3 (multilingual, 1024-dim).
 The model is loaded lazily on first use so the gRPC server can start quickly.
+
+한국어 메모:
+- sentence-transformers를 서비스 코드에 직접 노출하지 않고 이 모듈로 감싼다.
+  모델 교체(bge-m3 → 다른 모델)나 단위 테스트에서 stub 주입이 쉬워진다.
+- 모델 로드는 `model` property 접근 시 1회만 수행한다. 프로세스 기동 자체는
+  가볍고, `server.build_server`가 부팅 시 `embedder.dimension`을 읽어
+  의도적으로 cold start 비용을 선불로 치른다(첫 요청이 느려지는 현상 방지).
+- `embed_batch`는 `normalize_embeddings=True`로 L2 정규화된 벡터를 낸다.
+  Qdrant는 cosine distance로 저장되므로 정규화된 벡터 간 내적이 곧 유사도다.
+- `compose_product_text`는 상품명을 앞에 두고 description을 뒤에 붙인다.
+  모델이 앞쪽 토큰에 더 큰 가중을 두는 경향이 있어 상품명 신호를 살린다.
 """
 from __future__ import annotations
 

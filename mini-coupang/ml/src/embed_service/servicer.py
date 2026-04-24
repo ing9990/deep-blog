@@ -2,6 +2,24 @@
 
 Dispatches the 4 RPCs to the underlying Embedder and QdrantStore.
 Kept thin: business logic lives in Embedder / QdrantStore.
+
+한국어 메모:
+- 이 파일은 "얇은 디스패처"다. 임베딩 방식이나 벡터 DB 선택 같은 결정은
+  각각 embedder/qdrant_store에 있고, 여기서는 proto 메시지를 도메인
+  자료형으로 변환하고 호출 경과 시간(elapsed_ms)을 재는 역할만 한다.
+- `EmbedAndIndex`는 예외를 gRPC 상태 코드로 던지지 않고 `success=False`로
+  응답에 담아 돌려준다. 상품 등록 트랜잭션은 백엔드에서 이미 commit된
+  상태(AFTER_COMMIT)로 호출되므로 여기서 예외를 터뜨려도 DB는 롤백되지
+  않는다. 호출자가 일관된 응답 메타데이터(vector_dim, elapsed_ms)를
+  받는 편이 로깅과 재시도 판정에 유리하다.
+- `FindSimilar`는 소스 상품 자신을 결과에서 빼려고 `exclude_ids`로
+  product_id를 넘긴다. 그렇지 않으면 source 벡터가 본인과 cosine=1.0으로
+  매칭되어 첫 결과를 차지한다.
+- `SearchByQuery`와 `FindSimilar`의 filter는 같은 proto 메시지를 공유한다.
+  `_to_filter`가 proto optional 필드(HasField 체크)를 dataclass None으로
+  바꾼다. proto3 기본값(0, "")과 "미지정"을 구분하려면 HasField가 필수다.
+- status 기본값 "ACTIVE"는 EmbedAndIndex 안에서만 적용된다(저장 경로).
+  검색 경로에서는 호출자가 명시적으로 지정하거나 빈 값으로 둔다.
 """
 from __future__ import annotations
 
