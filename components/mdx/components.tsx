@@ -53,6 +53,7 @@ import { EmbeddingSpace } from '@/components/visualizations/EmbeddingSpace'
 import { RedundancyFailurePatterns } from '@/components/visualizations/RedundancyFailurePatterns'
 import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
 import { RestaurantIOSequence } from '@/components/visualizations/RestaurantIOSequence'
+import { SearchPipelineCompare } from '@/components/visualizations/SearchPipelineCompare'
 import { SecondaryIndexLookup } from '@/components/visualizations/SecondaryIndexLookup'
 import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRandomIO'
 import { SoaVsKafkaTopology } from '@/components/visualizations/SoaVsKafkaTopology'
@@ -166,6 +167,7 @@ export const mdxComponents: MDXComponents = {
   RelatedPost,
   RemoteCallOutcomes,
   RestaurantIOSequence,
+  SearchPipelineCompare,
   SecondaryIndexLookup,
   SequentialVsRandomIO,
   SoaVsKafkaTopology,
