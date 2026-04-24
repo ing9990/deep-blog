@@ -1,0 +1,257 @@
+---
+title:
+  ko: "Python MicroBatcher"
+  en: "Python MicroBatcher"
+slug: "python-microbatcher"
+date: 2026-04-25
+tags:
+  - backend
+  - concurrency
+  - design-pattern
+keywords:
+  - "MicroBatcher"
+  - "마이크로 배처"
+  - "Micro Batching"
+  - "배치 패턴"
+summary:
+  ko: "짧은 시간 창 안에 들어온 여러 개별 호출을 한 번에 묶어 처리하는 Python MicroBatcher 패턴을 이해하고, asyncio 기반 최소 구현과 size/time 이중 flush 문법을 익히며, 지연 시간 vs 처리량 트레이드오프의 판단 기준을 얻습니다."
+  en: "Understand the Python MicroBatcher pattern, which groups individual async calls arriving within a short window into a single batch. Learn the minimal asyncio implementation, the size/time dual-flush syntax, and the latency vs throughput tradeoff."
+category: language-backend
+draft: false
+---
+
+백엔드에서 같은 성격의 호출이 짧은 시간 안에 여러 개 몰려들 때가 있습니다. 추천 모델 추론, 임베딩 계산, 외부 API 조회, DB 쓰기. 한 건씩 처리하면 호출당 오버헤드에 매번 세금을 냅니다. MicroBatcher는 이 호출들을 몇 밀리초만 모아 한 번에 처리하도록 중간에 끼워 넣는 얇은 레이어입니다. 이 글은 `asyncio` 기반 최소 구현으로 사용법을 익히고, 왜 필요한지와 언제 쓰지 말아야 하는지까지 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - MicroBatcher가 무엇이고 size/time 이중 flush가 어떻게 동작하는지 이해한다
+  - `asyncio.Future`를 활용한 Python 최소 구현과 호출자 API를 익힌다
+  - 지연 시간 증가와 복잡도 부담을 감안해 언제 도입할지의 기준을 얻는다
+</Note>
+
+## 개요
+
+MicroBatcher는 **짧은 시간 창 안에 도착한 개별 비동기 호출을 모아 한 번에 처리하고, 각 호출자에게 자기 결과만 돌려주는 패턴**입니다.
+
+호출자 입장에서는 평소처럼 한 건을 `await`합니다. 내부에서는 같은 시점에 들어온 다른 요청들과 함께 한 번의 배치 처리로 합쳐집니다. 처리 결과가 나오면 MicroBatcher가 각 `Future`에 자기 몫을 나눠 넣고, `await`하던 호출자들이 동시에 깨어납니다.
+
+flush(배치를 실제로 실행하는 시점)는 두 조건 중 **먼저 만족되는 쪽**이 이깁니다.
+
+| 조건 | 의미 |
+|---|---|
+| `max_batch_size` 도달 | 큐에 N건이 쌓이면 즉시 실행 (처리량 극대화) |
+| `max_wait_ms` 만료 | 요청이 드물어도 최대 M밀리초만 기다림 (지연 상한 보장) |
+
+이 둘을 동시에 두는 이유는 간단합니다. 크기만 기준으로 하면 한가한 시간에는 배치가 영원히 안 찹니다. 시간만 기준으로 하면 피크 시간에 쓸데없이 더 기다립니다. **둘을 OR로 묶어야 피크와 한가한 시간 모두에서 균형**이 맞습니다.
+
+<RelatedPost slug="coroutine-primer" type="prerequisite" />
+
+## 사용 이유
+
+### 호출 하나하나가 비싸다
+
+다음 경로들은 **호출 한 번의 고정 비용**이 본래 작업 비용보다 큰 경우가 많습니다.
+
+| 경로 | 한 건당 오버헤드의 원인 |
+|---|---|
+| ML 추론 (GPU) | 커널 런칭, 호스트-디바이스 메모리 전송, 프레임워크 dispatch |
+| DB 쓰기 | 네트워크 round-trip, 트랜잭션 시작/종료 |
+| 벡터 DB `upsert` | HTTP 핸드셰이크, 직렬화, 인덱스 재계산 |
+| 외부 API | TCP/TLS, 인증, rate limit |
+
+예를 들어 bge-m3 같은 임베딩 모델은 GPU에서 1건을 처리해도 32건을 처리해도 걸리는 시간이 크게 차이 나지 않습니다. 1건씩 32번 호출하면 오버헤드만 32배가 됩니다. **같은 오버헤드를 32건이 나눠 쓰면 처리량이 크게 올라갑니다.**
+
+### 실제로 어디서 쓰는가
+
+- **GraphQL DataLoader**: 같은 요청 안에서 발생하는 N개의 `userById(id)` 호출을 한 번의 `usersByIds([...])`로 합침
+- **벡터 검색 엔진**: Qdrant, Pinecone 클라이언트의 `upsert(points=[...])`
+- **임베딩 서버**: HuggingFace `text-embeddings-inference`가 서버 내부에서 배치를 구성해 GPU에 한 번에 보냄
+- **로그/메트릭 수집기**: OpenTelemetry exporter의 `BatchSpanProcessor`
+
+공통점은 하나입니다. **한 번 부르는 비용이 비싸거나, 묶어서 부르면 명시적으로 더 빠른 API가 존재한다**는 점입니다.
+
+## 사용법 문법
+
+Python에서는 `asyncio.Future`로 "나중에 결과가 도착할 자리"를 호출자에게 돌려주고, 내부 큐에 아이템과 future 쌍을 저장한 뒤 size/time 조건에 따라 flush합니다.
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Flush는 `max_batch_size` 도달 또는 `max_wait_ms` 만료 중 **먼저 오는 쪽**이 실행합니다. 한쪽만으로는 피크와 한가한 시간을 모두 커버할 수 없습니다.
+</Callout>
+
+### 최소 구현
+
+```python title="microbatcher.py"
+import asyncio
+from typing import Awaitable, Callable, Generic, TypeVar
+
+T = TypeVar("T")
+R = TypeVar("R")
+
+
+class MicroBatcher(Generic[T, R]):
+    def __init__(
+        self,
+        handler: Callable[[list[T]], Awaitable[list[R]]],
+        max_batch_size: int = 32,
+        max_wait_ms: int = 10,
+    ):
+        self._handler = handler
+        self._max_batch = max_batch_size
+        self._max_wait = max_wait_ms / 1000
+        self._queue: list[tuple[T, asyncio.Future[R]]] = []
+        self._lock = asyncio.Lock()
+        self._flush_task: asyncio.Task | None = None
+
+    async def submit(self, item: T) -> R:
+        loop = asyncio.get_running_loop()
+        fut: asyncio.Future[R] = loop.create_future()
+
+        async with self._lock:
+            self._queue.append((item, fut))
+            if len(self._queue) >= self._max_batch:        # [!code highlight]
+                await self._flush_locked()                 # [!code highlight]
+            elif self._flush_task is None:
+                self._flush_task = asyncio.create_task(self._delayed_flush())
+
+        return await fut
+
+    async def _delayed_flush(self):
+        await asyncio.sleep(self._max_wait)                # [!code highlight]
+        async with self._lock:
+            if self._queue:
+                await self._flush_locked()
+
+    async def _flush_locked(self):
+        batch = self._queue
+        self._queue = []
+        self._flush_task = None
+        items = [x for x, _ in batch]
+        try:
+            results = await self._handler(items)
+            for (_, fut), r in zip(batch, results):
+                if not fut.done():
+                    fut.set_result(r)
+        except Exception as e:
+            for _, fut in batch:
+                if not fut.done():
+                    fut.set_exception(e)
+```
+
+핵심만 짚으면 다음과 같습니다.
+
+| 요소 | 역할 |
+|---|---|
+| `asyncio.Future` | 호출자에게 "나중에 결과 도착할 자리"를 미리 돌려줌 |
+| `asyncio.Lock` | 큐 조작의 동시 수정 방지 (단일 이벤트 루프 안에서도 `await` 지점에서 인터리빙 발생) |
+| `_flush_task` | 한 창에 하나의 지연 flush 타이머만 유지 |
+| size 분기 | 임계치 도달 시 즉시 flush, 타이머 불필요 |
+| time 분기 | `asyncio.sleep(max_wait)` 후 남은 큐 처리 |
+
+### 호출자 쪽 사용법
+
+호출자는 MicroBatcher의 존재를 거의 의식하지 않습니다. 한 건만 보낸 것처럼 `await`하면 됩니다.
+
+```python title="usage.py"
+async def embed_many(texts: list[str]) -> list[list[float]]:
+    # 모델은 배치로 받도록 설계된 API
+    return await model.encode_async(texts)
+
+
+batcher = MicroBatcher(
+    handler=embed_many,
+    max_batch_size=32,
+    max_wait_ms=10,
+)
+
+
+async def handle_request(text: str) -> list[float]:
+    # 호출자는 배치의 존재를 모른다
+    return await batcher.submit(text)                       # [!code highlight]
+```
+
+같은 이벤트 루프 위에서 `handle_request`가 여러 번 동시에 호출되면, 각 호출은 독립된 `Future`를 받고 `batcher` 내부에서 자동으로 한 배치로 합쳐집니다. 결과가 나오면 각자 자기 몫만 돌려받습니다.
+
+### 실행 시나리오 두 가지
+
+<Tabs group="microbatcher-scenario">
+  <Tab label="피크 시간 (크기로 flush)">
+    ```text
+    t=0ms   submit("a")   큐=[a]         타이머 시작
+    t=1ms   submit("b")   큐=[a,b]
+    t=2ms   submit("c")   큐=[a,b,c]
+    ...
+    t=3ms   submit 32번째  큐=32건 도달 → 즉시 flush  // [!code highlight]
+            handler(32건) 실행, 결과 분배
+            → 32명이 거의 동시에 await에서 깨어남
+    ```
+  </Tab>
+  <Tab label="한가한 시간 (시간으로 flush)">
+    ```text
+    t=0ms   submit("a")   큐=[a]         타이머 시작 (10ms 뒤 만료)
+    t=3ms   submit("b")   큐=[a,b]
+    ...
+    t=10ms  타이머 만료 → flush            // [!code highlight]
+            handler([a,b]) 실행
+            → 두 호출자 각자 결과 수신
+    ```
+  </Tab>
+</Tabs>
+
+## 트레이드오프
+
+MicroBatcher를 도입하면 반드시 함께 따라오는 대가가 있습니다. 입문 수준이지만 도입 판단에 필요한 최소한만 짚습니다.
+
+### 지연 시간이 증가한다 (피할 수 없음)
+
+배치를 기다리는 `max_wait_ms`는 그대로 개별 요청의 지연 하한에 더해집니다. 한가한 시간에 홀로 들어온 요청은 "함께 묶일 친구"가 없으므로 타이머 만료까지 꼬박 기다립니다. 처리량이 올라가는 대신 **p99 지연은 나빠질 수 있습니다**.
+
+판단 기준은 단순합니다. 호출 한 번의 오버헤드가 `max_wait_ms`보다 훨씬 커야 의미가 있습니다. 오버헤드가 1~2ms인데 `max_wait_ms=10`을 두면 배치의 이득보다 손해가 큽니다.
+
+### 복잡도가 늘어난다
+
+단일 호출 코드보다 관리할 것이 많아집니다.
+
+<Note title="추가로 고려해야 할 것들">
+  - 에러 전파 정책: 배치 전체 실패인가, 개별 분리인가
+  - 셧다운: 이벤트 루프 종료 시 남은 큐를 어떻게 flush할 것인가
+  - 타임아웃: handler가 지연되면 `submit`의 `await`도 같이 걸린다
+  - 관측: 배치 크기, 대기 시간, 실패율 메트릭을 따로 수집해야 튜닝 가능
+</Note>
+
+### Partial failure 처리는 handler의 계약이다
+
+32건 중 1건만 깨진 경우를 생각해보면, 기본 구현은 전부 실패로 처리합니다. 이게 불편하면 handler 반환 타입을 바꿔야 합니다.
+
+```python
+# 개별 분리 정책을 원할 때
+from typing import Union
+
+async def embed_many_safe(
+    texts: list[str],
+) -> list[Union[list[float], Exception]]:
+    ...
+
+# MicroBatcher는 각 슬롯이 Exception이면 그 future만 set_exception
+```
+
+이 변형은 사용자 코드 쪽에서 **결과가 예외일 수 있다는 전제**를 감수해야 합니다. 호출자 API가 그만큼 복잡해집니다.
+
+### 큐에는 한계가 필요하다 (backpressure)
+
+큐 크기에 상한이 없으면, 소비자(handler)가 느려질 때 큐가 무한히 자라 OOM을 만듭니다. 실전 구현에서는 `max_queue_size`를 두고 한계 도달 시 `submit`이 즉시 예외를 던지거나, 호출자를 잠깐 대기시켜야 합니다. 이 설계 자체의 이유와 전략은 별도 글에서 깊게 다룹니다.
+
+<RelatedPost slug="backpressure" type="deep-dive" />
+
+### 단건 저지연이 계약인 경로는 피하라
+
+사용자 최전선 요청 지연이 서비스 계약(SLO) 안쪽에 위치하거나, 실시간 경보처럼 **묶일 이유가 없는** 경로에는 쓰지 않습니다. MicroBatcher는 "묶여도 문제없고 묶이면 이득인" 곳에서만 가치가 있습니다.
+
+<Callout type="error" title="핵심 통찰: 배치는 공짜가 아니라 지연 예산의 의도적 소비다">
+  MicroBatcher는 처리량을 끌어올리기 위해 **개별 요청의 지연 예산을 의도적으로 깎아 씁니다**. `max_wait_ms`는 "이 주제에서 허용 가능한 추가 지연"이라는 설계 선언이지 성능 튜닝 값이 아닙니다. 도입하기 전 "이 경로의 지연 예산이 얼마인가"부터 합의해야, 나중에 값을 바꿀 때 근거가 생깁니다.
+</Callout>
+
+## 참고 자료
+
+- Facebook Engineering, [DataLoader: Batching and caching](https://github.com/graphql/dataloader) 공식 저장소
+- OpenTelemetry Specification, [BatchSpanProcessor](https://opentelemetry.io/docs/specs/otel/trace/sdk/#batching-processor)
+- Qdrant Docs, [Batch upsert points](https://qdrant.tech/documentation/concepts/points/#upload-points)
+- Python Docs, [`asyncio.Future`](https://docs.python.org/3/library/asyncio-future.html)
