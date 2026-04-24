@@ -65,6 +65,8 @@ import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMes
 import { VectorSearchSpace } from '@/components/visualizations/VectorSearchSpace'
 import { HNSWLevelWalk } from '@/components/visualizations/HNSWLevelWalk'
 import { IVFNprobe } from '@/components/visualizations/IVFNprobe'
+import { SQPipeline } from '@/components/visualizations/SQPipeline'
+import { SQOptionMatrix } from '@/components/visualizations/SQOptionMatrix'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   'data-keyword-link'?: string
@@ -180,5 +182,7 @@ export const mdxComponents: MDXComponents = {
   VectorSearchSpace,
   HNSWLevelWalk,
   IVFNprobe,
+  SQPipeline,
+  SQOptionMatrix,
   Tabs,
 }

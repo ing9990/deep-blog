@@ -1,0 +1,280 @@
+---
+title:
+  ko: "Qdrant Scalar Quantization"
+  en: "Qdrant Scalar Quantization"
+slug: "qdrant-scalar-quantization"
+date: 2026-04-25
+tags:
+  - backend
+  - ai
+  - vector-database
+keywords:
+  - Scalar Quantization
+  - Qdrant Scalar Quantization
+  - Quantile
+  - Rescoring
+  - Oversampling
+summary:
+  ko: "Qdrant의 Scalar Quantization이 fp32 벡터를 int8로 바꿔 메모리 4배 절약과 SIMD 가속을 얻는 대신 recall을 얼마나 양보하는지, quantile·rescore·oversampling·always_ram 옵션이 어느 축을 움직이는지 내부 동작 중심으로 정리합니다."
+  en: "Understand how Qdrant Scalar Quantization trades recall for 4x memory savings and SIMD-accelerated distance by mapping fp32 to int8, and which axis each option (quantile, rescore, oversampling, always_ram) moves inside the pipeline."
+category: infrastructure
+draft: false
+---
+
+Qdrant에 벡터 수가 쌓이면 가장 먼저 터지는 건 RAM입니다. fp32로 1024차원 벡터를 1000만 개 저장하면 그 자체로 38GB. Scalar Quantization은 이 벡터를 int8로 바꿔 메모리를 1/4로 줄이고, 부수적으로 SIMD 거리 계산까지 얻는 기법입니다. 공짜가 아닌 대신 recall을 양보하는데, 조건이 맞으면 손실은 1%p 내외로 억제됩니다. 이 글은 그 파이프라인이 내부에서 어떻게 작동하고, 각 옵션이 어느 축을 움직이는지 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - Scalar Quantization이 fp32에서 int8로 벡터를 변환하는 3단 파이프라인을 이해한다
+  - quantile, always_ram, rescore, oversampling 옵션이 메모리·QPS·recall 중 어느 축을 움직이는지 구분할 수 있다
+  - 내 데이터셋 규모와 RAM 여건에서 SQ를 켤지 말지 판단하는 기준을 얻는다
+</Note>
+
+## Scalar Quantization이란
+
+Scalar Quantization(스칼라 양자화)은 **벡터의 각 원소(scalar)를 더 적은 비트 수로 표현**하는 압축 기법입니다. Qdrant에서는 보통 fp32를 int8로 바꾸는 것을 의미합니다.
+
+임베딩 모델이 반환하는 벡터는 대부분 fp32(32-bit float) 형식입니다. `[0.1234, -0.5678, 0.9012, ...]` 같은 원소 하나에 4바이트가 듭니다. bge-m3의 1024차원이면 한 벡터가 4KB, 100만 벡터면 `4GB`가 순수 임베딩 저장소로 필요합니다. HNSW 그래프 메타데이터까지 합치면 더 커집니다.
+
+Scalar Quantization은 fp32 원소 하나를 int8(1바이트) 한 값에 매핑합니다. 핵심은 "원소 값의 분포 범위를 구간 256개로 나누고, 각 원소가 어느 구간에 속하는지만 기록"하는 것입니다. 한 벡터가 1KB로 줄어 **메모리가 1/4**이 되고, 더 중요한 건 int8 SIMD 명령어(AVX2/AVX-512의 VPDPBUSD 등)로 **거리 계산이 CPU 레벨에서 병렬화**된다는 점입니다.
+
+정밀도 손실은 당연히 있습니다. `0.1234`와 `0.1238`이 같은 bucket으로 뭉개지면 두 벡터의 "가까움" 판단이 달라질 수 있습니다. 그래서 Qdrant는 1차로 int8로 후보를 뽑고, 필요 시 2차로 원본 fp32로 재정렬하는 rescoring 단계를 두어 정밀도를 회수합니다.
+
+혼동하기 쉬운 한 가지. Scalar Quantization은 **Product Quantization(PQ)과 다릅니다**. PQ는 벡터를 subspace로 쪼개 각각 codebook으로 대체(더 공격적 압축, 8에서 64배), SQ는 원소 단위 선형 매핑(덜 공격적, 4배). Qdrant는 SQ / PQ / Binary Quantization 셋 모두 지원하지만 기본 권장은 SQ입니다. 이유는 바로 다음 섹션에서 다룹니다.
+
+<RelatedPost slug="qdrant-primer" type="prerequisite" />
+
+## 왜 필요한가
+
+HNSW가 이미 ANN으로 빠른데 왜 또 압축을 해야 하는지가 Why의 출발점입니다. 답은 **HNSW의 병목이 두 곳에 있고, 그 둘이 벡터 크기에 비례해 커지기 때문**입니다.
+
+첫 번째 병목은 메모리입니다. HNSW는 그래프 탐색 성능을 위해 벡터 본체가 RAM에 올라와 있어야 합니다. mmap으로 디스크에 두면 그래프 노드를 탐색할 때마다 page fault가 터지고, 한 쿼리가 수백 개 노드를 밟으므로 latency가 선형으로 악화됩니다. 서비스 규모가 커져 벡터가 수천만 개가 되면 RAM이 먼저 터집니다. `fp32 × 1024차원 × 1000만 개 = 38.1GB`. 인스턴스 비용이 순식간에 뛰어오릅니다.
+
+두 번째 병목은 거리 계산의 CPU 시간입니다. HNSW 한 쿼리는 대략 수백에서 수천 개 후보 벡터와 거리를 계산합니다. fp32 cosine/dot product는 한 쌍당 1024번의 곱셈과 1023번의 덧셈. int8로 바뀌면 같은 연산이 AVX-512 `VPDPBUSD` 한 명령어로 64개 원소 곱셈-누산을 처리합니다. CPU cycle이 크게 줄어듭니다. HNSW 탐색 자체가 빨라지는 건 아니지만, 탐색 중 일어나는 거리 계산이 가속되어 실측 QPS가 올라갑니다.
+
+여기서 한 가지 짚을 점. **메모리 압박 때문에 생긴 기능이라는 인과**. "속도가 더 빨라진다"는 부수 효과에 가깝고, 원래 동기는 "대규모 데이터셋을 저비용 인스턴스에 꾸겨넣기"입니다. Qdrant 공식 문서도 이 순서로 기술합니다. 인과 방향을 뒤집으면 "recall을 깎아 속도를 얻는다"는 잘못된 프레임이 됩니다. 실제로는 **메모리를 줄이려는 압축이 SIMD와 만나 속도까지 부수적으로 얻는** 구조입니다.
+
+왜 **SQ가 기본 권장**이고 PQ나 Binary가 아닌가? 세 가지가 recall 손실에 붙는 비용 곡선이 다릅니다.
+
+| 방식 | 압축률 | 학습 단계 | Recall 손실 | 운영 복잡도 |
+|---|---|---|---|---|
+| Scalar Quantization | 4배 | 없음 (min/max 스캔만) | 1에서 3%p 내외 | 낮음 |
+| Product Quantization | 8에서 64배 | codebook 학습 필요 | 3에서 10%p | 중간 |
+| Binary Quantization | 32배 | 모델이 binary-friendly할 때만 실용적 | 많이 변동 | 중간 |
+
+즉 "일단 써보고 싶다"면 SQ부터, "메모리가 더 필요하다"면 PQ나 Binary로 내려가는 게 상식적 순서입니다.
+
+## 내부 동작
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  SQ는 **분포 스캔, fp32→int8 매핑, int8 탐색 + rescore**의 3단 파이프라인입니다.
+  1단계는 일회성 비용(collection 빌드 시), 2단계는 공간 절약, 3단계는 속도와 정밀도의 타협점. 각 단계가 어느 축(메모리·QPS·recall)에 영향을 주는지 구분해야 옵션 선택이 명확해집니다.
+</Callout>
+
+<Callout type="error" title="핵심 통찰: SQ는 recall을 팔아 속도를 사는 것이 아니다">
+  SQ의 원래 동기는 RAM 절약입니다. SIMD 가속은 int8 매핑이 가져온 부수 효과이고, recall 손실은 rescoring과 oversampling으로 대부분 회수됩니다. "정확도를 깎아 속도를 얻는다"는 프레임이 아니라, "메모리 제약을 풀고, 그 과정에서 속도까지 얻고, recall은 조건만 맞추면 거의 무손실로 유지된다"가 정확한 인과입니다.
+</Callout>
+
+### 1단계. 분포 스캔과 min/max 결정
+
+Collection에 벡터를 upsert할 때, Qdrant는 세그먼트 단위로 벡터 원소 값의 분포를 수집합니다. 목적은 "fp32 값을 int8 256 구간에 어떻게 매핑할지" 경계값 두 개(min, max)를 정하는 것입니다.
+
+단순하게 전역 min/max를 쓰면 이상치 하나가 구간 전체를 깎아버립니다. 99.9% 원소가 `[-1.0, 1.0]`에 몰려 있는데 한 벡터에 `5.0`이 있으면, `[-5.0, 5.0]` 범위로 256구간을 나누게 되어 대부분 원소가 몇 개 구간에 뭉쳐버립니다. 그래서 Qdrant는 `quantile` 파라미터(기본 0.99)로 양쪽 끝 0.5%를 잘라냅니다. 잘린 원소는 min/max 범위 밖이 되어 **clipping**(양 끝값으로 고정)됩니다.
+
+### 2단계. 선형 매핑 (fp32에서 int8)
+
+원소 `x`를 int8 값 `q`로 바꾸는 공식은 단순합니다.
+
+$$q = \text{round}\left(\frac{x - \min}{\max - \min} \times 255\right) - 128$$
+
+`(x - min) / (max - min)`가 `[0.0, 1.0]` 구간으로 정규화되고, `× 255 - 128`로 `[-128, 127]`(int8 signed) 범위에 매핑됩니다. 이 매핑은 벡터 단위가 아니라 **collection 전체 공통 스케일**로 적용되므로, 모든 벡터가 같은 min/max 파라미터를 공유합니다. 덕분에 매핑 정보를 벡터마다 따로 저장할 필요가 없고, 벡터당 메모리는 `차원 × 1바이트`가 됩니다.
+
+한 가지 중요한 뉘앙스. **Cosine 유사도는 벡터 정규화가 전제**입니다. 모든 벡터 norm이 1이면 원소 값이 대체로 `[-0.1, 0.1]` 근처 좁은 범위에 몰리고, 256구간이 촘촘하게 배치되어 정밀도 손실이 작습니다. 반대로 정규화되지 않은 벡터는 원소 값 범위가 들쭉날쭉해서 구간 매핑이 거칠어집니다. Qdrant가 "cosine distance 쓰면 SQ 효과가 더 좋다"고 권하는 이유입니다.
+
+### 3단계. 거리 계산과 Rescoring
+
+쿼리가 들어오면 쿼리 벡터도 같은 min/max로 int8 양자화됩니다. HNSW 그래프를 탐색하며 "후보 벡터와 거리"를 계산할 때 **int8 vs int8** 연산이 돌아갑니다. AVX-512 `VPDPBUSD` 같은 SIMD 명령어가 64개 원소를 한 사이클에 처리해 속도가 납니다.
+
+1차로 top-K 후보가 나오면 Qdrant는 원본 fp32 벡터로 **rescoring**(재정렬)을 합니다. `top_k=10`, `oversampling=2.0`이면 1차로 int8 거리로 20개를 뽑고, 그 20개의 원본 fp32로 거리를 다시 재어 상위 10개를 최종 반환합니다. 1차 후보가 "대략 비슷한 것들"까지 넉넉히 포함하면, 2차 fp32 재정렬로 순위가 fp32-only와 거의 같아집니다.
+
+<SQPipeline />
+
+이 3단 구조가 SQ의 정체입니다. 1단계는 일회성(collection 빌드 시), 2단계는 공간 절약(벡터당 1/4 메모리), 3단계는 속도와 정밀도 회수(SIMD + rescoring).
+
+한 가지 미묘한 포인트. HNSW 그래프 탐색의 **중간 노드 비교는 int8로 진행**되고, 그래프 토폴로지(연결 관계) 자체는 원본 fp32로 빌드됩니다. 즉 "그래프는 정확하게 쌓이고, 그래프 위 거리 계산만 근사"하는 구조라 recall 손실이 생각보다 작습니다.
+
+### Config 옵션
+
+Qdrant SQ 설정은 **Collection 생성 시점**과 **검색 시점** 둘로 나뉩니다. 어느 축을 움직이는지 나눠서 보면 덜 헷갈립니다.
+
+Collection 생성 시점 설정은 `ScalarQuantizationConfig`입니다.
+
+```python title="create_collection.py"
+from qdrant_client import QdrantClient, models
+
+client = QdrantClient(url="http://localhost:6333")
+
+client.create_collection(
+    collection_name="products",
+    vectors_config=models.VectorParams(
+        size=1024,
+        distance=models.Distance.COSINE,
+        on_disk=True,  // [!code highlight]
+    ),
+    quantization_config=models.ScalarQuantization(
+        scalar=models.ScalarQuantizationConfig(
+            type=models.ScalarType.INT8,
+            quantile=0.99,
+            always_ram=True,  // [!code highlight]
+        ),
+    ),
+)
+```
+
+세 옵션이 전부입니다.
+
+| 옵션 | 역할 |
+|---|---|
+| `type` | 현재는 `INT8`만 지원. 미래 확장 자리. |
+| `quantile` | min/max 결정 시 양쪽 꼬리 clip 비율. `[0.5, 1.0]` 범위. 기본 권장 0.99. 미설정 시 전체 범위(이상치 취약). |
+| `always_ram` | 양자화 벡터(int8)를 강제로 RAM에 상주. 원본 fp32는 `on_disk=true`로 따로 내림. SQ 메모리 절약이 실제로 실현되는 지점. |
+
+검색 시점 설정은 `QuantizationSearchParams`입니다.
+
+```python title="search_with_quantization.py"
+from qdrant_client import models
+
+client.query_points(
+    collection_name="products",
+    query=query_vector,
+    limit=10,
+    search_params=models.SearchParams(
+        quantization=models.QuantizationSearchParams(
+            ignore=False,
+            rescore=True,  // [!code highlight]
+            oversampling=2.0,  // [!code highlight]
+        ),
+    ),
+)
+```
+
+| 옵션 | 기본값 | 역할 |
+|---|---|---|
+| `ignore` | `false` | 이 쿼리에서 양자화를 건너뛰고 원본 fp32로만 검색. 디버깅이나 "중요 쿼리만 정밀 모드" 용도. |
+| `rescore` | 미설정 시 Qdrant 자동 판단 | int8 1차 후보를 원본 fp32로 재정렬할지. `true`면 정밀도 회복, `false`면 int8 결과 그대로. |
+| `oversampling` | `1.0` | 1차 후보를 몇 배 뽑을지. `2.0`이면 `limit=100`일 때 1차 200개 뽑아 fp32 재정렬 후 상위 100개 반환. |
+
+어느 옵션이 어느 축을 움직이는지 한눈에 정리하면 이렇습니다.
+
+<SQOptionMatrix />
+
+빌드 타임 옵션(`quantile`, `always_ram`, `on_disk`)은 메모리와 파이프라인 구조를 정하고, 런타임 옵션(`rescore`, `oversampling`, `ignore`)은 쿼리별로 속도와 정확도의 밸런스를 조정합니다.
+
+## 실전 문제
+
+SQ를 실제로 붙여보면 반복되는 문제가 몇 가지 있습니다. 대부분 "기본값 그대로 썼는데 왜 이상하지?" 계열입니다.
+
+### 1. 정규화 안 된 벡터에서 recall 급락
+
+Cosine distance를 쓰면서 임베딩을 정규화하지 않고 넣는 경우가 은근히 많습니다. Qdrant는 cosine 선택 시 자동으로 normalize를 걸지 **않고**(dot product로 최적화해서 돌립니다), 사용자가 넣은 벡터의 스케일을 그대로 저장합니다. 정규화되지 않은 벡터는 norm이 0.3에서 15처럼 벡터마다 들쭉날쭉해서 원소 값 범위가 크고, `quantile=0.99` 기준으로 잘라도 256 bucket이 거친 매핑이 됩니다. 결과는 "SQ 켜니까 top-10 recall이 95%에서 75%로 떨어졌어요" 같은 증상입니다.
+
+해결은 단순합니다. Embedding을 **서버로 보내기 전에 L2 normalize** 합니다.
+
+```python title="normalize_before_upsert.py"
+import numpy as np
+
+def l2_normalize(v: np.ndarray) -> np.ndarray:
+    n = np.linalg.norm(v)
+    return v / n if n > 0 else v
+
+normalized = [l2_normalize(v) for v in raw_vectors]
+```
+
+OpenAI `text-embedding-3-*`, Cohere `embed-v3` 같은 상용 모델은 이미 정규화된 벡터를 반환하므로 문제없지만, 직접 파인튜닝한 모델이나 bge-m3 일부 출력은 확인이 필요합니다.
+
+### 2. `rescore=false`로 품질이 예상보다 낮음
+
+배치 검색에서 throughput을 최대화하려고 `rescore=false`로 쓰다가 품질이 안 나오는 경우입니다. int8만으로는 순위가 fp32와 다릅니다. 특히 "top-K 간 거리 차이가 작은 쿼리"(예: 카테고리가 겹치는 상품들) 구간에서 순위가 요동칩니다.
+
+보통 `rescore=true` + `oversampling=2.0` 조합이 fp32-only recall의 98% 이상을 회복하는 타협점입니다. `rescore`를 끌 바에는 `oversampling=1.0, rescore=true`가 거의 항상 더 낫습니다. rescore의 비용은 "몇 개 벡터에 대한 fp32 거리 재계산"이라 rescoring 대상 자체가 `limit` 수준이면 부담이 크지 않습니다.
+
+### 3. 원본과 양자화를 모두 디스크에 두는 조합의 함정
+
+메모리를 극단적으로 줄이려고 양자화 벡터까지 디스크에 두면(`always_ram=false`), HNSW 탐색 중 int8 거리 계산마다 page fault가 터집니다. SQ 도입 목적(RAM 압박 완화 + SIMD 가속)이 모두 사라지고 오히려 fp32-only보다 느려질 수 있습니다.
+
+규칙은 단순합니다. **int8는 반드시 RAM, 원본 fp32는 상황에 따라 디스크**. 이게 SQ의 표준 메모리 배치입니다.
+
+### 4. 작은 collection에서 오히려 느림
+
+벡터 수십만 개 이하의 작은 collection에서는 SQ 이득이 거의 없습니다. HNSW 탐색이 이미 밀리초 수준이라 SIMD 가속 효과가 측정 오차에 묻힙니다. 그런데 rescoring 오버헤드는 그대로라 net 성능이 더 떨어지는 경우도 관측됩니다. SQ는 대체로 **벡터 수가 백만 개를 넘길 때부터** 본격적인 이득이 있습니다. 작은 collection은 fp32 그대로 두는 편이 깔끔합니다.
+
+### 5. `quantile`을 튜닝 없이 default만 믿기
+
+`quantile=0.99`가 범용 권장값이지만, **극단적 sparse 임베딩**(일부 one-hot 계열, 학습 전 random init 벡터)에서는 원소 대부분이 0이고 몇 개만 큰 값인 분포가 나옵니다. 이 경우 0.99 cutting이 오히려 유효 신호를 잘라낼 수 있습니다.
+
+의심되면 "SQ 켠 것 vs 끈 것 top-10 jaccard 유사도"를 샘플 쿼리 수백 개로 돌려 recall 손실을 측정한 뒤 `quantile`을 조정합니다. `[0.95, 0.999]` 사이가 보통의 탐색 범위입니다. 대부분의 정규화된 임베딩에서는 `0.99`로 충분합니다.
+
+### 6. 운영 중 index 재빌드 트리거
+
+기존 collection에 SQ를 **사후에** 붙이려면 `update_collection`으로 `quantization_config`를 넣고 기다려야 하는데, 이 과정에서 백그라운드 인덱싱이 돌면서 latency가 일시적으로 튀고 CPU가 치솟습니다. 운영 중 붙이는 건 피하고, **신규 collection 생성 시점에 같이 설정**하는 게 안전합니다. 불가피하면 트래픽 낮은 시간대에 진행합니다.
+
+## 트레이드오프
+
+SQ를 평가할 때 세 축을 분리해서 봐야 올바른 판단이 나옵니다. 한 축만 보면 오독하기 쉽습니다.
+
+### 메모리
+
+가장 확정적인 축입니다. `int8 = fp32 / 4`이므로 **벡터 본체 메모리가 정확히 1/4**이 됩니다.
+
+| 벡터 수 | 차원 | fp32 | int8 (SQ) |
+|---|---|---|---|
+| 100만 | 768 | 2.86 GB | 0.72 GB |
+| 100만 | 1024 | 3.81 GB | 0.95 GB |
+| 1000만 | 1024 | 38.1 GB | 9.54 GB |
+
+이 수치는 벡터 본체만입니다. HNSW 그래프 메타데이터(이웃 링크, offset 등)는 별도로 보통 벡터 저장소의 10에서 20%가 추가로 잡히고, 이 부분은 SQ로 줄지 않습니다. 그래도 수천만 벡터 스케일에서는 SQ만으로 "인스턴스 등급을 한 단계 낮출 수 있다" 수준의 의미가 있습니다.
+
+원본 fp32를 `on_disk=true`로 내리고 int8만 RAM에 두면 RAM 사용량이 더 극적으로 줄지만, 디스크 I/O에 recall이 의존하게 되므로 SSD 여부를 확인해야 합니다.
+
+### QPS와 Latency
+
+Qdrant 공식 문서의 측정 결과는 **latency 28에서 60% 감소**(데이터셋, 차원, 하드웨어에 따른 편차)로 요약됩니다. 대체로 "쿼리 1건 latency가 절반 내외"로 들어오는 범위입니다. 다만 이 수치는 Qdrant 자체 벤치이므로, 서비스 환경에서 재측정하는 것이 원칙입니다. 영향 요인은 다음과 같습니다.
+
+<Note title="QPS 영향 요인">
+  - **SIMD 지원 여부**: AVX2/AVX-512 있는 x86 CPU에서 최대 효과. ARM Graviton·Apple Silicon은 NEON으로 이득 있으나 x86 대비 작을 수 있음.
+  - **벡터 차원**: 차원이 클수록 SIMD 효과가 커짐. 128차원보다 1024차원에서 속도 이득이 상대적으로 큼.
+  - **Rescore 설정**: `oversampling=2.0, rescore=true`에서 원본 `on_disk=true`면 rescore 구간이 디스크 I/O에 묶여 이득이 깎임. 원본을 RAM에 두면 이득이 거의 그대로.
+  - **Collection 크기**: 벡터 100만 개 미만이면 이득 미미.
+</Note>
+
+"QPS가 몇 배 오르는가"에 단일한 답은 없습니다. **"같은 하드웨어에서 RAM 부족으로 page fault가 터지던 구간"이 사라졌을 때 체감 이득이 가장 크다**고 이해하는 편이 정확합니다.
+
+### Recall
+
+정규화된 cosine 임베딩 + `quantile=0.99` + `rescore=true, oversampling=2.0` 조합에서, fp32-only 대비 recall@10 손실은 **1%p 내외**로 관측되는 것이 일반적입니다. Qdrant 공식도 대부분의 경우 무시 가능한 수준이라고 기술합니다.
+
+중요한 점은 **손실이 선형이 아니라는 것**입니다. 조건이 나빠지면(정규화 안 됨, `quantile` 잘못 설정, rescore off 등) 손실이 5에서 10%p로 뛸 수 있고, 조건만 맞으면 대부분 쿼리에서 top-10이 fp32와 완전 일치합니다. 즉 평균 recall은 좋아 보여도 꼬리(tail) 쿼리에서 품질이 무너질 수 있어, 단일 평균치보다 **recall 분포의 하위 1%/0.1%**를 같이 봐야 합니다.
+
+### 의사결정표
+
+| 상황 | SQ를 켜야 하나? |
+|---|---|
+| 100만 이상 벡터, RAM 압박 중 | 켠다. 메모리·속도 동시 이득 |
+| 100만 이상 벡터, RAM 여유, recall 99% 이상 요구 | 켜고 `oversampling` 2.0에서 4.0, 측정 후 판단 |
+| 10만 벡터 이하, RAM 여유 | 끈다. 이득 적고 rescore 오버헤드가 net loss |
+| Binary가 가능한 모델 + 극한 메모리 절약 필요 | Binary Quantization 우선, SQ는 차선 |
+| 메모리 한계 + 빌드 시간 감당 가능 | Product Quantization도 비교 후보 |
+
+SQ의 "정체성"을 한 문장으로 응축하면 이렇습니다. *4배 메모리 절약과 SIMD 기반 거리 가속을 학습 없이 얻되, recall은 정규화와 rescoring 조건이 맞을 때 거의 무손실로 유지된다. 조건이 어긋나면 recall이 빠르게 깎인다.*
+
+<RelatedPost slug="vector-database-primer" type="parallel" />
+
+## 마무리
+
+Scalar Quantization은 "정확도를 깎아 속도를 사는 기법"이 아니라 "메모리 제약을 풀면서 부수적으로 속도까지 얻는 기법"입니다. 3단 파이프라인의 어느 단계가 어느 축(메모리·QPS·recall)에 영향을 주는지 구분하면, 옵션 선택이 단순한 규칙이 됩니다. `always_ram=true`로 메모리 절약을 실현하고, `rescore=true, oversampling=2.0`으로 recall을 회복하고, 대규모 벡터에서만 켠다. 세 규칙만 지키면 SQ는 비용 구조와 검색 품질을 동시에 잡습니다.
+
+## 참고 자료
+
+- [Qdrant Docs — Scalar Quantization](https://qdrant.tech/documentation/guides/quantization/#scalar-quantization)
+- [Qdrant Blog — Scalar Quantization: Background, Practices & More](https://qdrant.tech/articles/scalar-quantization/)
+- [Qdrant Blog — What is Vector Quantization?](https://qdrant.tech/articles/what-is-vector-quantization/)
+- [Qdrant API Reference — ScalarQuantizationConfig](https://api.qdrant.tech/api-reference/collections/create-collection)
