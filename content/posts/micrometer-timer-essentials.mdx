@@ -1,0 +1,460 @@
+---
+title:
+  ko: "Micrometer Timer 입문"
+  en: "Micrometer Timer Essentials"
+slug: "micrometer-timer-essentials"
+date: 2026-04-24
+tags:
+  - backend
+  - observability
+  - micrometer
+  - spring-boot
+keywords:
+  - Micrometer
+  - Timer
+  - "@Timed"
+  - MeterRegistry
+  - ObservationRegistry
+summary:
+  ko: "Micrometer Timer가 기록하는 네 가지(count, totalTime, max, distribution)와 세 가지 측정 API(record, Timer.Sample, @Timed)를 이해하고, 비즈니스 코드를 덜 더럽히는 4단계 전략(자동 계측, @Timed, Observation, 직접 Aspect)을 구분할 수 있습니다. 측정은 caller thread에서 동기이지만 lock-free라 blocking이 아니라는 실행 모델과 Prometheus 연동까지 다룹니다."
+  en: "The four values a Micrometer Timer records (count, totalTime, max, distribution), the three timing APIs (record, Timer.Sample, @Timed), and a four-step ladder (auto-instrumentation, @Timed, Observation, Aspect) to keep business code clean. Plus the execution model and Prometheus wiring."
+category: language-backend
+draft: false
+---
+
+Spring 애플리케이션에서 "주문 API 응답 시간"이나 "쿠폰 검증 소요 시간" 같은 지표를 남기려면 Micrometer Timer가 기본 도구입니다. 이 글은 Timer가 무엇을 기록하고, hot path에서 어떻게 동작하며, 비즈니스 코드에 얼마나 적게 자국을 남기면서 계측을 붙일 수 있는지를 개념, 문법, 실행 순서로 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - Micrometer가 facade라는 위치와 Timer가 기록하는 네 가지(count·totalTime·max·distribution)를 이해한다
+  - `timer.record`, `Timer.Sample`, `@Timed` 세 가지 측정 API의 적합한 상황을 구분할 수 있다
+  - 비즈니스 코드를 덜 더럽히는 4단계 사다리(자동 계측, @Timed, Observation, 직접 Aspect)에서 자기 상황에 맞는 단계를 선택하는 기준을 얻는다
+</Note>
+
+## Timer란 무엇인가
+
+Micrometer는 **metrics facade**입니다. SLF4J가 로깅에서 하는 역할을 계측에서 합니다. 애플리케이션 코드는 `Counter`, `Timer`, `Gauge` 같은 Micrometer API로만 작성하고, 실제 backend(Prometheus, StatsD, Datadog, CloudWatch 등)는 구현체를 교체해 바꿉니다. Spring Boot 2.0부터는 `MeterRegistry`가 auto-configured 빈으로 제공되어 의존성만 추가하면 주입받기만 하면 됩니다.
+
+Timer는 이벤트의 횟수와 소요 시간을 같이 기록하는 meter입니다. 기록하는 값은 정확히 네 종류입니다.
+
+| 지표 | 의미 |
+|---|---|
+| `count` | 이벤트 발생 횟수 (monotonic counter) |
+| `totalTime` | 누적 실행 시간 합 |
+| `max` | 슬라이딩 윈도우(기본 2분) 내 최댓값 |
+| `distribution` (선택) | percentile·histogram. `publishPercentiles()` / `publishPercentileHistogram()` 활성화 시 |
+
+`count`와 `totalTime`만 있으면 평균(`sum / count`)은 바로 계산됩니다. percentile은 distribution을 켜야 얻습니다.
+
+### Timer는 blocking으로 동작하는가
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  `record(Runnable)`은 caller thread에서 동기로 실행되지만, 기록은 lock-free 메모리 연산이고 외부 전송은 별도 스케줄러가 담당합니다. 이 분리를 잡으면 왜 hot path에 Timer를 그냥 박아도 되는지 전부 연결됩니다.
+</Callout>
+
+질문을 두 층으로 나눠 보면 답이 분명해집니다.
+
+**1. caller thread 관점.** `timer.record(Runnable)`은 호출 스레드에서 Runnable을 동기로 실행합니다. 내부는 대략 이런 모양입니다.
+
+```java title="Timer.java (개념적 형태)"
+public void record(Runnable r) {
+    long start = clock.monotonicTime();
+    try {
+        r.run();
+    } finally {
+        record(clock.monotonicTime() - start, TimeUnit.NANOSECONDS);
+    }
+}
+```
+
+이 의미에서는 "blocking"이 맞습니다. 측정 대상 함수가 느리면 호출자도 그만큼 기다립니다. 측정이 없을 때와 같은 동작입니다.
+
+**2. 메트릭 기록 자체의 비용.** `count`와 `sum` 업데이트는 `LongAdder`로 구현되어 lock-free이고, `max`는 `TimeWindowMax`에서 CAS-loop 기반으로 갱신됩니다. hot path에 추가되는 비용은 `nanoTime` 두 번 호출과 `LongAdder#add` 정도로, 측정 자체로 수백 나노초 수준이지 ms 단위 정체가 되지 않습니다.
+
+**3. Backend 전송(publishing).** `PrometheusMeterRegistry`는 `/actuator/prometheus`가 스크랩될 때 현재 상태를 텍스트로 렌더링할 뿐이고, `StepMeterRegistry` 계열(StatsD, Datadog 등)은 기본 1분 주기의 스케줄 스레드가 push합니다. **네트워크 I/O는 호출 스레드가 지불하지 않습니다.**
+
+전체 그림은 세 레인으로 분리됩니다.
+
+```text title="실행 모델"
+  Business thread              MeterRegistry              Backend
+  ─────────────────            ─────────────              ───────
+  timer.record(() -> ...) ──▶  LongAdder.add(count)
+                               LongAdder.add(sum)
+                               TimeWindowMax.update()
+                               (lock-free, 수백 ns)
+                                      │
+                                      │ (별도 스케줄러 또는 scrape)
+                                      ▼
+                               PrometheusScrape   ◀── GET /actuator/prometheus
+                               StepPublisher      ──▶ StatsD / Datadog ...
+```
+
+한 줄 정리하면, **측정은 caller thread에서 동기로 수행되지만 in-memory + lock-free라 병목이 되지 않고, 외부 전송은 별도 스케줄러가 떠안는 구조**입니다. 그래서 비동기 큐 같은 복잡한 기구 없이도 hot path에 Timer를 박아도 안전한 것입니다.
+
+## Timer 만들기
+
+Timer를 생성하는 방법은 `MeterRegistry.timer(...)` 한 줄과 `Timer.builder(...)...register(registry)` 체인, 두 가지입니다. 상황에 맞춰 고릅니다.
+
+```java title="TimerCreation.java"
+// (a) 최소 형태, 같은 이름·태그면 idempotent하게 동일 Timer 재사용
+Timer simple = registry.timer("order.place", "result", "success");
+
+// (b) Builder, percentile / SLO / 설명까지 세밀 제어
+Timer tuned = Timer.builder("order.place")                  // [!code highlight]
+    .description("주문 생성 소요 시간")
+    .tags("result", "success")
+    .publishPercentiles(0.5, 0.95, 0.99)
+    .publishPercentileHistogram()
+    .register(registry);                                    // [!code highlight]
+```
+
+`registry.timer(...)`는 내부적으로 같은 `name + tags` 조합을 캐시합니다. 같은 키로 여러 번 호출해도 동일 Timer 인스턴스가 반환되므로, 안전하게 메서드마다 lookup해도 되고 필드로 저장해 재사용해도 됩니다.
+
+### 이름과 태그 규칙
+
+이름(name)은 **dot-delimited 계층형**으로 씁니다(`order.place`, `payment.gateway.latency`). 이 규칙은 Micrometer naming convention 공식 가이드입니다. backend별로 이 이름이 자동 변환됩니다. 예를 들어 `order.place`는 Prometheus에서 `order_place_seconds_count` / `order_place_seconds_sum` / `order_place_seconds_max`로, StatsD에서는 `order.place`로 노출됩니다.
+
+태그(tag)는 **디멘션**입니다. `result=success` vs `result=failure`처럼 같은 메트릭을 쪼개는 축입니다. 같은 name이라도 tag 조합이 다르면 Prometheus에서는 별도 time series가 됩니다. 태그 이름은 소문자 스네이크/케밥, 값은 **유한 집합**(result, method, status 등)에서 고르는 것이 규칙입니다. 카디널리티 얘기는 5번 절에서 다시 짚습니다.
+
+### Spring Boot에서의 `MeterRegistry` 주입
+
+Spring Boot는 `micrometer-core`가 classpath에 있으면 `MeterRegistry` 빈을 auto-configure합니다. `spring-boot-starter-actuator`와 `micrometer-registry-prometheus` 의존성을 넣으면 구현체가 `PrometheusMeterRegistry`로 결정됩니다. 비즈니스 코드에서는 타입이 `MeterRegistry`(인터페이스)로 주입받기만 하면 됩니다.
+
+```java title="OrderService.java"
+@Service
+class OrderService {
+    private final Timer placeTimer;
+
+    OrderService(MeterRegistry registry) {
+        this.placeTimer = registry.timer("order.place");     // [!code highlight]
+    }
+}
+```
+
+생성자 주입 시점에 Timer를 필드로 잡아두는 관례가 흔합니다. 매 호출마다 `registry.timer(...)`를 다시 해도 틀리진 않지만(캐시되니까), 필드 조회가 가장 쌉니다.
+
+## 시간 측정 API
+
+한 Timer에 시간을 기록하는 API는 세 가지입니다. 적합한 상황이 다르니 순서대로 봅니다.
+
+### 1. `record(Runnable)` / `recordCallable`
+
+가장 직관적인 형태입니다. Lambda로 대상을 감싸고 끝냅니다. 반환값이 없으면 `record`, 있으면 `recordCallable`.
+
+```java title="RecordUsage.java"
+placeTimer.record(() -> orderRepository.save(order));
+
+Order saved = placeTimer.recordCallable(() -> orderRepository.save(order));
+```
+
+내부 구현은 앞 절에서 봤듯 `start → try { run } finally { stop }` 패턴입니다. 예외가 던져져도 시간이 기록되는 것은 동일합니다. **시작과 끝이 같은 블록 안에 있을 때** 씁니다.
+
+### 2. `Timer.Sample#start / stop(Timer)`
+
+시작 시각만 먼저 잡아두고 어떤 Timer에 기록할지는 나중에 결정할 때 씁니다. 분기 태그를 결과에 따라 동적으로 붙일 수 있는 것이 핵심 차이입니다.
+
+```java title="SampleUsage.java"
+Timer.Sample sample = Timer.start(registry);                 // [!code highlight]
+try {
+    orderService.place(cmd);
+    sample.stop(registry.timer("order.place", "result", "success"));
+} catch (Exception e) {
+    sample.stop(registry.timer("order.place", "result", "failure"));
+    throw e;
+}
+```
+
+`Timer.start(registry)`는 Timer가 아니라 **registry의 clock**을 받는다는 점이 중요합니다. Timer 선택이 `stop` 시점으로 미뤄졌기 때문에, 성공/실패·응답코드·분류 같은 **run이 끝나야 알 수 있는 태그**를 붙일 수 있습니다. (1)로는 표현이 어려운 케이스가 이것입니다.
+
+### 3. `@Timed` 어노테이션
+
+메서드 단위로 감싸고 싶을 때 씁니다. `TimedAspect` 빈 하나가 등록되어 있으면 자동으로 측정됩니다.
+
+```java title="TimedUsage.java"
+@Configuration
+class MetricsConfig {
+    @Bean
+    TimedAspect timedAspect(MeterRegistry registry) {
+        return new TimedAspect(registry);
+    }
+}
+
+@Service
+class OrderService {
+    @Timed(value = "order.place", percentiles = {0.95, 0.99})  // [!code highlight]
+    public Order place(PlaceCommand cmd) { ... }
+}
+```
+
+`TimedAspect`는 `spring-boot-starter-aop` 기반으로 동작하는 Spring AOP 프록시입니다. 주의점 두 가지.
+
+- **self-invocation(같은 클래스 내부 호출)은 측정되지 않습니다.** 프록시를 거치지 않기 때문입니다. public 메서드에서만 걸고, 같은 클래스 안에서 `this.place(...)`로 부르면 적용이 빠집니다.
+- **기본은 동기 메서드**입니다. 리턴 타입이 `CompletableFuture`, `Publisher`(Reactor/RxJava) 등 비동기면 기본 동작은 "메서드 리턴까지의 시간"만 재서 실제 완료 시간과 어긋납니다. Async/Reactive는 전용 지원이 필요한 영역이며, 이 글에서는 "동기 메서드에 쓴다" 선까지만 잡아둡니다.
+
+### 세 API 선택 기준
+
+| API | 언제 쓰는가 |
+|---|---|
+| `record(Runnable)` / `recordCallable` | 시작과 끝이 같은 블록, 태그가 **측정 전에** 확정되는 경우 |
+| `Timer.Sample#start/stop` | 태그가 **측정 후**에야 알 수 있는 경우(결과 분기), 시작·끝 지점이 다른 메서드에 있는 경우 |
+| `@Timed` | 메서드 경계 전체가 측정 단위일 때. 비즈니스 코드에 계측 의존성을 남기지 않고 어노테이션만 남기고 싶을 때 |
+
+(3)은 다음 절의 "비즈니스 코드를 덜 더럽히는 전략" 사다리의 두 번째 단과 이어집니다.
+
+## 계측과 비즈니스 분리
+
+<Callout type="error" title="핵심 통찰: 가장 덜 더럽히는 계측은 코드를 쓰지 않는 것">
+  Spring Boot가 이미 제공하는 자동 계측부터 확인하고, 남는 부분만 `@Timed`나 Observation으로 감싸세요. 비즈니스 클래스 안에 `MeterRegistry` 필드와 try/finally를 직접 박는 것은 거의 언제나 마지막 선택지입니다.
+</Callout>
+
+이 절은 **사다리**입니다. 위에서부터 시도하고, 커버가 안 되는 부분만 아래 단계로 내려갑니다. 기준은 "얼마나 깎아낼 수 있나"입니다.
+
+```text title="계측 분리 사다리"
+          덜 더럽힘
+              ▲
+  (a) 자동 계측                ← 코드 0줄, 먼저 확인
+  (b) @Timed + TimedAspect     ← 어노테이션 한 줄
+  (c) @Observed / ObservationRegistry  ← Timer + Trace 한 번에
+  (d) 직접 Aspect              ← 횡단 관심사, 최후의 수단
+              ▼
+         더 더럽힘
+```
+
+### (a) Spring Boot 자동 계측 — 코드 0줄
+
+가장 깨끗한 계측은 **내가 쓰지 않은 계측**입니다. `spring-boot-starter-actuator`와 `micrometer-core`만 있으면 다음은 애플리케이션 코드 한 줄 없이 기록됩니다.
+
+| Meter 이름 | 무엇을 재는가 |
+|---|---|
+| `http.server.requests` | 모든 HTTP 요청 (uri, method, status, exception 태그 자동) |
+| `spring.data.repository.invocations` | Spring Data Repository 메서드 호출 |
+| `jdbc.connections.*`, `hikaricp.connections.*` | 커넥션 풀 활동 |
+| `jvm.memory.*`, `jvm.gc.*`, `jvm.threads.*` | JVM 내부 |
+| `system.cpu.usage`, `process.cpu.usage` | OS 수준 |
+| `logback.events` | 로그 레벨별 카운트 |
+
+**직접 Timer를 만들기 전에 자동 계측에 이미 있는지부터 확인**하는 습관이 중요합니다. 많은 "주문 API 응답 시간" 같은 요구는 `http.server.requests{uri="/orders", method="POST"}`로 이미 풀립니다. 새 Timer를 정의하는 건 자동 계측으로 안 잡히는 **비즈니스 이벤트**만입니다. 예로 "주문 취소까지 걸린 시간", "쿠폰 검증 소요 시간"이 여기에 해당합니다.
+
+### (b) `@Timed` + `TimedAspect`
+
+자동 계측으로 안 잡히는 메서드는 `@Timed` 한 줄만 비즈니스 클래스에 남깁니다. Aspect는 설정에서 한 번만 등록합니다.
+
+```java title="CouponService.java"
+@Service
+class CouponService {
+    @Timed(value = "coupon.validate", percentiles = {0.95, 0.99})
+    public CouponResult validate(CouponCode code, OrderId orderId) { ... }
+}
+```
+
+비즈니스 코드에 남는 건 `@Timed(...)` 한 줄뿐입니다. `MeterRegistry`, `Timer` 필드, try/finally 모두 사라집니다. 계측을 끄고 싶으면 어노테이션을 지우거나 `TimedAspect` 빈을 빼면 됩니다. 앞 절에서 짚은 주의(self-invocation, async)가 그대로 적용됩니다.
+
+### (c) Spring 6 `ObservationRegistry` / `@Observed`
+
+Micrometer 1.10+ / Spring Framework 6 / Spring Boot 3부터는 `Observation`이라는 상위 추상이 있습니다. 하나의 Observation 경계에서 **Timer와 Tracing span과 structured log**가 같이 생성됩니다.
+
+```java title="CouponService.java"
+@Service
+class CouponService {
+    @Observed(name = "coupon.validate", contextualName = "validate-coupon")  // [!code highlight]
+    public CouponResult validate(CouponCode code, OrderId orderId) { ... }
+}
+```
+
+이 한 줄이면 `coupon.validate` Timer가 기록되고, Tempo/Zipkin으로 trace가 같은 이름의 span으로 남고, structured log의 MDC에 trace id가 자동 전파됩니다. 프로그래매틱으로 쓸 때는 `observationRegistry.observe("coupon.validate", () -> ...)` 형태입니다. `@Observed`는 `ObservedAspect` 빈이 등록되어 있어야 동작한다는 점은 `@Timed`와 동일한 패턴입니다.
+
+**언제 `@Observed`를 쓰는가.** Timer만 필요하면 `@Timed`로 충분합니다. Timer와 Tracing을 **같은 경계에서** 묶고 싶거나 프로젝트 전체가 이미 OpenTelemetry로 통일되어 있다면 `@Observed`가 자연스럽습니다. 이 계층은 spring-grpc 스타터가 말하는 "Observability 통합"과 동일한 추상입니다. spring-grpc 스타터는 gRPC 서버/클라이언트 양쪽에 Observation을 자동으로 끼워 Timer와 span이 같이 나오게 합니다.
+
+<RelatedPost slug="spring-grpc-starter" type="deep-dive" label="spring-grpc의 Observability 통합 계층" />
+
+### (d) 직접 Aspect — 최후의 수단
+
+어노테이션으로 감당이 안 되는 커스텀 포인트컷이 필요할 때만 내려갑니다. 예: "service 패키지의 모든 public 메서드" 혹은 "특정 Repository 인터페이스의 모든 메서드". 이때도 계측 로직은 Aspect 하나에 가두고 비즈니스 코드에는 어노테이션조차 남기지 않습니다.
+
+```java title="RepositoryTimingAspect.java"
+@Aspect
+@Component
+class RepositoryTimingAspect {
+    private final MeterRegistry registry;
+
+    RepositoryTimingAspect(MeterRegistry registry) { this.registry = registry; }
+
+    @Around("execution(* com.example.order.repository..*.*(..))")            // [!code highlight]
+    public Object time(ProceedingJoinPoint pjp) throws Throwable {
+        Timer.Sample sample = Timer.start(registry);
+        try {
+            return pjp.proceed();
+        } finally {
+            String method = pjp.getSignature().toShortString();
+            sample.stop(registry.timer("repo.call", "method", method));
+        }
+    }
+}
+```
+
+(d)가 필요한 상황은 대체로 (a)에서 (c)로는 표현이 안 되는 횡단 관심사, 즉 전역 규칙으로 어노테이션 없이 일괄 계측하고 싶을 때뿐입니다. 직접 Aspect를 쓰면 **카디널리티가 Aspect 하나에서 터질 수 있으니** method 시그니처 같은 값을 tag에 넣을 때 특히 조심해야 합니다. 이어서 다룹니다.
+
+## 태그와 분포
+
+Timer 하나에서 기본으로 나오는 값은 count·sum·max입니다. 여기에 두 가지를 더 붙여 쓸모를 키웁니다. **태그**로 축을 쪼개고, **분포 설정**으로 percentile을 얻습니다.
+
+### 태그는 같은 Timer를 축으로 쪼개는 장치
+
+같은 이름의 Timer라도 태그 조합이 다르면 backend에서는 **별도 time series**로 취급됩니다. `order.place{result=success}`와 `order.place{result=failure}`는 따로 집계됩니다.
+
+```java title="TaggedTimer.java"
+Timer.builder("order.place")
+    .tag("result", "success")
+    .tag("channel", "web")
+    .register(registry);
+```
+
+태그 값은 **유한 집합**에서만 고릅니다. `result ∈ {success, failure}`, `method ∈ {GET, POST, ...}`, `status ∈ {2xx, 4xx, 5xx}`처럼 도메인 값이 사전에 확정되어야 합니다. 카디널리티가 무한으로 벌어지는 값(`userId`, `orderId`, `traceId`, free-form query string 등)을 태그에 넣으면 사용자/주문 수만큼 time series가 생겨 Prometheus 메모리와 scrape 비용이 선형으로 증가합니다. "태그는 디멘션, 식별자는 태그가 아니다"를 원칙으로 기억해두면 됩니다.
+
+### 공통 태그는 `commonTags`로 한 번에
+
+전역에 공통으로 붙는 태그(애플리케이션 이름, 환경, 리전)는 common tag로 한 번만 설정합니다.
+
+```java title="CommonTagsConfig.java"
+@Bean
+MeterRegistryCustomizer<MeterRegistry> commonTags() {
+    return registry -> registry.config().commonTags(
+        "application", "order-service",
+        "env", "prod"
+    );
+}
+```
+
+Spring Boot에서는 `management.metrics.tags.*` 프로퍼티로도 같은 효과를 냅니다. 메서드마다 똑같은 태그를 수동으로 붙이는 건 더러움의 전조입니다.
+
+### percentile 두 가지 모드
+
+Timer가 기본으로 주는 값은 count·sum·max라 "p95 응답시간" 같은 분포는 별도 활성화가 필요합니다. Micrometer는 두 가지 모드를 제공합니다.
+
+```java title="PercentileModes.java"
+Timer.builder("order.place")
+    .publishPercentiles(0.5, 0.95, 0.99)   // (1) client-side
+    .publishPercentileHistogram()          // (2) server-side
+    .register(registry);
+```
+
+**(1) `publishPercentiles(...)`, 클라이언트 측 계산 gauge export.** 애플리케이션 내부에서 HDR histogram으로 미리 계산한 p50/p95/p99 값을 gauge로 내보냅니다. 장점은 별도 집계 없이 바로 값이 보인다는 것입니다. 단점은 **여러 인스턴스를 합칠 수 없다**는 점입니다. 각 인스턴스의 p95 평균은 전체 p95와 다릅니다. 단일 인스턴스 디버깅 용도.
+
+**(2) `publishPercentileHistogram()`, Prometheus histogram 버킷 export.** `{name}_seconds_bucket{le="..."}` 형태의 누적 버킷을 노출합니다. 집계는 Prometheus 서버에서 `histogram_quantile(0.95, sum by (le) (rate(...)))`로 계산합니다. 여러 인스턴스 합산이 옳고, 시간축 집계도 가능합니다. 대신 버킷 개수만큼 time series 수가 늘어납니다.
+
+운영 환경은 **2번**이 기본입니다. 1번은 2번을 못 쓰는 환경이나 빠른 로컬 확인용으로 봅니다.
+
+### SLO 버킷 추가
+
+`serviceLevelObjectives(...)`를 쓰면 임계치 기반 버킷이 자동으로 추가됩니다.
+
+```java title="SloBuckets.java"
+Timer.builder("order.place")
+    .publishPercentileHistogram()
+    .serviceLevelObjectives(                                 // [!code highlight]
+        Duration.ofMillis(100),
+        Duration.ofMillis(300),
+        Duration.ofSeconds(1)
+    )
+    .register(registry);
+```
+
+이 세 값은 histogram의 `le=0.1`, `le=0.3`, `le=1.0` 버킷으로 export됩니다. "100ms 이내 요청 비율"을 알아야 하는 SLO 대시보드는 `rate(order_place_seconds_bucket{le="0.1"}[5m]) / rate(order_place_seconds_count[5m])` 형태로 바로 계산 가능해집니다.
+
+## 결과 확인
+
+지금까지 만든 Timer가 실제로 어디서 어떻게 보이는지 확인합니다. Spring Boot Actuator가 두 개의 엔드포인트로 같은 Timer를 다르게 렌더링합니다.
+
+### `/actuator/metrics/{name}` — JSON
+
+특정 Timer 하나의 현재 스냅샷을 JSON으로 봅니다. Prometheus/Grafana를 띄우기 전에 "Timer가 실제로 증가하고 있는지" 확인할 때 유용합니다.
+
+```bash title="metrics-endpoint.sh"
+curl http://localhost:8080/actuator/metrics/order.place
+```
+
+```json title="response.json"
+{
+  "name": "order.place",
+  "description": "주문 생성 소요 시간",
+  "baseUnit": "seconds",
+  "measurements": [
+    { "statistic": "COUNT", "value": 142 },
+    { "statistic": "TOTAL_TIME", "value": 18.34 },
+    { "statistic": "MAX", "value": 0.312 }
+  ],
+  "availableTags": [
+    { "tag": "result", "values": ["success", "failure"] },
+    { "tag": "channel", "values": ["web", "mobile"] }
+  ]
+}
+```
+
+`availableTags`를 쿼리 파라미터로 붙이면 특정 디멘션만 조회됩니다.
+
+```bash title="metrics-filter.sh"
+curl "http://localhost:8080/actuator/metrics/order.place?tag=result:success"
+```
+
+단일 인스턴스의 현재 값만 보여주므로 **시계열은 없습니다**. "방금 Timer가 꽂혔는지" 확인 용도입니다.
+
+### `/actuator/prometheus` — text format
+
+Prometheus 서버가 주기적으로 긁어가는 text exposition format입니다. 같은 Timer가 이번엔 **여러 time series**로 풀립니다.
+
+```text title="prometheus-exposition.txt"
+# HELP order_place_seconds 주문 생성 소요 시간
+# TYPE order_place_seconds summary
+order_place_seconds_count{result="success",channel="web"} 142.0
+order_place_seconds_sum{result="success",channel="web"} 18.34
+order_place_seconds_max{result="success",channel="web"} 0.312
+```
+
+`publishPercentileHistogram()`을 켰다면 아래가 같이 나옵니다.
+
+```text title="prometheus-histogram.txt"
+# TYPE order_place_seconds histogram
+order_place_seconds_bucket{result="success",le="0.1"} 98.0
+order_place_seconds_bucket{result="success",le="0.3"} 135.0
+order_place_seconds_bucket{result="success",le="1.0"} 142.0
+order_place_seconds_bucket{result="success",le="+Inf"} 142.0
+```
+
+### 왜 이름이 바뀌는가
+
+등록할 때 쓴 이름은 `order.place`였는데 export된 이름은 `order_place_seconds_*`입니다. 두 가지 규칙이 적용됐습니다.
+
+1. **Prometheus naming convention**: dot은 underscore로 치환됩니다. `order.place`가 `order_place`가 됩니다.
+2. **Base unit suffix**: Timer의 base unit이 seconds라 `_seconds`가 붙고, meter 종류에 따라 `_count` / `_sum` / `_max` / `_bucket` 접미사가 추가됩니다.
+
+이 변환은 `PrometheusMeterRegistry`가 처리합니다. 애플리케이션 코드는 Micrometer 컨벤션대로 `order.place`만 쓰면 되고, backend가 자기 컨벤션으로 번역합니다.
+
+### Prometheus에서 실제 쿼리 예
+
+```text title="promql.txt"
+# 성공 요청의 분당 처리량
+rate(order_place_seconds_count{result="success"}[1m])
+
+# p95 응답시간 (publishPercentileHistogram 활성화 시)
+histogram_quantile(0.95, sum by (le) (rate(order_place_seconds_bucket[5m])))
+
+# 100ms 이내 비율 (SLO 버킷 활용)
+rate(order_place_seconds_bucket{le="0.1"}[5m])
+  / rate(order_place_seconds_count[5m])
+```
+
+쿼리는 Prometheus 함수이지 Micrometer의 영역이 아닙니다. Micrometer가 하는 일은 여기까지입니다. **hot path에서 값을 정확히 기록하고, backend에 맞는 형태로 노출**하는 두 가지입니다.
+
+## 마무리
+
+Micrometer Timer는 "시간을 재는 도구"지만, 입문 단계에서 실제로 중요한 것은 도구의 세부 문법이 아니라 두 가지 감각입니다. 하나는 **caller thread의 측정은 동기지만 lock-free이고, 전송은 별도 레인**이라는 실행 모델입니다. 이걸 잡으면 hot path에 Timer를 박는 걸 주저할 이유가 사라집니다. 다른 하나는 **비즈니스 코드에 계측 자국을 얼마나 깎아낼 수 있는가**입니다. Spring Boot 자동 계측이 이미 커버하는 것부터 확인하고, 남는 부분만 `@Timed`나 `@Observed`로 덮고, 횡단 규칙이 필요할 때만 직접 Aspect로 내려가는 사다리를 기억해두면 어느 계층에서 계측을 더할지 판단이 쉬워집니다.
+
+여기서 다루지 않은 심화 주제(Reactive/Async에서의 Timer, 카디널리티 폭증 대응, Observation API의 handler·context 설계, Timer를 Grafana 대시보드로 연결하는 실제 예)는 후속 글에서 이어서 정리합니다.
+
+<RelatedPost slug="k6-essentials" type="parallel" label="k6로 만든 부하와 Timer로 관찰한 결과 비교" />
+
+## 참고 자료
+
+- [Micrometer 공식 문서 — Timer](https://docs.micrometer.io/micrometer/reference/concepts/timers.html)
+- [Spring Boot Reference — Metrics](https://docs.spring.io/spring-boot/reference/actuator/metrics.html)
+- [Micrometer Observation API](https://docs.micrometer.io/micrometer/reference/observation.html)
+- [Prometheus — Histograms and Summaries](https://prometheus.io/docs/practices/histograms/)
