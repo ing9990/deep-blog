@@ -49,6 +49,7 @@ import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
 import { RagPipeline } from '@/components/visualizations/RagPipeline'
+import { DenseVsSparseStorage } from '@/components/visualizations/DenseVsSparseStorage'
 import { EmbeddingSpace } from '@/components/visualizations/EmbeddingSpace'
 import { RedundancyFailurePatterns } from '@/components/visualizations/RedundancyFailurePatterns'
 import { RemoteCallOutcomes } from '@/components/visualizations/RemoteCallOutcomes'
@@ -164,6 +165,7 @@ export const mdxComponents: MDXComponents = {
   QuickSort,
   QuickSortPivot,
   RagPipeline,
+  DenseVsSparseStorage,
   EmbeddingSpace,
   RedundancyFailurePatterns,
   RelatedPost,
