@@ -38,6 +38,7 @@ import { KafkaConsumerGroupScopes } from '@/components/visualizations/KafkaConsu
 import { KafkaLeaderFailover } from '@/components/visualizations/KafkaLeaderFailover'
 import { KafkaPartitionStructure } from '@/components/visualizations/KafkaPartitionStructure'
 import { KafkaReplicationFlow } from '@/components/visualizations/KafkaReplicationFlow'
+import { KnnClassifier } from '@/components/visualizations/KnnClassifier'
 import { KYCVerificationFlow } from '@/components/visualizations/KYCVerificationFlow'
 import { AMLTermsHierarchy } from '@/components/visualizations/AMLTermsHierarchy'
 import { BackpressureStrategyMatrix } from '@/components/visualizations/BackpressureStrategyMatrix'
@@ -153,6 +154,7 @@ export const mdxComponents: MDXComponents = {
   KafkaLeaderFailover,
   KafkaPartitionStructure,
   KafkaReplicationFlow,
+  KnnClassifier,
   KYCVerificationFlow,
   AMLTermsHierarchy,
   BackpressureStrategyMatrix,
