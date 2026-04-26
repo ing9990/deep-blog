@@ -1,28 +1,30 @@
-"""Seed via the public API so MySQL and Qdrant stay consistent.
+"""Seed via the public API.
 
 Flow:
     1) Naver Shopping API 로 N건 수집(dedup).
-    2) (옵션) MySQL truncate + Qdrant collection 재생성.
+    2) (옵션) MySQL truncate. --with-qdrant 명시 시 Qdrant collection 재생성도 같이.
     3) POST /auth/signup/seller 로 40명 판매자 생성(기존 계정은 409 skip).
     4) POST /auth/login/seller 로 40명의 JSESSIONID 확보.
     5) ThreadPoolExecutor 로 POST /api/seller/products 를 병렬 호출.
-       Backend 가 AFTER_COMMIT + @Async 로 EmbedPort.indexProduct 를 돌려
-       Qdrant 까지 자동으로 반영된다.
-    6) Qdrant points_count 가 목표에 도달할 때까지 polling -> MySQL ↔ Qdrant 일치 보장.
+    6) (옵션, --with-qdrant) Qdrant points_count polling 으로 MySQL ↔ Qdrant 일치 확인.
 
 Usage:
     mini-coupang/ml/.venv/bin/python mini-coupang/shared/data/generate_seed.py \
         [--sellers 40] [--products 12000] [--concurrency 8] \
         [--base-url http://localhost:8080] \
-        [--qdrant-url http://localhost:6333] \
+        [--with-qdrant --qdrant-url http://localhost:6333] \
         [--no-reset]
 
 Prereqs:
-    - mini-coupang-{mysql,qdrant,ml} 컨테이너 UP
+    - mini-coupang-mysql 컨테이너 UP
     - backend (:8080) UP  (IntelliJ 실행 또는 bootRun)
     - .env 에 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
+    - --with-qdrant 사용 시: Qdrant + ml 서비스가 별 환경에서 운영 중이어야 함.
 
 한국어 메모:
+    - Qdrant/ml 은 더 이상 default 흐름이 아님. 검색 책임은 stage 1 회귀(MySQL LIKE)
+      로 정리되었고, 등록 시 인덱싱(ProductRegisteredListener)도 @Component 비활성.
+      옛 hybrid 흐름이 필요하면 --with-qdrant 명시.
     - 기존 SQL 직접 적재(seed_data.sql.gz) 경로는 JPA 이벤트를 우회해 Qdrant 가
       비는 문제가 있었다. 동일 경로로 들어가는 공개 API 를 써서 정합성을 구조적으로
       보장하는 방향으로 전환.
@@ -30,7 +32,6 @@ Prereqs:
       Python 이 더 많이 찔러도 @Async 큐가 포화되면 CallerRunsPolicy 로 넘어가
       HTTP 응답이 지연될 뿐. 기본 8 로 유지.
     - signup 은 멱등하다(409 skip). 스크립트를 여러 번 돌려도 안전.
-    - 마지막 sync 대기가 성공 조건의 핵심. polling 이 target 도달하면 exit 0.
 """
 from __future__ import annotations
 
@@ -320,7 +321,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--base-url", type=str, default="http://localhost:8080")
     p.add_argument("--qdrant-url", type=str, default="http://localhost:6333")
     p.add_argument("--no-reset", action="store_true",
-                   help="skip MySQL truncate + Qdrant recreate")
+                   help="skip MySQL truncate (and Qdrant recreate when --with-qdrant)")
+    p.add_argument("--with-qdrant", action="store_true",
+                   help="옛 hybrid 흐름 활성: Qdrant 컬렉션 재생성 + 등록 후 points_count polling. "
+                        "기본은 skip (검색 책임이 MySQL LIKE 로 회귀했고 인덱싱 listener 가 비활성).")
     return p.parse_args()
 
 
@@ -346,7 +350,8 @@ def main() -> int:
 
     if not args.no_reset:
         reset_mysql()
-        reset_qdrant(args.qdrant_url)
+        if args.with_qdrant:
+            reset_qdrant(args.qdrant_url)
 
     print("[signup] 40 sellers", file=sys.stderr)
     for i, mall in enumerate(sellers, start=1):
@@ -391,14 +396,18 @@ def main() -> int:
         file=sys.stderr,
     )
 
-    final_count = wait_qdrant_sync(args.qdrant_url, success)
-    if final_count < success:
-        print(
-            f"[warn] Qdrant sync short: {final_count}/{success}",
-            file=sys.stderr,
-        )
-        return 2
-    print(f"[done] MySQL={success} Qdrant={final_count}", file=sys.stderr)
+    if args.with_qdrant:
+        final_count = wait_qdrant_sync(args.qdrant_url, success)
+        if final_count < success:
+            print(
+                f"[warn] Qdrant sync short: {final_count}/{success}",
+                file=sys.stderr,
+            )
+            return 2
+        print(f"[done] MySQL={success} Qdrant={final_count}", file=sys.stderr)
+    else:
+        print(f"[done] MySQL={success} (Qdrant skipped, use --with-qdrant for legacy flow)",
+              file=sys.stderr)
     return 0
 
 
