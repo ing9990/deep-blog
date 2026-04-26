@@ -10,6 +10,7 @@ import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.seller.domain.Seller;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
+import com.deepblog.minicoupang.domain.stock.domain.OptionStock;
 import com.deepblog.minicoupang.domain.stock.repository.OptionStockRepository;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,6 +85,35 @@ class SellerProductFlowIntegrationTest {
             .andExpect(jsonPath("$.status").value("ACTIVE"))
             .andExpect(jsonPath("$.optionCount").value(1))
             .andExpect(jsonPath("$.imageCount").value(1));
+    }
+
+    @Test
+    void register_optionWithInitialStock_persistsStockWithGivenQuantity() throws Exception {
+        Long accountId = createSellerAccount("seller-stock@example.com");
+        MockHttpSession session = sessionFor(accountId);
+
+        String body = """
+            {
+              "categoryId": 1,
+              "name": "재고 100 텀블러",
+              "description": "설명",
+              "basePrice": 15000,
+              "options": [
+                {"optionName": "기본", "sku": "STOCK-TEST-1", "additionalPrice": 0, "initialStock": 100}
+              ]
+            }
+            """;
+
+        mockMvc.perform(post("/api/seller/products")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isCreated());
+
+        Assertions.assertThat(optionStockRepository.findAll())
+            .singleElement()
+            .extracting(OptionStock::getQuantity)
+            .isEqualTo(100L);
     }
 
     @Test

@@ -54,11 +54,14 @@ public record RegisterProductRequest(
 
         @NotNull(message = "추가 가격은 필수입니다.")
         @PositiveOrZero(message = "추가 가격은 0 이상이어야 합니다.")
-        Long additionalPrice
+        Long additionalPrice,
+
+        @PositiveOrZero(message = "초기 재고는 0 이상이어야 합니다.")
+        Long initialStock
     ) {
 
         public OptionCommand toCommand() {
-            return new OptionCommand(optionName, sku, additionalPrice);
+            return new OptionCommand(optionName, sku, additionalPrice, initialStock);
         }
     }
 
