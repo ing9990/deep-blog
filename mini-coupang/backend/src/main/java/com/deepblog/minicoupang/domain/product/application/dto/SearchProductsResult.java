@@ -16,6 +16,7 @@ public record SearchProductsResult(List<Item> items) {
         String name,
         String description,
         Long basePrice,
-        String status
+        String status,
+        double score
     ) {}
 }

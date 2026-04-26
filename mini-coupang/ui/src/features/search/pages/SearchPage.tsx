@@ -41,6 +41,7 @@ export function SearchPage() {
               name={p.name}
               description={p.description}
               basePrice={p.basePrice}
+              score={p.score}
             />
           ))}
         </div>

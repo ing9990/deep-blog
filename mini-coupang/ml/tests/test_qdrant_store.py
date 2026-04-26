@@ -1,17 +1,20 @@
-"""Tests for QdrantStore.
+"""Tests for QdrantStore (hybrid: named vectors).
 
-Requires a running Qdrant at localhost:6334 (see docker-compose.yml).
-Each test uses a unique collection name so parallel test runs don't conflict.
+Requires a running Qdrant at localhost:6334.
+랜덤 dense + 랜덤 sparse 로 hybrid 경로를 검증한다. 실제 임베딩 모델은
+끌어오지 않는다.
 """
 from __future__ import annotations
 
 import random
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 
 import numpy as np
 import pytest
+import pytest_asyncio
 
 from embed_service.qdrant_store import (
+    HybridVector,
     ProductPayload,
     QdrantStore,
     SearchFilter,
@@ -19,24 +22,35 @@ from embed_service.qdrant_store import (
 
 TEST_DIM = 384
 
+pytestmark = pytest.mark.asyncio
 
-@pytest.fixture
-def store() -> Iterator[QdrantStore]:
+
+@pytest_asyncio.fixture
+async def store() -> AsyncIterator[QdrantStore]:
     suffix = random.randint(10_000, 99_999)
     collection = f"test_products_{suffix}"
     s = QdrantStore(collection_name=collection, vector_dim=TEST_DIM)
-    s.ensure_collection()
+    await s.ensure_collection()
     try:
         yield s
     finally:
-        s._client.delete_collection(collection_name=collection)
+        await s._client.delete_collection(collection_name=collection)
+        await s.close()
 
 
-def _random_vector(seed: int) -> list[float]:
+def _hybrid(seed: int, sparse_size: int = 8) -> HybridVector:
+    """deterministic dense (정규화) + sparse (랜덤 token id 집합)."""
     rng = np.random.default_rng(seed)
-    v = rng.normal(size=TEST_DIM)
-    v /= np.linalg.norm(v)
-    return v.tolist()
+    d = rng.normal(size=TEST_DIM)
+    d /= np.linalg.norm(d)
+    # sparse: 랜덤 token id 와 양수 weight
+    indices = rng.choice(50_000, size=sparse_size, replace=False).tolist()
+    values = rng.uniform(0.1, 1.0, size=sparse_size).tolist()
+    return HybridVector(
+        dense=d.tolist(),
+        sparse_indices=[int(x) for x in indices],
+        sparse_values=[float(v) for v in values],
+    )
 
 
 def _payload(
@@ -53,38 +67,41 @@ def _payload(
     )
 
 
-def test_ensure_collection_is_idempotent(store: QdrantStore) -> None:
-    store.ensure_collection()  # second call should be a no-op
-    store.upsert(1, _random_vector(1), _payload())
+async def test_ensure_collection_is_idempotent(store: QdrantStore) -> None:
+    await store.ensure_collection()  # second call → no-op
+    await store.upsert(1, _hybrid(1), _payload())
 
 
-def test_upsert_and_retrieve_vector(store: QdrantStore) -> None:
-    vector = _random_vector(42)
-    store.upsert(1, vector, _payload())
+async def test_upsert_and_retrieve_hybrid(store: QdrantStore) -> None:
+    v = _hybrid(42)
+    await store.upsert(1, v, _payload())
 
-    retrieved = store.get_vector(1)
+    retrieved = await store.get_vectors(1)
     assert retrieved is not None
-    assert len(retrieved) == TEST_DIM
-    assert retrieved == pytest.approx(vector, abs=1e-4)
+    assert len(retrieved.dense) == TEST_DIM
+    assert retrieved.dense == pytest.approx(v.dense, abs=1e-4)
+    # sparse 는 indices 순서가 바뀔 수 있으므로 set 비교
+    assert set(retrieved.sparse_indices) == set(v.sparse_indices)
 
 
-def test_search_returns_nearest_neighbors(store: QdrantStore) -> None:
-    store.upsert(1, _random_vector(1), _payload())
-    store.upsert(2, _random_vector(2), _payload())
-    store.upsert(3, _random_vector(3), _payload())
+async def test_hybrid_search_returns_self_first(store: QdrantStore) -> None:
+    v1 = _hybrid(1)
+    await store.upsert(1, v1, _payload())
+    await store.upsert(2, _hybrid(2), _payload())
+    await store.upsert(3, _hybrid(3), _payload())
 
-    hits = store.search(vector=_random_vector(1), limit=3)
+    hits = await store.hybrid_search(vector=v1, limit=3)
     ids = [h.product_id for h in hits]
-    # point 1 is identical to the query; it should come first.
+    # 자기와 동일한 dense+sparse 로 질의했으므로 1번이 1순위.
     assert ids[0] == 1
 
 
-def test_filter_by_category(store: QdrantStore) -> None:
-    store.upsert(1, _random_vector(1), _payload(category_id=10))
-    store.upsert(2, _random_vector(2), _payload(category_id=20))
+async def test_hybrid_search_filter_by_category(store: QdrantStore) -> None:
+    await store.upsert(1, _hybrid(1), _payload(category_id=10))
+    await store.upsert(2, _hybrid(2), _payload(category_id=20))
 
-    hits = store.search(
-        vector=_random_vector(1),
+    hits = await store.hybrid_search(
+        vector=_hybrid(1),
         limit=5,
         filter_=SearchFilter(category_id=10),
     )
@@ -93,13 +110,13 @@ def test_filter_by_category(store: QdrantStore) -> None:
     assert 2 not in ids
 
 
-def test_filter_by_price_range(store: QdrantStore) -> None:
-    store.upsert(1, _random_vector(1), _payload(base_price=1000))
-    store.upsert(2, _random_vector(2), _payload(base_price=5000))
-    store.upsert(3, _random_vector(3), _payload(base_price=9000))
+async def test_hybrid_search_filter_by_price_range(store: QdrantStore) -> None:
+    await store.upsert(1, _hybrid(1), _payload(base_price=1000))
+    await store.upsert(2, _hybrid(2), _payload(base_price=5000))
+    await store.upsert(3, _hybrid(3), _payload(base_price=9000))
 
-    hits = store.search(
-        vector=_random_vector(1),
+    hits = await store.hybrid_search(
+        vector=_hybrid(1),
         limit=5,
         filter_=SearchFilter(min_price=2000, max_price=6000),
     )
@@ -107,12 +124,12 @@ def test_filter_by_price_range(store: QdrantStore) -> None:
     assert ids == [2]
 
 
-def test_filter_excludes_ids(store: QdrantStore) -> None:
-    store.upsert(1, _random_vector(1), _payload())
-    store.upsert(2, _random_vector(2), _payload())
+async def test_hybrid_search_excludes_ids(store: QdrantStore) -> None:
+    await store.upsert(1, _hybrid(1), _payload())
+    await store.upsert(2, _hybrid(2), _payload())
 
-    hits = store.search(
-        vector=_random_vector(1),
+    hits = await store.hybrid_search(
+        vector=_hybrid(1),
         limit=5,
         exclude_ids=[1],
     )
@@ -121,21 +138,12 @@ def test_filter_excludes_ids(store: QdrantStore) -> None:
     assert 2 in ids
 
 
-def test_no_filter_returns_all_statuses(store: QdrantStore) -> None:
-    store.upsert(1, _random_vector(1), _payload(status="ACTIVE"))
-    store.upsert(2, _random_vector(2), _payload(status="INACTIVE"))
+async def test_explicit_status_filter(store: QdrantStore) -> None:
+    await store.upsert(1, _hybrid(1), _payload(status="ACTIVE"))
+    await store.upsert(2, _hybrid(2), _payload(status="INACTIVE"))
 
-    hits = store.search(vector=_random_vector(1), limit=5)
-    ids = [h.product_id for h in hits]
-    assert set(ids) == {1, 2}
-
-
-def test_explicit_status_filter(store: QdrantStore) -> None:
-    store.upsert(1, _random_vector(1), _payload(status="ACTIVE"))
-    store.upsert(2, _random_vector(2), _payload(status="INACTIVE"))
-
-    hits = store.search(
-        vector=_random_vector(1),
+    hits = await store.hybrid_search(
+        vector=_hybrid(1),
         limit=5,
         filter_=SearchFilter(status="INACTIVE"),
     )
@@ -144,9 +152,9 @@ def test_explicit_status_filter(store: QdrantStore) -> None:
     assert 1 not in ids
 
 
-def test_delete_removes_point(store: QdrantStore) -> None:
-    store.upsert(1, _random_vector(1), _payload())
-    assert store.get_vector(1) is not None
+async def test_delete_removes_point(store: QdrantStore) -> None:
+    await store.upsert(1, _hybrid(1), _payload())
+    assert await store.get_vectors(1) is not None
 
-    store.delete(1)
-    assert store.get_vector(1) is None
+    await store.delete(1)
+    assert await store.get_vectors(1) is None

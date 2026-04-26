@@ -18,6 +18,7 @@ export interface SearchResult {
     description: string;
     basePrice: number;
     status: string;
+    score: number;
   }>;
 }
 

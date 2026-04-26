@@ -12,6 +12,7 @@ export function BuyerLayout() {
         <Link to="/" className="text-lg font-semibold">mini-coupang</Link>
         <nav className="ml-auto flex gap-4 text-sm">
           <Link to="/search">검색</Link>
+          <Link to={me?.seller ? '/seller' : '/seller/login'}>판매자 센터</Link>
           {me?.member ? (
             <>
               <Link to="/me">내 정보</Link>

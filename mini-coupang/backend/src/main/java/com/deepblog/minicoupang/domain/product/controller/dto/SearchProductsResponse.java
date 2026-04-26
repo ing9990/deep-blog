@@ -12,7 +12,8 @@ public record SearchProductsResponse(int size, List<Item> items) {
         String name,
         String description,
         Long basePrice,
-        String status
+        String status,
+        double score
     ) {}
 
     public static SearchProductsResponse from(SearchProductsResult result) {
@@ -24,7 +25,8 @@ public record SearchProductsResponse(int size, List<Item> items) {
                 i.name(),
                 i.description(),
                 i.basePrice(),
-                i.status()
+                i.status(),
+                i.score()
             ))
             .toList();
         return new SearchProductsResponse(items.size(), items);

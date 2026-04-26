@@ -55,13 +55,19 @@ NAVER_CLIENT_SECRET = os.environ["NAVER_CLIENT_SECRET"]
 SEED_PASSWORD = "test1234!"  # BCryptPasswordEncoder 쪽과 공유하는 평문
 VECTOR_DIM = 1024  # bge-m3 임베딩 차원
 
-# 카테고리당 검색어 3개. 네이버 API 의 "query 당 최대 1,000개" 제약을 극복.
+# 카테고리당 검색어 4개. 네이버 API 의 "query 당 최대 1,000개" 제약을 극복.
+# (cid, query) 튜플은 backend/data.sql 의 categories 행 의미와 1:1 로 일치시킨다.
 QUERIES: list[tuple[int, str]] = [
-    (1, "텀블러"), (1, "보온병"), (1, "물병"),
-    (2, "노트북"), (2, "랩탑"), (2, "울트라북"),
-    (3, "운동화"), (3, "러닝화"), (3, "스니커즈"),
-    (4, "키보드"), (4, "기계식키보드"), (4, "무선키보드"),
-    (5, "백팩"), (5, "등산가방"), (5, "캠핑백팩"),
+    (1, "텀블러"), (1, "보온병"), (1, "물병"), (1, "도시락"),
+    (2, "노트북"), (2, "랩탑"), (2, "울트라북"), (2, "맥북"),
+    (3, "운동화"), (3, "러닝화"), (3, "스니커즈"), (3, "구두"),
+    (4, "키보드"), (4, "기계식키보드"), (4, "무선키보드"), (4, "마우스"),
+    (5, "백팩"), (5, "등산가방"), (5, "캠핑백팩"), (5, "캐리어"),
+    (6, "티셔츠"), (6, "셔츠"), (6, "청바지"), (6, "자켓"),
+    (7, "모니터"), (7, "게이밍모니터"), (7, "울트라와이드"), (7, "4K모니터"),
+    (8, "립스틱"), (8, "향수"), (8, "선크림"), (8, "마스크팩"),
+    (9, "커피원두"), (9, "라면"), (9, "과자"), (9, "김치"),
+    (10, "소설"), (10, "자기계발서"), (10, "전공서"), (10, "만화책"),
 ]
 
 NAVER_API_URL = "https://openapi.naver.com/v1/search/shop.json"
@@ -98,10 +104,22 @@ def fetch_page(query: str, start: int) -> list[dict]:
 
 
 def collect_products(target: int) -> list[dict]:
+    """카테고리별 quota 를 두어 (target / 카테고리수) 까지 채우고 다음 카테고리로 넘어간다.
+    QUERIES 순서대로만 fetch 하면 첫 몇 카테고리에서 target 이 다 채워져서 뒷쪽
+    카테고리(가방, 의류, 뷰티, 식품, 도서 등)가 0 건이 되는 분포 결함이 났던 적이 있다."""
+    cats = sorted({cid for cid, _ in QUERIES})
+    quota_per_cat = (target + len(cats) - 1) // len(cats)
     out: list[dict] = []
     seen: set[str] = set()
+    cat_count: Counter[int] = Counter()
     for cid, query in QUERIES:
-        print(f"[collect] ({cid}) {query!r}", file=sys.stderr)
+        if cat_count[cid] >= quota_per_cat:
+            continue  # 이 카테고리는 이미 quota 도달, 다음 검색어 중에도 같은 cid 면 모두 skip.
+        print(
+            f"[collect] ({cid}) {query!r} (cat={cat_count[cid]}/{quota_per_cat})",
+            file=sys.stderr,
+        )
+        cat_full = False
         for start in range(1, 1001, 100):
             try:
                 items = fetch_page(query, start)
@@ -129,11 +147,21 @@ def collect_products(target: int) -> list[dict]:
                     "basePrice": price,
                     "mall": mall,
                 })
+                cat_count[cid] += 1
+                if cat_count[cid] >= quota_per_cat:
+                    cat_full = True
+                    break
                 if len(out) >= target:
                     print(f"  reached target {target}", file=sys.stderr)
                     return out
+            if cat_full:
+                break
             time.sleep(0.1)
-    print(f"[collect] collected {len(out)}/{target}", file=sys.stderr)
+    print(
+        f"[collect] collected {len(out)}/{target} across {len(cats)} categories: "
+        f"{dict(sorted(cat_count.items()))}",
+        file=sys.stderr,
+    )
     return out
 
 
@@ -151,22 +179,41 @@ def pick_sellers(products: list[dict], count: int) -> list[str]:
 
 
 def reset_mysql() -> None:
-    print("[reset] MySQL TRUNCATE", file=sys.stderr)
-    sql = (
-        "SET FOREIGN_KEY_CHECKS=0;"
-        "TRUNCATE products;"
-        "TRUNCATE product_options;"
-        "TRUNCATE product_images;"
-        "TRUNCATE sellers;"
-        "TRUNCATE accounts;"
-        "SET FOREIGN_KEY_CHECKS=1;"
-    )
+    """products/sellers/accounts 와 함께 categories 도 비워서 재정의한다.
+    backend/data.sql 은 INSERT IGNORE 라 의미가 바뀐 1~5 행을 덮지 않으므로,
+    시드 스크립트 쪽에서 책임지고 동기화한다. (data.sql 의 categories 행 정의와 동일하게 유지할 것)"""
+    print("[reset] MySQL TRUNCATE + reseed categories", file=sys.stderr)
+    sql = """
+SET FOREIGN_KEY_CHECKS=0;
+TRUNCATE products;
+TRUNCATE product_options;
+TRUNCATE product_images;
+TRUNCATE sellers;
+TRUNCATE accounts;
+TRUNCATE categories;
+INSERT INTO categories (category_id, name, parent_id, created_at, updated_at) VALUES
+  (1, '주방/생활', NULL, NOW(), NOW()),
+  (2, '노트북', NULL, NOW(), NOW()),
+  (3, '신발', NULL, NOW(), NOW()),
+  (4, '키보드', NULL, NOW(), NOW()),
+  (5, '가방', NULL, NOW(), NOW()),
+  (6, '의류', NULL, NOW(), NOW()),
+  (7, '모니터/디스플레이', NULL, NOW(), NOW()),
+  (8, '뷰티', NULL, NOW(), NOW()),
+  (9, '식품', NULL, NOW(), NOW()),
+  (10, '도서', NULL, NOW(), NOW());
+SET FOREIGN_KEY_CHECKS=1;
+"""
+    # docker exec -i + stdin 으로 SQL 을 흘려보낸다. -e 옵션은 한글 인자가
+    # 셸/Docker 단계에서 인코딩 깨질 위험이 있어서 stdin 경로가 안전하다.
     subprocess.run(
         [
-            "docker", "exec", "mini-coupang-mysql",
-            "mysql", "-umini", "-pmini", "mini_coupang", "-e", sql,
+            "docker", "exec", "-i", "mini-coupang-mysql",
+            "mysql", "-umini", "-pmini", "--default-character-set=utf8mb4",
+            "mini_coupang",
         ],
         check=True,
+        input=sql.encode("utf-8"),
         capture_output=True,
     )
 

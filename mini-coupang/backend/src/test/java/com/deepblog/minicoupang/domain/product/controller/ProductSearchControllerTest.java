@@ -77,8 +77,8 @@ class ProductSearchControllerTest {
     @Test
     void search_response_exposesSizeAndItems() throws Exception {
         given(productSearchService.search(any())).willReturn(new SearchProductsResult(List.of(
-            new SearchProductsResult.Item(1L, 2L, 3L, "텀블러", "보온", 10_000L, "ACTIVE"),
-            new SearchProductsResult.Item(4L, 2L, 3L, "텀블러 2", "보냉", 11_000L, "ACTIVE")
+            new SearchProductsResult.Item(1L, 2L, 3L, "텀블러", "보온", 10_000L, "ACTIVE", 0.032),
+            new SearchProductsResult.Item(4L, 2L, 3L, "텀블러 2", "보냉", 11_000L, "ACTIVE", 0.016)
         )));
 
         mockMvc.perform(get("/api/products/search").param("q", "텀블러"))
@@ -88,6 +88,8 @@ class ProductSearchControllerTest {
             .andExpect(jsonPath("$.items[0].productId").value(1))
             .andExpect(jsonPath("$.items[0].name").value("텀블러"))
             .andExpect(jsonPath("$.items[0].status").value("ACTIVE"))
-            .andExpect(jsonPath("$.items[1].productId").value(4));
+            .andExpect(jsonPath("$.items[0].score").value(Matchers.closeTo(0.032, 1e-6)))
+            .andExpect(jsonPath("$.items[1].productId").value(4))
+            .andExpect(jsonPath("$.items[1].score").value(Matchers.closeTo(0.016, 1e-6)));
     }
 }

@@ -8,7 +8,8 @@ import java.time.Duration;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Component;
+// stage 1: @Component 비활성에 따라 unused. stage 2/3 활성화 시 복구.
+// import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -24,7 +25,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * Each invocation records {@code embed.index.latency} (tag outcome=success|failure)
  * so the indexing path can be observed independently of API latency.
  */
-@Component
+// Stage 1 baseline: gRPC 인덱싱 비활성. @Component 를 주석 처리해 bean 등록을
+// 차단하면 @TransactionalEventListener / @Async 와이어링이 끊긴다. 코드는 보존,
+// stage 2 ES indexer 또는 stage 3 personalization 채널이 들어올 때 활성화한다.
+// @Component
 @Slf4j
 public class ProductRegisteredListener {
 

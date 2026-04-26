@@ -2,6 +2,7 @@ package com.deepblog.minicoupang.domain.product.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -9,8 +10,6 @@ import static org.mockito.Mockito.verify;
 
 import com.deepblog.minicoupang.domain.product.application.dto.SearchProductsQuery;
 import com.deepblog.minicoupang.domain.product.application.dto.SearchProductsResult;
-import com.deepblog.minicoupang.domain.product.application.port.out.EmbedPort;
-import com.deepblog.minicoupang.domain.product.application.port.out.dto.ProductSearchHit;
 import com.deepblog.minicoupang.domain.product.domain.Product;
 import com.deepblog.minicoupang.domain.product.domain.ProductStatus;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
@@ -23,64 +22,75 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+/**
+ * Stage 1 baseline: ProductSearchService 가 MySQL LIKE 단일 채널로 동작하는지 검증한다.
+ * gRPC + Qdrant FusionQuery RRF 경로(4b4101c) 는 stage 2 ES 도입 시 다시 평가한다.
+ */
 class ProductSearchServiceTest {
 
     private ProductRepository productRepository;
-    private EmbedPort embedPort;
     private ProductSearchService service;
 
     @BeforeEach
     void setUp() {
         productRepository = mock(ProductRepository.class);
-        embedPort = mock(EmbedPort.class);
-        service = new ProductSearchService(productRepository, embedPort);
+        service = new ProductSearchService(new SearchSteps(productRepository));
     }
 
     @Test
-    @DisplayName("combines lexical and semantic ids through RRF, preserves order via findAllById lookup")
-    void combinesAndPreservesOrder() {
+    @DisplayName("forwards keyword + filter to MySQL LIKE and preserves repository order")
+    void forwardsAndPreservesOrder() {
+        // searchIdsByKeyword 가 ORDER BY p.id ASC 로 돌려준 순서를 응답이 그대로 유지해야 한다.
         given(productRepository.searchIdsByKeyword(
-                any(), any(), any(), any(), any(ProductStatus.class), any(Pageable.class)))
+                eq("텀블러"), eq(ProductStatus.ACTIVE), eq(1L), eq(1000L), eq(50000L), any(Pageable.class)))
             .willReturn(List.of(10L, 20L, 30L));
-        given(embedPort.search(any())).willReturn(List.of(
-            new ProductSearchHit(30L, 0.9f),
-            new ProductSearchHit(40L, 0.8f),
-            new ProductSearchHit(10L, 0.7f)
-        ));
-        given(productRepository.findAllById(any()))
-            .willReturn(List.of(
-                stubProduct(10L),
-                stubProduct(20L),
-                stubProduct(30L),
-                stubProduct(40L)
-            ));
+        given(productRepository.findAllById(List.of(10L, 20L, 30L)))
+            .willReturn(List.of(stubProduct(20L), stubProduct(10L), stubProduct(30L)));
 
         SearchProductsResult result = service.search(
             new SearchProductsQuery("텀블러", 1L, 1000L, 50000L, 3));
 
-        ArgumentCaptor<List<Long>> idsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(productRepository).findAllById(idsCaptor.capture());
-        List<Long> requestedIds = idsCaptor.getValue();
-        assertThat(requestedIds).hasSize(3);
-        assertThat(requestedIds).startsWith(10L, 30L);
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(productRepository).searchIdsByKeyword(
+            eq("텀블러"), eq(ProductStatus.ACTIVE), eq(1L), eq(1000L), eq(50000L), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(3);
 
         assertThat(result.items()).hasSize(3);
-        assertThat(result.items().get(0).productId()).isEqualTo(requestedIds.get(0));
+        assertThat(result.items().get(0).productId()).isEqualTo(10L);
+        assertThat(result.items().get(1).productId()).isEqualTo(20L);
+        assertThat(result.items().get(2).productId()).isEqualTo(30L);
+        // stage 1 baseline 의 score 는 placeholder(1.0). 진짜 ranking score 는 stage 2 ES 에서 부활.
+        assertThat(result.items()).allMatch(item -> item.score() == 1.0);
     }
 
     @Test
-    @DisplayName("empty lexical and empty semantic returns empty result without calling findAllById")
-    void emptyChannels() {
+    @DisplayName("empty hits returns empty result without calling findAllById")
+    void emptyHits() {
         given(productRepository.searchIdsByKeyword(
-                any(), any(), any(), any(), any(ProductStatus.class), any(Pageable.class)))
+                any(), any(), any(), any(), any(), any(Pageable.class)))
             .willReturn(List.of());
-        given(embedPort.search(any())).willReturn(List.of());
 
         SearchProductsResult result = service.search(
             new SearchProductsQuery("zzz없는단어", null, null, null, 20));
 
         assertThat(result.items()).isEmpty();
         verify(productRepository, never()).findAllById(any());
+    }
+
+    @Test
+    @DisplayName("missing product (deleted between search and fetch) is filtered from result")
+    void missingProductIsFiltered() {
+        given(productRepository.searchIdsByKeyword(
+                any(), any(), any(), any(), any(), any(Pageable.class)))
+            .willReturn(List.of(10L, 99L));
+        given(productRepository.findAllById(List.of(10L, 99L)))
+            .willReturn(List.of(stubProduct(10L)));
+
+        SearchProductsResult result = service.search(
+            new SearchProductsQuery("텀블러", null, null, null, 5));
+
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.items().get(0).productId()).isEqualTo(10L);
     }
 
     private static Product stubProduct(long id) {

@@ -31,10 +31,15 @@ class CategoryControllerTest {
     void seedCategories() {
         categoryRepository.deleteAll();
         categoryRepository.saveAll(List.of(
-            Category.create("패션", null),
+            Category.create("주방/생활", null),
+            Category.create("노트북", null),
+            Category.create("신발", null),
+            Category.create("키보드", null),
+            Category.create("가방", null),
+            Category.create("의류", null),
+            Category.create("모니터/디스플레이", null),
             Category.create("뷰티", null),
             Category.create("식품", null),
-            Category.create("가전", null),
             Category.create("도서", null)
         ));
     }
@@ -43,7 +48,7 @@ class CategoryControllerTest {
     void list_returns_all_seeded_categories() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.get("/api/categories"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.items", hasSize(5)))
+            .andExpect(jsonPath("$.items", hasSize(10)))
             .andExpect(jsonPath("$.items[0].name").exists());
     }
 }

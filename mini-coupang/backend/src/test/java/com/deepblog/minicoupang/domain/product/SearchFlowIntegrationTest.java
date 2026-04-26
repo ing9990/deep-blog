@@ -20,6 +20,7 @@ import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
 import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Disabled("stage 1 baseline: gRPC + Qdrant 채널이 끊긴 상태. stage 2 ES 도입 시 MySQL+ES hybrid 흐름으로 재작성한다.")
 class SearchFlowIntegrationTest {
 
     @Autowired

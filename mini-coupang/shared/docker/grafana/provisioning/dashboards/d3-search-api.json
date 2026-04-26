@@ -1,43 +1,48 @@
 {
   "uid": "mc-search-latency",
-  "title": "미니쿠팡 · 검색 API 지연 (D3)",
-  "tags": ["mini-coupang", "backend", "http"],
+  "title": "미니쿠팡 · 검색 API 성능 (D3)",
+  "tags": ["mini-coupang", "backend", "http", "search"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "refresh": "5s",
-  "time": {"from": "now-15m", "to": "now"},
+  "time": {"from": "now-1h", "to": "now"},
   "templating": {"list": []},
   "annotations": {"list": []},
   "panels": [
     {
       "id": 1,
       "type": "timeseries",
-      "title": "검색 API 응답 지연 (p50 / p95 / p99)",
-      "description": "GET /api/products/search 의 히스토그램 기반 분위수. 1분 rate 윈도우.",
-      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 10},
+      "title": "구간별 p95 비교 (lexical · semantic · rrf · fetch)",
+      "description": "하이브리드 검색 4구간의 p95를 한 축에 올려 누가 API p95를 지배하는지 한눈에. 1분 rate 윈도우.",
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 10},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/products/search\"}[1m])))",
-          "legendFormat": "p50"
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(search_channel_lexical_seconds_bucket[1m])))",
+          "legendFormat": "lexical p95"
         },
         {
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/products/search\"}[1m])))",
-          "legendFormat": "p95"
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(search_channel_semantic_seconds_bucket[1m])))",
+          "legendFormat": "semantic p95"
         },
         {
           "refId": "C",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/products/search\"}[1m])))",
-          "legendFormat": "p99"
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(search_rrf_seconds_bucket[1m])))",
+          "legendFormat": "rrf p95"
+        },
+        {
+          "refId": "D",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(search_fetch_seconds_bucket[1m])))",
+          "legendFormat": "fetch p95"
         }
       ],
       "options": {
-        "legend": {"showLegend": true, "displayMode": "list", "placement": "bottom"},
-        "tooltip": {"mode": "multi", "sort": "none"}
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "right", "calcs": ["mean", "max", "lastNotNull"]},
+        "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "fieldConfig": {
         "defaults": {
@@ -58,9 +63,127 @@
     {
       "id": 2,
       "type": "timeseries",
+      "title": "검색 API 응답 지연 (p50 / p95) + SLO 라인",
+      "description": "GET /api/products/search 의 p50/p95. 1분 rate. 300ms(yellow)·500ms(red)는 현시점 가설 SLO, 실측 baseline 수집 뒤 재조정.",
+      "gridPos": {"x": 0, "y": 10, "w": 12, "h": 10},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/products/search\"}[1m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/products/search\"}[1m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "options": {
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]},
+        "tooltip": {"mode": "multi", "sort": "none"}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "thresholdsStyle": {"mode": "line"}
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.3},
+              {"color": "red", "value": 0.5}
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "heatmap",
+      "title": "검색 API 지연 분포 (heatmap, 1m)",
+      "description": "히스토그램 버킷 기반. 색상 농도 = 요청 밀도. 라인 분위수와 보완해 꼬리 이상치 확인.",
+      "gridPos": {"x": 12, "y": 10, "w": 12, "h": 10},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/products/search\"}[1m]))",
+          "format": "heatmap",
+          "legendFormat": "{{le}}"
+        }
+      ],
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {"scheme": "Spectral", "mode": "scheme", "exponent": 0.5, "reverse": false, "steps": 64},
+        "yAxis": {"unit": "s", "decimals": 2, "axisPlacement": "left"},
+        "tooltip": {"show": true, "yHistogram": false},
+        "legend": {"show": true}
+      },
+      "fieldConfig": {
+        "defaults": {"custom": {"scaleDistribution": {"type": "linear"}}},
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "검색 API p99 (5m rate)",
+      "description": "p99는 낮은 트래픽에서 1m 윈도우가 심하게 요동. 5m rate로 노이즈 저감.",
+      "gridPos": {"x": 0, "y": 20, "w": 12, "h": 9},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/products/search\"}[5m])))",
+          "legendFormat": "p99 (5m)"
+        }
+      ],
+      "options": {
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]},
+        "tooltip": {"mode": "single", "sort": "none"}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {"mode": "line"}
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.5},
+              {"color": "red", "value": 1.0}
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
       "title": "검색 API 요청 속도 (RPS)",
-      "description": "초당 요청 수. 검색 부하 수준을 p50/p95와 나란히 보기 위한 패널.",
-      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 10},
+      "description": "초당 요청 수. 검색 부하 수준을 지연 지표와 나란히 비교.",
+      "gridPos": {"x": 12, "y": 20, "w": 12, "h": 9},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
@@ -89,11 +212,45 @@
       }
     },
     {
-      "id": 3,
+      "id": 6,
+      "type": "timeseries",
+      "title": "검색 API 상태 코드 분포",
+      "description": "status별 요청 속도. 2xx·4xx·5xx 비율 감시.",
+      "gridPos": {"x": 0, "y": 29, "w": 16, "h": 9},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{uri=\"/api/products/search\"}[1m]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "options": {
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "right", "calcs": ["mean", "max", "lastNotNull"]},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "fillOpacity": 30,
+            "stacking": {"mode": "normal", "group": "A"},
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
       "type": "stat",
       "title": "검색 API 5xx 에러율 (5m)",
       "description": "5xx / total. 0 나눗셈 방지 위해 clamp_min(_, 0.001).",
-      "gridPos": {"x": 0, "y": 10, "w": 8, "h": 8},
+      "gridPos": {"x": 16, "y": 29, "w": 8, "h": 9},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
@@ -122,40 +279,6 @@
             ]
           },
           "color": {"mode": "thresholds"}
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 4,
-      "type": "timeseries",
-      "title": "검색 API 상태 코드 분포",
-      "description": "status별 요청 속도. 2xx·4xx·5xx 비율 감시.",
-      "gridPos": {"x": 8, "y": 10, "w": 16, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (status) (rate(http_server_requests_seconds_count{uri=\"/api/products/search\"}[1m]))",
-          "legendFormat": "{{status}}"
-        }
-      ],
-      "options": {
-        "legend": {"showLegend": true, "displayMode": "list", "placement": "right"},
-        "tooltip": {"mode": "multi", "sort": "desc"}
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "color": {"mode": "palette-classic"},
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "stepAfter",
-            "lineWidth": 1,
-            "fillOpacity": 30,
-            "stacking": {"mode": "normal", "group": "A"},
-            "showPoints": "never"
-          }
         },
         "overrides": []
       }

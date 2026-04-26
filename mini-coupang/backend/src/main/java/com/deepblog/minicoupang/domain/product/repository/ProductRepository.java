@@ -22,28 +22,24 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findBySellerIdAndStatus(Long sellerId, ProductStatus status);
 
-    /**
-     * Lexical side of hybrid search. Returns product ids matching the
-     * keyword in name or description and satisfying the optional filters.
-     * Any {@code null} filter parameter means "no constraint on this axis".
-     * Result is ordered by {@code product_id ASC} so ranks are stable.
-     */
+    // Stage 1 baseline: MySQL LIKE 단일 채널. LOWER + 양쪽 와일드카드라 B+Tree
+    // 인덱스 사용 불가, ORDER BY p.id ASC 는 relevance 가 아닌 ID 순. 이 한계가
+    // stage 2 ES 도입의 동기다. gRPC + Qdrant FusionQuery 채널은 SearchSteps
+    // 에서 호출만 끊은 상태로 보존된다.
     @Query("""
         SELECT p.id FROM Product p
-        WHERE (LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))
-            OR LOWER(p.description) LIKE LOWER(CONCAT('%', :q, '%')))
+        WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))
+          AND p.status = :status
           AND (:categoryId IS NULL OR p.categoryId = :categoryId)
           AND (:minPrice IS NULL OR p.basePrice >= :minPrice)
           AND (:maxPrice IS NULL OR p.basePrice <= :maxPrice)
-          AND (:status IS NULL OR p.status = :status)
         ORDER BY p.id ASC
         """)
     List<Long> searchIdsByKeyword(
-        @Param("q") String q,
+        @Param("q") String keyword,
+        @Param("status") ProductStatus status,
         @Param("categoryId") Long categoryId,
         @Param("minPrice") Long minPrice,
         @Param("maxPrice") Long maxPrice,
-        @Param("status") ProductStatus status,
-        Pageable page
-    );
+        Pageable pageable);
 }

@@ -152,34 +152,96 @@ class ProductRepositoryTest {
         assertThat(page.getContent()).hasSize(3);
     }
 
+    // Stage 1 baseline: gRPC + Qdrant FusionQuery 경로(4b4101c) 의 호출은 끊었고,
+    // 검색은 다시 MySQL LIKE 단일 채널로 동작한다. stage 2 ES 도입 시까지 이
+    // 메서드가 검색 채널의 진입점이다.
+
     @Test
-    void searchIdsByKeyword_matchesNameAndDescription_respectsFilters() {
-        Seller seller = persistSeller("1000000005");
-        Product tumbler = Product.create(seller, 1L, "프리미엄 텀블러", "보온 24시간 유지", 15_000L);
-        Product bag = Product.create(seller, 2L, "레더 백팩", "가죽 소재 통학용", 80_000L);
-        Product suspended = Product.create(seller, 1L, "정지된 텀블러", "회수됨", 15_000L);
+    void searchIdsByKeyword_caseInsensitiveLikeMatch() {
+        Seller seller = persistSeller("1000000001");
+        Product a = productRepository.save(Product.create(seller, 1L, "프리미엄 텀블러", "설명", 15_000L));
+        Product b = productRepository.save(Product.create(seller, 1L, "보온 텀블러 PRO", "설명", 20_000L));
+        productRepository.save(Product.create(seller, 1L, "다른 상품", "설명", 5_000L));
+        em.flush();
+        em.clear();
+
+        List<Long> ids = productRepository.searchIdsByKeyword(
+            "텀블러", ProductStatus.ACTIVE, null, null, null, PageRequest.of(0, 10));
+
+        assertThat(ids).containsExactly(a.getId(), b.getId());
+    }
+
+    @Test
+    void searchIdsByKeyword_excludesNonActiveStatus() {
+        Seller seller = persistSeller("1000000001");
+        Product active = productRepository.save(Product.create(seller, 1L, "텀블러 A", "설명", 15_000L));
+        Product suspended = Product.create(seller, 1L, "텀블러 B", "설명", 20_000L);
         suspended.suspend();
-        productRepository.save(tumbler);
-        productRepository.save(bag);
         productRepository.save(suspended);
         em.flush();
         em.clear();
 
-        List<Long> activeOnly = productRepository.searchIdsByKeyword(
-            "텀블러", null, null, null, ProductStatus.ACTIVE, PageRequest.of(0, 50));
-        assertThat(activeOnly).containsExactly(tumbler.getId());
+        List<Long> ids = productRepository.searchIdsByKeyword(
+            "텀블러", ProductStatus.ACTIVE, null, null, null, PageRequest.of(0, 10));
 
-        List<Long> anyStatus = productRepository.searchIdsByKeyword(
-            "텀블러", null, null, null, null, PageRequest.of(0, 50));
-        assertThat(anyStatus).containsExactlyInAnyOrder(tumbler.getId(), suspended.getId());
+        assertThat(ids).containsExactly(active.getId());
+    }
 
-        List<Long> categoryFiltered = productRepository.searchIdsByKeyword(
-            "가죽", 2L, null, null, ProductStatus.ACTIVE, PageRequest.of(0, 50));
-        assertThat(categoryFiltered).containsExactly(bag.getId());
+    @Test
+    void searchIdsByKeyword_priceFilter() {
+        Seller seller = persistSeller("1000000001");
+        productRepository.save(Product.create(seller, 1L, "텀블러 A", "설명", 5_000L));
+        Product midPrice = productRepository.save(Product.create(seller, 1L, "텀블러 B", "설명", 15_000L));
+        productRepository.save(Product.create(seller, 1L, "텀블러 C", "설명", 30_000L));
+        em.flush();
+        em.clear();
 
-        List<Long> priceFiltered = productRepository.searchIdsByKeyword(
-            "텀블러", null, 1_000L, 10_000L, ProductStatus.ACTIVE, PageRequest.of(0, 50));
-        assertThat(priceFiltered).isEmpty();
+        List<Long> ids = productRepository.searchIdsByKeyword(
+            "텀블러", ProductStatus.ACTIVE, null, 10_000L, 20_000L, PageRequest.of(0, 10));
+
+        assertThat(ids).containsExactly(midPrice.getId());
+    }
+
+    @Test
+    void searchIdsByKeyword_categoryFilter() {
+        Seller seller = persistSeller("1000000001");
+        Product cat1 = productRepository.save(Product.create(seller, 1L, "텀블러", "설명", 15_000L));
+        productRepository.save(Product.create(seller, 2L, "텀블러", "설명", 15_000L));
+        em.flush();
+        em.clear();
+
+        List<Long> ids = productRepository.searchIdsByKeyword(
+            "텀블러", ProductStatus.ACTIVE, 1L, null, null, PageRequest.of(0, 10));
+
+        assertThat(ids).containsExactly(cat1.getId());
+    }
+
+    @Test
+    void searchIdsByKeyword_pageableLimitsResultSize() {
+        Seller seller = persistSeller("1000000001");
+        for (int i = 0; i < 5; i++) {
+            productRepository.save(Product.create(seller, 1L, "텀블러 " + i, "설명", 1_000L));
+        }
+        em.flush();
+        em.clear();
+
+        List<Long> ids = productRepository.searchIdsByKeyword(
+            "텀블러", ProductStatus.ACTIVE, null, null, null, PageRequest.of(0, 3));
+
+        assertThat(ids).hasSize(3);
+    }
+
+    @Test
+    void searchIdsByKeyword_noMatchReturnsEmpty() {
+        Seller seller = persistSeller("1000000001");
+        productRepository.save(Product.create(seller, 1L, "텀블러", "설명", 15_000L));
+        em.flush();
+        em.clear();
+
+        List<Long> ids = productRepository.searchIdsByKeyword(
+            "없는단어zzz", ProductStatus.ACTIVE, null, null, null, PageRequest.of(0, 10));
+
+        assertThat(ids).isEmpty();
     }
 
     @Test
