@@ -21,6 +21,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -145,6 +146,11 @@ public class Product extends BaseEntity {
         ProductOption option = ProductOption.forProduct(this, optionName, sku, additionalPrice);
         this.options.add(option);
         return option;
+    }
+
+    public ProductOption addDefaultOption() {
+        String sku = "DEFAULT-" + UUID.randomUUID().toString().replace("-", "").toUpperCase();
+        return addOption("기본", sku, 0L);
     }
 
     private void assertSkuNotDuplicated(String sku) {

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import hashlib
 import os
 import re
 import subprocess
@@ -273,6 +274,10 @@ def login_seller(base_url: str, idx: int) -> str:
 
 
 def register_product(base_url: str, cookie: str, product: dict) -> tuple[bool, int]:
+    # SKU 는 name 의 md5 16자로 고유성 확보 (uk_product_options_sku 충돌 방지).
+    # 시드는 항상 옵션 1개 + initialStock=100 으로 등록해 6단계 락 비교 시리즈의
+    # baseline (재고 100) 을 보장한다.
+    sku = "SEED-" + hashlib.md5(product["name"].encode("utf-8")).hexdigest()[:16].upper()
     try:
         r = requests.post(
             f"{base_url}/api/seller/products",
@@ -281,7 +286,14 @@ def register_product(base_url: str, cookie: str, product: dict) -> tuple[bool, i
                 "name": product["name"],
                 "description": product["description"],
                 "basePrice": product["basePrice"],
-                "options": [],
+                "options": [
+                    {
+                        "optionName": "기본",
+                        "sku": sku,
+                        "additionalPrice": 0,
+                        "initialStock": 100,
+                    }
+                ],
                 "images": [],
             },
             cookies={"JSESSIONID": cookie},
