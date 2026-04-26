@@ -16,6 +16,8 @@ import com.deepblog.minicoupang.domain.product.seller.application.RegisterProduc
 import com.deepblog.minicoupang.domain.seller.domain.Seller;
 import com.deepblog.minicoupang.domain.seller.exception.SellerNotRegisteredException;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
+import com.deepblog.minicoupang.domain.stock.domain.OptionStock;
+import com.deepblog.minicoupang.domain.stock.repository.OptionStockRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +30,7 @@ class SellerProductServiceTest {
 
     private ProductRepository productRepository;
     private SellerRepository sellerRepository;
+    private OptionStockRepository optionStockRepository;
     private ApplicationEventPublisher eventPublisher;
     private SellerProductService service;
 
@@ -35,12 +38,19 @@ class SellerProductServiceTest {
     void setUp() {
         productRepository = mock(ProductRepository.class);
         sellerRepository = mock(SellerRepository.class);
+        optionStockRepository = mock(OptionStockRepository.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
-        service = new SellerProductService(productRepository, sellerRepository, eventPublisher);
+        service = new SellerProductService(
+            productRepository, sellerRepository, optionStockRepository, eventPublisher);
 
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> {
             Product persisted = invocation.getArgument(0);
             ReflectionTestUtils.setField(persisted, "id", 99L);
+            // 옵션이 cascade persist 됐다고 가정하고 ID 부여
+            long nextOptionId = 1000L;
+            for (var opt : persisted.getOptions()) {
+                ReflectionTestUtils.setField(opt, "id", nextOptionId++);
+            }
             return persisted;
         });
     }
@@ -72,7 +82,7 @@ class SellerProductServiceTest {
     }
 
     @Test
-    void registerProduct_nullOptionsAndImages_createsEmptyProduct() {
+    void registerProduct_nullOptions_addsDefaultOptionAndPersistsStock() {
         Long accountId = 100L;
         Seller seller = mock(Seller.class);
         when(seller.getId()).thenReturn(42L);
@@ -84,8 +94,67 @@ class SellerProductServiceTest {
 
         RegisterProductResult result = service.registerProduct(accountId, command);
 
-        assertThat(result.optionCount()).isZero();
+        assertThat(result.optionCount()).isEqualTo(1);
         assertThat(result.imageCount()).isZero();
+        verify(optionStockRepository).save(any(OptionStock.class));
+    }
+
+    @Test
+    void registerProduct_emptyOptions_addsDefaultOptionAndPersistsStock() {
+        Long accountId = 100L;
+        Seller seller = mock(Seller.class);
+        when(seller.getId()).thenReturn(42L);
+        when(sellerRepository.findByAccountId(accountId)).thenReturn(Optional.of(seller));
+
+        RegisterProductCommand command = new RegisterProductCommand(
+            1L, "텀블러", "설명", 15_000L, List.of(), List.of()
+        );
+
+        RegisterProductResult result = service.registerProduct(accountId, command);
+
+        assertThat(result.optionCount()).isEqualTo(1);
+        verify(optionStockRepository).save(any(OptionStock.class));
+    }
+
+    @Test
+    void registerProduct_explicitOptions_persistsStockForEach() {
+        Long accountId = 100L;
+        Seller seller = mock(Seller.class);
+        when(seller.getId()).thenReturn(42L);
+        when(sellerRepository.findByAccountId(accountId)).thenReturn(Optional.of(seller));
+
+        RegisterProductCommand command = new RegisterProductCommand(
+            1L, "텀블러", "설명", 15_000L,
+            List.of(
+                new OptionCommand("빨강-M", "SKU-1", 1_000L),
+                new OptionCommand("파랑-L", "SKU-2", 2_000L)
+            ),
+            List.of()
+        );
+
+        service.registerProduct(accountId, command);
+
+        verify(optionStockRepository, org.mockito.Mockito.times(2)).save(any(OptionStock.class));
+    }
+
+    @Test
+    void registerProduct_optionWithInitialStock_persistsWithGivenQuantity() {
+        Long accountId = 100L;
+        Seller seller = mock(Seller.class);
+        when(seller.getId()).thenReturn(42L);
+        when(sellerRepository.findByAccountId(accountId)).thenReturn(Optional.of(seller));
+
+        RegisterProductCommand command = new RegisterProductCommand(
+            1L, "텀블러", "설명", 15_000L,
+            List.of(new OptionCommand("빨강", "SKU-1", 1_000L, 100L)),
+            List.of()
+        );
+
+        service.registerProduct(accountId, command);
+
+        ArgumentCaptor<OptionStock> stockCaptor = ArgumentCaptor.forClass(OptionStock.class);
+        verify(optionStockRepository).save(stockCaptor.capture());
+        assertThat(stockCaptor.getValue().getQuantity()).isEqualTo(100L);
     }
 
     @Test

@@ -8,6 +8,8 @@ import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.seller.domain.Seller;
 import com.deepblog.minicoupang.domain.seller.exception.SellerNotRegisteredException;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
+import com.deepblog.minicoupang.domain.stock.domain.OptionStock;
+import com.deepblog.minicoupang.domain.stock.repository.OptionStockRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -22,6 +24,7 @@ public class SellerProductService {
 
     private final ProductRepository productRepository;
     private final SellerRepository sellerRepository;
+    private final OptionStockRepository optionStockRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -37,17 +40,33 @@ public class SellerProductService {
             command.basePrice()
         );
 
-        ofNullable(command.options()).orElse(List.of())
-            .forEach(option -> product.addOption(
+        List<RegisterProductCommand.OptionCommand> optionCommands =
+            ofNullable(command.options()).orElse(List.of());
+
+        if (optionCommands.isEmpty()) {
+            product.addDefaultOption();
+        } else {
+            optionCommands.forEach(option -> product.addOption(
                 option.optionName(),
                 option.sku(),
                 option.additionalPrice()
             ));
+        }
 
         ofNullable(command.images()).orElse(List.of())
             .forEach(image -> product.addImage(image.url(), image.primary()));
 
         Product saved = productRepository.save(product);
+
+        saved.getOptions().forEach(option -> {
+            long initialStock = optionCommands.stream()
+                .filter(c -> option.getSku().equals(c.sku()))
+                .findFirst()
+                .map(RegisterProductCommand.OptionCommand::resolvedInitialStock)
+                .orElse(0L);
+            optionStockRepository.save(OptionStock.forOption(option.getId(), initialStock));
+        });
+
         eventPublisher.publishEvent(ProductRegistered.from(saved));
         return RegisterProductResult.from(saved);
     }

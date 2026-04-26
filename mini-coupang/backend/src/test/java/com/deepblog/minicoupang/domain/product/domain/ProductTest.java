@@ -276,6 +276,29 @@ class ProductTest {
     }
 
     @Test
+    void addDefaultOption_addsOptionWithGeneratedSku() {
+        Product product = activeProduct();
+
+        ProductOption option = product.addDefaultOption();
+
+        assertThat(product.getOptions()).hasSize(1);
+        assertThat(option.getOptionName()).isEqualTo("기본");
+        assertThat(option.getSku()).startsWith("DEFAULT-");
+        assertThat(option.getAdditionalPrice()).isZero();
+    }
+
+    @Test
+    void addDefaultOption_calledTwice_generatesDistinctSkus() {
+        Product product = activeProduct();
+
+        ProductOption first = product.addDefaultOption();
+        ProductOption second = product.addDefaultOption();
+
+        assertThat(first.getSku()).isNotEqualTo(second.getSku());
+        assertThat(product.getOptions()).hasSize(2);
+    }
+
+    @Test
     void addImage_primary_isAddedAtOrderZero() {
         Product product = activeProduct();
 

@@ -11,7 +11,20 @@ public record RegisterProductCommand(
     List<ImageCommand> images
 ) {
 
-    public record OptionCommand(String optionName, String sku, Long additionalPrice) {}
+    public record OptionCommand(
+        String optionName,
+        String sku,
+        Long additionalPrice,
+        Long initialStock
+    ) {
+        public OptionCommand(String optionName, String sku, Long additionalPrice) {
+            this(optionName, sku, additionalPrice, null);
+        }
+
+        public long resolvedInitialStock() {
+            return initialStock != null ? initialStock : 0L;
+        }
+    }
 
     public record ImageCommand(String url, boolean primary) {}
 }
