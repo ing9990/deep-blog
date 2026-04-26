@@ -543,9 +543,6 @@ body {
   font-size: var(--text-code-inline);
   font-weight: var(--weight-medium);
   color: var(--code-inline-fg);
-  background-color: color-mix(in oklab, var(--code-inline-fg) 10%, var(--background));
-  padding: 0.2em 0.45em;
-  border-radius: var(--radius-sm);
 }
 
 .prose-kr pre,
@@ -565,7 +562,12 @@ body {
   line-height: var(--leading-normal);
 }
 
-.prose-kr ul,
+.prose-kr ul {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 1.2em;
+}
+
 .prose-kr ol {
   padding-left: 1.5em;
   margin-bottom: 1.2em;
@@ -573,12 +575,35 @@ body {
 
 .prose-kr li {
   margin-bottom: 0.4em;
+}
+
+.prose-kr ol > li {
   padding-left: 0.25em;
 }
 
-/* Muted marker color so bullets/numbers don't compete with body text. */
-.prose-kr ul > li::marker {
-  color: var(--muted-foreground);
+/* Body <ul> marker: a small triangle in the primary accent, paired
+   with a faint per-item underline so each item reads as a discrete
+   row (closer to a ruled-notebook line than a generic bullet). */
+.prose-kr ul > li {
+  position: relative;
+  padding: 0.35em 0 0.35em 1.4em;
+  margin: 0;
+  line-height: var(--leading-relaxed);
+  border-bottom: 1px dashed var(--border);
+}
+
+.prose-kr ul > li:last-child {
+  border-bottom: none;
+}
+
+.prose-kr ul > li::before {
+  content: '▸';
+  position: absolute;
+  left: 0.25em;
+  top: 0.35em;
+  color: var(--primary);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-relaxed);
 }
 
 .prose-kr ol > li::marker {
@@ -586,11 +611,21 @@ body {
   font-weight: var(--weight-medium);
 }
 
-/* Nested lists: tighter spacing, one indent level of rhythm. */
+/* Nested lists: tighter spacing, no rule (rule would clutter at depth). */
 .prose-kr li > ul,
 .prose-kr li > ol {
   margin-top: 0.3em;
   margin-bottom: 0.3em;
+}
+
+.prose-kr li > ul > li {
+  border-bottom: none;
+  padding-top: 0.15em;
+  padding-bottom: 0.15em;
+}
+
+.prose-kr li > ul > li::before {
+  top: 0.15em;
 }
 
 /* ================================================================
@@ -617,9 +652,11 @@ body {
 .prose-kr .note > .note-body > :first-child { margin-top: 0; }
 .prose-kr .note > .note-body > :last-child  { margin-bottom: 0; }
 
-/* Dash marker list for Note internals. CSS-driven so authors keep
-   writing `<ul><li>...</li></ul>` in MDX — no em-dash in source
-   (em-dash is globally forbidden; guards enforce). */
+/* Ruled-notebook list for Note internals. Each <li> sits on a thin
+   horizontal rule (like a line in a ruled notebook), and the marker
+   is a check glyph in success-green so the items read as "objectives
+   to achieve" rather than generic bullets. CSS-driven so authors keep
+   writing `<ul><li>...</li></ul>` in MDX. */
 .prose-kr .note ul {
   list-style: none;
   padding-left: 0;
@@ -628,18 +665,34 @@ body {
 
 .prose-kr .note ul > li {
   position: relative;
-  padding-left: 1.4em;
-  margin: 0.6em 0;
+  padding: 0.65em 0 0.65em 1.75em;
+  margin: 0;
   line-height: var(--leading-relaxed);
+  border-bottom: 1px solid var(--note-border);
+}
+
+.prose-kr .note ul > li:first-child {
+  padding-top: 0.25em;
+}
+
+.prose-kr .note ul > li:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .prose-kr .note ul > li::before {
-  content: '–';                  /* en-dash marker (U+2013), not em-dash */
+  content: '✓';
   position: absolute;
-  left: 0.25em;
-  top: 0;
-  color: var(--muted-foreground);
-  font-weight: var(--weight-medium);
+  left: 0.2em;
+  top: 0.65em;
+  color: var(--callout-success-icon);
+  font-weight: var(--weight-bold);
+  font-size: 0.95em;
+  line-height: var(--leading-relaxed);
+}
+
+.prose-kr .note ul > li:first-child::before {
+  top: 0.25em;
 }
 
 .prose-kr .note ol {
