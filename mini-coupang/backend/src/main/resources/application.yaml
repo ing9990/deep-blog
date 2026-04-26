@@ -9,11 +9,15 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    defer-datasource-initialization: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
     open-in-view: false
+  sql:
+    init:
+      mode: always
 
 server:
   port: 8080
@@ -28,7 +32,39 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: when-authorized
+  metrics:
+    distribution:
+      percentiles-histogram:
+        embed.index.latency: true
+        http.server.requests: true
+        product.indexing.queue.wait: true
+        product.indexing.e2e: true
+        search.channel.lexical: true
+        search.channel.semantic: true
+        search.rrf: true
+        search.fetch: true
+      percentiles:
+        embed.index.latency: 0.5, 0.9, 0.95, 0.99
+        http.server.requests: 0.5, 0.95, 0.99
+        product.indexing.queue.wait: 0.5, 0.95, 0.99
+        product.indexing.e2e: 0.5, 0.95, 0.99
+        search.channel.lexical: 0.5, 0.95, 0.99
+        search.channel.semantic: 0.5, 0.95, 0.99
+        search.rrf: 0.5, 0.95, 0.99
+        search.fetch: 0.5, 0.95, 0.99
+
+grpc:
+  client:
+    embed:
+      # ML 서비스는 Desktop PC(Windows, GPU)로 이관되었습니다.
+      # Mac → PC LAN(192.168.50.8) 경유. 홈 네트워크 전용이라 plaintext 유지.
+      address: 'static://192.168.50.8:50051'
+      negotiation-type: plaintext
+
+embed:
+  grpc:
+    deadline-ms: 5000

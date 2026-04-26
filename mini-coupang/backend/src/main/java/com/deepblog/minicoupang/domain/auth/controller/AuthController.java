@@ -6,8 +6,15 @@ import com.deepblog.minicoupang.domain.auth.application.AuthService;
 import com.deepblog.minicoupang.domain.auth.context.SessionKeys;
 import com.deepblog.minicoupang.domain.auth.controller.dto.LoginRequest;
 import com.deepblog.minicoupang.domain.auth.controller.dto.LoginResponse;
-import com.deepblog.minicoupang.domain.auth.controller.dto.SignupRequest;
-import com.deepblog.minicoupang.domain.auth.controller.dto.SignupResponse;
+import com.deepblog.minicoupang.domain.auth.controller.dto.MemberSignupRequest;
+import com.deepblog.minicoupang.domain.auth.controller.dto.SellerLoginResponse;
+import com.deepblog.minicoupang.domain.auth.controller.dto.MemberSignupResponse;
+import com.deepblog.minicoupang.domain.auth.controller.dto.SellerSignupRequest;
+import com.deepblog.minicoupang.domain.auth.controller.dto.SellerSignupResponse;
+import com.deepblog.minicoupang.domain.member.application.MemberSignupResult;
+import com.deepblog.minicoupang.domain.member.application.MemberSignupService;
+import com.deepblog.minicoupang.domain.seller.application.SellerSignupResult;
+import com.deepblog.minicoupang.domain.seller.application.SellerSignupService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,12 +30,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final MemberSignupService memberSignupService;
+    private final SellerSignupService sellerSignupService;
 
-    @PostMapping("/signup")
-    public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
-        Long accountId = authService.signup(request.email(), request.password());
-        return ResponseEntity.status(CREATED)
-            .body(new SignupResponse(accountId, request.email()));
+    @PostMapping("/signup/member")
+    public ResponseEntity<MemberSignupResponse> signupMember(
+        @Valid @RequestBody MemberSignupRequest request
+    ) {
+        MemberSignupResult result = memberSignupService.signup(request.toCommand());
+        return ResponseEntity.status(CREATED).body(MemberSignupResponse.from(result));
+    }
+
+    @PostMapping("/signup/seller")
+    public ResponseEntity<SellerSignupResponse> signupSeller(
+        @Valid @RequestBody SellerSignupRequest request
+    ) {
+        SellerSignupResult result = sellerSignupService.signup(request.toCommand());
+        return ResponseEntity.status(CREATED).body(SellerSignupResponse.from(result));
     }
 
     @PostMapping("/login")
@@ -36,9 +54,19 @@ public class AuthController {
         @Valid @RequestBody LoginRequest request,
         HttpSession session
     ) {
-        Long accountId = authService.login(request.email(), request.password());
-        session.setAttribute(SessionKeys.AUTH_ACCOUNT_ID, accountId);
-        return ResponseEntity.ok(new LoginResponse(accountId));
+        AuthService.LoginAsMemberResult r = authService.loginAsMember(request.email(), request.password());
+        session.setAttribute(SessionKeys.AUTH_ACCOUNT_ID, r.accountId());
+        return ResponseEntity.ok(new LoginResponse(r.accountId(), r.memberId()));
+    }
+
+    @PostMapping("/login/seller")
+    public ResponseEntity<SellerLoginResponse> loginSeller(
+        @Valid @RequestBody LoginRequest request,
+        HttpSession session
+    ) {
+        AuthService.LoginAsSellerResult r = authService.loginAsSeller(request.email(), request.password());
+        session.setAttribute(SessionKeys.AUTH_ACCOUNT_ID, r.accountId());
+        return ResponseEntity.ok(new SellerLoginResponse(r.accountId(), r.sellerId()));
     }
 
     @PostMapping("/logout")

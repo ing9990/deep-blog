@@ -38,3 +38,6 @@ out/
 
 ### macOS ###
 .DS_Store
+
+### Local blog planning (not committed) ###
+blog-insight.md
