@@ -57,19 +57,39 @@ NAVER_CLIENT_SECRET = os.environ["NAVER_CLIENT_SECRET"]
 SEED_PASSWORD = "test1234!"  # BCryptPasswordEncoder 쪽과 공유하는 평문
 VECTOR_DIM = 1024  # bge-m3 임베딩 차원
 
-# 카테고리당 검색어 4개. 네이버 API 의 "query 당 최대 1,000개" 제약을 극복.
-# (cid, query) 튜플은 backend/data.sql 의 categories 행 의미와 1:1 로 일치시킨다.
+# 카테고리당 검색어 10개 (총 100). 네이버 API 의 "query 당 최대 1,000개" 제약을
+# 극복해 카테고리당 최대 1만 product 확보. backend/data.sql 의 categories 10행과
+# 1:1 매핑.
 QUERIES: list[tuple[int, str]] = [
     (1, "텀블러"), (1, "보온병"), (1, "물병"), (1, "도시락"),
+    (1, "머그컵"), (1, "식기"), (1, "후라이팬"), (1, "도마"), (1, "주방칼"), (1, "수저"),
+
     (2, "노트북"), (2, "랩탑"), (2, "울트라북"), (2, "맥북"),
+    (2, "게이밍노트북"), (2, "LG그램"), (2, "삼성노트북"), (2, "ASUS노트북"), (2, "MSI노트북"), (2, "레노버노트북"),
+
     (3, "운동화"), (3, "러닝화"), (3, "스니커즈"), (3, "구두"),
+    (3, "슬리퍼"), (3, "부츠"), (3, "샌들"), (3, "트레킹화"), (3, "골프화"), (3, "농구화"),
+
     (4, "키보드"), (4, "기계식키보드"), (4, "무선키보드"), (4, "마우스"),
+    (4, "게이밍키보드"), (4, "텐키레스키보드"), (4, "무접점키보드"), (4, "트랙패드"), (4, "게이밍마우스"), (4, "무선마우스"),
+
     (5, "백팩"), (5, "등산가방"), (5, "캠핑백팩"), (5, "캐리어"),
+    (5, "크로스백"), (5, "토트백"), (5, "클러치백"), (5, "노트북가방"), (5, "슬링백"), (5, "메신저백"),
+
     (6, "티셔츠"), (6, "셔츠"), (6, "청바지"), (6, "자켓"),
-    (7, "모니터"), (7, "게이밍모니터"), (7, "울트라와이드"), (7, "4K모니터"),
+    (6, "후드티"), (6, "코트"), (6, "패딩"), (6, "스웨터"), (6, "치마"), (6, "원피스"),
+
+    (7, "모니터"), (7, "게이밍모니터"), (7, "울트라와이드모니터"), (7, "4K모니터"),
+    (7, "곡면모니터"), (7, "OLED모니터"), (7, "27인치모니터"), (7, "32인치모니터"), (7, "듀얼모니터"), (7, "모니터암"),
+
     (8, "립스틱"), (8, "향수"), (8, "선크림"), (8, "마스크팩"),
+    (8, "파운데이션"), (8, "아이섀도우"), (8, "블러셔"), (8, "클렌저"), (8, "토너"), (8, "에센스"),
+
     (9, "커피원두"), (9, "라면"), (9, "과자"), (9, "김치"),
+    (9, "시리얼"), (9, "우유"), (9, "견과류"), (9, "차"), (9, "빵"), (9, "즉석밥"),
+
     (10, "소설"), (10, "자기계발서"), (10, "전공서"), (10, "만화책"),
+    (10, "어린이책"), (10, "시집"), (10, "외국어교재"), (10, "요리책"), (10, "잡지"), (10, "에세이"),
 ]
 
 NAVER_API_URL = "https://openapi.naver.com/v1/search/shop.json"
@@ -327,9 +347,10 @@ def wait_qdrant_sync(qdrant_url: str, target: int, timeout_sec: int = 900) -> in
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Seed via public API (MySQL + Qdrant consistent)")
     p.add_argument("--sellers", type=int, default=40)
-    p.add_argument("--products", type=int, default=12_000)
-    p.add_argument("--concurrency", type=int, default=8,
-                   help="concurrent POST workers (default 8)")
+    p.add_argument("--products", type=int, default=100_000)
+    p.add_argument("--concurrency", type=int, default=32,
+                   help="concurrent POST workers (default 32). backend Tomcat default thread pool=200, "
+                        "HikariCP default pool=10. 32~64 가 일반적 sweet spot.")
     p.add_argument("--base-url", type=str, default="http://localhost:8080")
     p.add_argument("--qdrant-url", type=str, default="http://localhost:6333")
     p.add_argument("--no-reset", action="store_true",
