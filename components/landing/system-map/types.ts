@@ -1,39 +1,22 @@
-export type DomainId = 'seller' | 'product'
+export type TrackStatus = 'done' | 'in-progress' | 'planned'
 
-export type FeatureStatus = 'done' | 'in-progress' | 'planned'
+export type TrackCtaKind = 'blog' | 'concept' | 'github'
 
-export interface FeatureChoice {
-  /** 무엇을 선택했는가. */
-  text: string
-  /** 왜 그렇게 선택했는가. */
-  reason: string
-}
-
-export interface FeatureChallenge {
-  /** 어떤 문제가 있었는가. */
-  problem: string
-  /** 어떻게 해결했는가 (한 줄 요약). */
-  solution: string
-  /** 존재하는 content/posts/*.mdx의 slug. 있으면 "자세히 보기" 버튼 노출. */
+export interface TrackCta {
+  kind: TrackCtaKind
+  label: string
+  href: string
+  /** When set, the CTA is dropped if the slug is missing from content/posts. */
   postSlug?: string
 }
 
-export interface Feature {
+export interface Track {
   id: string
-  domain: DomainId
-  /** 사용자 스토리형 요구사항. */
-  requirement: string
-  /** 1-2줄 아키텍처 흐름 요약. */
-  architecture: string
-  status?: FeatureStatus
-  choices: FeatureChoice[]
-  challenges: FeatureChallenge[]
-  /** 기능 간 횡단 개념 (멱등성, Redis 분산락 등) 태그. */
-  tags?: string[]
-}
-
-export interface DomainMeta {
-  id: DomainId
-  label: string
-  summary: string
+  /** Short topic label (e.g. "주문 동시성"). */
+  topic: string
+  /** 2~3 line solution trace. Recruiter-scannable, no jargon. */
+  trace: string
+  status: TrackStatus
+  /** Buttons rendered under the trace, primary first. */
+  ctas: TrackCta[]
 }
