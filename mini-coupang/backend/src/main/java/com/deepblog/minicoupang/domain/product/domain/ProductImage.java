@@ -6,7 +6,8 @@ import static lombok.AccessLevel.PRIVATE;
 import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.minicoupang.domain.common.BaseEntity;
-import com.deepblog.minicoupang.domain.product.exception.InvalidProductException;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -58,10 +59,10 @@ public class ProductImage extends BaseEntity {
 
     private static void validateUrl(String url) {
         if (url == null || url.isBlank()) {
-            throw new InvalidProductException("이미지 URL은 비어 있을 수 없습니다.");
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT,"이미지 URL은 비어 있을 수 없습니다.");
         }
         if (url.length() > 500) {
-            throw new InvalidProductException("이미지 URL은 500자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT,"이미지 URL은 500자 이하여야 합니다.");
         }
     }
 }

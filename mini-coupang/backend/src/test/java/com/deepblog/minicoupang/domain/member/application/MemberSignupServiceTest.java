@@ -3,7 +3,8 @@ package com.deepblog.minicoupang.domain.member.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.deepblog.minicoupang.domain.auth.exception.DuplicateEmailException;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +35,7 @@ class MemberSignupServiceTest {
 
         assertThatThrownBy(() -> sut.signup(
             new MemberSignupCommand("dup@example.com", "password456", "김길동", "01033334444", null)
-        )).isInstanceOf(DuplicateEmailException.class);
+        )).isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DUPLICATE_EMAIL);
     }
 }

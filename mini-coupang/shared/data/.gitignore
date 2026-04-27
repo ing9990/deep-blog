@@ -2,3 +2,4 @@
 *.sql
 !*.example.sql
 products.json
+__pycache__/

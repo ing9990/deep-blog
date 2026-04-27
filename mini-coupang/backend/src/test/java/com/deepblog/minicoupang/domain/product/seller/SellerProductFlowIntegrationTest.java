@@ -10,6 +10,9 @@ import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.seller.domain.Seller;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
+import com.deepblog.minicoupang.domain.product.domain.OptionStock;
+import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,10 +42,14 @@ class SellerProductFlowIntegrationTest {
     private ProductRepository productRepository;
 
     @Autowired
+    private OptionStockRepository optionStockRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void cleanDatabase() {
+        optionStockRepository.deleteAll();
         productRepository.deleteAll();
         sellerRepository.deleteAll();
         accountRepository.deleteAll();
@@ -81,7 +88,36 @@ class SellerProductFlowIntegrationTest {
     }
 
     @Test
-    void register_withoutOptionsAndImages_returns201() throws Exception {
+    void register_optionWithInitialStock_persistsStockWithGivenQuantity() throws Exception {
+        Long accountId = createSellerAccount("seller-stock@example.com");
+        MockHttpSession session = sessionFor(accountId);
+
+        String body = """
+            {
+              "categoryId": 1,
+              "name": "재고 100 텀블러",
+              "description": "설명",
+              "basePrice": 15000,
+              "options": [
+                {"optionName": "기본", "sku": "STOCK-TEST-1", "additionalPrice": 0, "initialStock": 100}
+              ]
+            }
+            """;
+
+        mockMvc.perform(post("/api/seller/products")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isCreated());
+
+        Assertions.assertThat(optionStockRepository.findAll())
+            .singleElement()
+            .extracting(OptionStock::getQuantity)
+            .isEqualTo(100L);
+    }
+
+    @Test
+    void register_withoutOptions_addsDefaultOptionAndStock() throws Exception {
         Long accountId = createSellerAccount("seller2@example.com");
         MockHttpSession session = sessionFor(accountId);
 
@@ -99,8 +135,10 @@ class SellerProductFlowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
             .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.optionCount").value(0))
+            .andExpect(jsonPath("$.optionCount").value(1))
             .andExpect(jsonPath("$.imageCount").value(0));
+
+        Assertions.assertThat(optionStockRepository.count()).isEqualTo(1L);
     }
 
     @Test

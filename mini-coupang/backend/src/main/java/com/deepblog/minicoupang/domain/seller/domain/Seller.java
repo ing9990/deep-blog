@@ -7,7 +7,8 @@ import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.minicoupang.domain.auth.domain.Account;
 import com.deepblog.minicoupang.domain.common.BaseEntity;
-import com.deepblog.minicoupang.domain.seller.exception.InvalidSellerException;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -73,19 +74,19 @@ public class Seller extends BaseEntity {
 
     private static void validateAccount(Account account) {
         if (account == null) {
-            throw new InvalidSellerException("계정 정보가 올바르지 않습니다.");
+            throw new BusinessException(ErrorCode.INVALID_SELLER,"계정 정보가 올바르지 않습니다.");
         }
     }
 
     private static void validateBusinessName(String businessName) {
         if (businessName == null || businessName.length() < 2 || businessName.length() > 100) {
-            throw new InvalidSellerException("상호명은 2자 이상 100자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_SELLER,"상호명은 2자 이상 100자 이하여야 합니다.");
         }
     }
 
     private static void validateBusinessRegistrationNumber(String brn) {
         if (brn == null || brn.length() != 10 || !brn.chars().allMatch(Character::isDigit)) {
-            throw new InvalidSellerException("사업자등록번호는 숫자 10자리여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_SELLER,"사업자등록번호는 숫자 10자리여야 합니다.");
         }
     }
 
@@ -93,13 +94,13 @@ public class Seller extends BaseEntity {
         if (representativeName == null
             || representativeName.length() < 2
             || representativeName.length() > 50) {
-            throw new InvalidSellerException("대표자명은 2자 이상 50자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_SELLER,"대표자명은 2자 이상 50자 이하여야 합니다.");
         }
     }
 
     private static void validatePhoneNumber(String phoneNumber) {
         if (phoneNumber == null || phoneNumber.length() < 10 || phoneNumber.length() > 11) {
-            throw new InvalidSellerException("전화번호는 10자 이상 11자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_SELLER,"전화번호는 10자 이상 11자 이하여야 합니다.");
         }
     }
 }

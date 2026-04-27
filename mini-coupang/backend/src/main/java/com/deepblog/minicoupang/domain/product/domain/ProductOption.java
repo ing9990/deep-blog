@@ -6,7 +6,8 @@ import static lombok.AccessLevel.PRIVATE;
 import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.minicoupang.domain.common.BaseEntity;
-import com.deepblog.minicoupang.domain.product.exception.InvalidProductException;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -14,7 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import java.util.Objects;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,10 +26,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = PROTECTED)
 @AllArgsConstructor(access = PRIVATE)
 @Builder
-@Table(
-    name = "product_options",
-    uniqueConstraints = @UniqueConstraint(name = "uk_product_options_sku", columnNames = "sku")
-)
+@Table(name = "product_options")
 public class ProductOption extends BaseEntity {
 
     @Id
@@ -43,7 +41,7 @@ public class ProductOption extends BaseEntity {
     @Column(name = "option_name", nullable = false, length = 100)
     private String optionName;
 
-    @Column(name = "sku", nullable = false, length = 50)
+    @Column(name = "sku", nullable = false, length = 50, unique = true)
     private String sku;
 
     @Column(name = "additional_price", nullable = false)
@@ -69,28 +67,44 @@ public class ProductOption extends BaseEntity {
 
     private static void validateOptionName(String optionName) {
         if (optionName == null || optionName.isBlank()) {
-            throw new InvalidProductException("옵션명은 비어 있을 수 없습니다.");
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT,"옵션명은 비어 있을 수 없습니다.");
         }
         if (optionName.length() < 2 || optionName.length() > 100) {
-            throw new InvalidProductException("옵션명은 2자 이상 100자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT,"옵션명은 2자 이상 100자 이하여야 합니다.");
         }
     }
 
     private static void validateSku(String sku) {
         if (sku == null || sku.isBlank()) {
-            throw new InvalidProductException("SKU는 비어 있을 수 없습니다.");
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT,"SKU는 비어 있을 수 없습니다.");
         }
         if (sku.length() < 2 || sku.length() > 50) {
-            throw new InvalidProductException("SKU는 2자 이상 50자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT,"SKU는 2자 이상 50자 이하여야 합니다.");
         }
     }
 
     private static void validateAdditionalPrice(Long additionalPrice) {
         if (additionalPrice == null) {
-            throw new InvalidProductException("추가 가격 정보가 필요합니다.");
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT,"추가 가격 정보가 필요합니다.");
         }
         if (additionalPrice < 0) {
-            throw new InvalidProductException("추가 가격은 0 이상이어야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT,"추가 가격은 0 이상이어야 합니다.");
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof ProductOption that)) {
+            return false;
+        }
+        return sku != null && sku.equals(that.sku);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(sku);
     }
 }

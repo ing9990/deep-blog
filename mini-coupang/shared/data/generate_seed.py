@@ -1,28 +1,30 @@
-"""Seed via the public API so MySQL and Qdrant stay consistent.
+"""Seed via the public API.
 
 Flow:
     1) Naver Shopping API 로 N건 수집(dedup).
-    2) (옵션) MySQL truncate + Qdrant collection 재생성.
+    2) (옵션) MySQL truncate. --with-qdrant 명시 시 Qdrant collection 재생성도 같이.
     3) POST /auth/signup/seller 로 40명 판매자 생성(기존 계정은 409 skip).
     4) POST /auth/login/seller 로 40명의 JSESSIONID 확보.
     5) ThreadPoolExecutor 로 POST /api/seller/products 를 병렬 호출.
-       Backend 가 AFTER_COMMIT + @Async 로 EmbedPort.indexProduct 를 돌려
-       Qdrant 까지 자동으로 반영된다.
-    6) Qdrant points_count 가 목표에 도달할 때까지 polling -> MySQL ↔ Qdrant 일치 보장.
+    6) (옵션, --with-qdrant) Qdrant points_count polling 으로 MySQL ↔ Qdrant 일치 확인.
 
 Usage:
     mini-coupang/ml/.venv/bin/python mini-coupang/shared/data/generate_seed.py \
         [--sellers 40] [--products 12000] [--concurrency 8] \
         [--base-url http://localhost:8080] \
-        [--qdrant-url http://localhost:6333] \
+        [--with-qdrant --qdrant-url http://localhost:6333] \
         [--no-reset]
 
 Prereqs:
-    - mini-coupang-{mysql,qdrant,ml} 컨테이너 UP
+    - mini-coupang-mysql 컨테이너 UP
     - backend (:8080) UP  (IntelliJ 실행 또는 bootRun)
     - .env 에 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
+    - --with-qdrant 사용 시: Qdrant + ml 서비스가 별 환경에서 운영 중이어야 함.
 
 한국어 메모:
+    - Qdrant/ml 은 더 이상 default 흐름이 아님. 검색 책임은 stage 1 회귀(MySQL LIKE)
+      로 정리되었고, 등록 시 인덱싱(ProductRegisteredListener)도 @Component 비활성.
+      옛 hybrid 흐름이 필요하면 --with-qdrant 명시.
     - 기존 SQL 직접 적재(seed_data.sql.gz) 경로는 JPA 이벤트를 우회해 Qdrant 가
       비는 문제가 있었다. 동일 경로로 들어가는 공개 API 를 써서 정합성을 구조적으로
       보장하는 방향으로 전환.
@@ -30,12 +32,12 @@ Prereqs:
       Python 이 더 많이 찔러도 @Async 큐가 포화되면 CallerRunsPolicy 로 넘어가
       HTTP 응답이 지연될 뿐. 기본 8 로 유지.
     - signup 은 멱등하다(409 skip). 스크립트를 여러 번 돌려도 안전.
-    - 마지막 sync 대기가 성공 조건의 핵심. polling 이 target 도달하면 exit 0.
 """
 from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import hashlib
 import os
 import re
 import subprocess
@@ -55,19 +57,39 @@ NAVER_CLIENT_SECRET = os.environ["NAVER_CLIENT_SECRET"]
 SEED_PASSWORD = "test1234!"  # BCryptPasswordEncoder 쪽과 공유하는 평문
 VECTOR_DIM = 1024  # bge-m3 임베딩 차원
 
-# 카테고리당 검색어 4개. 네이버 API 의 "query 당 최대 1,000개" 제약을 극복.
-# (cid, query) 튜플은 backend/data.sql 의 categories 행 의미와 1:1 로 일치시킨다.
+# 카테고리당 검색어 10개 (총 100). 네이버 API 의 "query 당 최대 1,000개" 제약을
+# 극복해 카테고리당 최대 1만 product 확보. backend/data.sql 의 categories 10행과
+# 1:1 매핑.
 QUERIES: list[tuple[int, str]] = [
     (1, "텀블러"), (1, "보온병"), (1, "물병"), (1, "도시락"),
+    (1, "머그컵"), (1, "식기"), (1, "후라이팬"), (1, "도마"), (1, "주방칼"), (1, "수저"),
+
     (2, "노트북"), (2, "랩탑"), (2, "울트라북"), (2, "맥북"),
+    (2, "게이밍노트북"), (2, "LG그램"), (2, "삼성노트북"), (2, "ASUS노트북"), (2, "MSI노트북"), (2, "레노버노트북"),
+
     (3, "운동화"), (3, "러닝화"), (3, "스니커즈"), (3, "구두"),
+    (3, "슬리퍼"), (3, "부츠"), (3, "샌들"), (3, "트레킹화"), (3, "골프화"), (3, "농구화"),
+
     (4, "키보드"), (4, "기계식키보드"), (4, "무선키보드"), (4, "마우스"),
+    (4, "게이밍키보드"), (4, "텐키레스키보드"), (4, "무접점키보드"), (4, "트랙패드"), (4, "게이밍마우스"), (4, "무선마우스"),
+
     (5, "백팩"), (5, "등산가방"), (5, "캠핑백팩"), (5, "캐리어"),
+    (5, "크로스백"), (5, "토트백"), (5, "클러치백"), (5, "노트북가방"), (5, "슬링백"), (5, "메신저백"),
+
     (6, "티셔츠"), (6, "셔츠"), (6, "청바지"), (6, "자켓"),
-    (7, "모니터"), (7, "게이밍모니터"), (7, "울트라와이드"), (7, "4K모니터"),
+    (6, "후드티"), (6, "코트"), (6, "패딩"), (6, "스웨터"), (6, "치마"), (6, "원피스"),
+
+    (7, "모니터"), (7, "게이밍모니터"), (7, "울트라와이드모니터"), (7, "4K모니터"),
+    (7, "곡면모니터"), (7, "OLED모니터"), (7, "27인치모니터"), (7, "32인치모니터"), (7, "듀얼모니터"), (7, "모니터암"),
+
     (8, "립스틱"), (8, "향수"), (8, "선크림"), (8, "마스크팩"),
+    (8, "파운데이션"), (8, "아이섀도우"), (8, "블러셔"), (8, "클렌저"), (8, "토너"), (8, "에센스"),
+
     (9, "커피원두"), (9, "라면"), (9, "과자"), (9, "김치"),
+    (9, "시리얼"), (9, "우유"), (9, "견과류"), (9, "차"), (9, "빵"), (9, "즉석밥"),
+
     (10, "소설"), (10, "자기계발서"), (10, "전공서"), (10, "만화책"),
+    (10, "어린이책"), (10, "시집"), (10, "외국어교재"), (10, "요리책"), (10, "잡지"), (10, "에세이"),
 ]
 
 NAVER_API_URL = "https://openapi.naver.com/v1/search/shop.json"
@@ -272,6 +294,10 @@ def login_seller(base_url: str, idx: int) -> str:
 
 
 def register_product(base_url: str, cookie: str, product: dict) -> tuple[bool, int]:
+    # SKU 는 name 의 md5 16자로 고유성 확보 (uk_product_options_sku 충돌 방지).
+    # 시드는 항상 옵션 1개 + initialStock=100 으로 등록해 6단계 락 비교 시리즈의
+    # baseline (재고 100) 을 보장한다.
+    sku = "SEED-" + hashlib.md5(product["name"].encode("utf-8")).hexdigest()[:16].upper()
     try:
         r = requests.post(
             f"{base_url}/api/seller/products",
@@ -280,7 +306,14 @@ def register_product(base_url: str, cookie: str, product: dict) -> tuple[bool, i
                 "name": product["name"],
                 "description": product["description"],
                 "basePrice": product["basePrice"],
-                "options": [],
+                "options": [
+                    {
+                        "optionName": "기본",
+                        "sku": sku,
+                        "additionalPrice": 0,
+                        "initialStock": 100,
+                    }
+                ],
                 "images": [],
             },
             cookies={"JSESSIONID": cookie},
@@ -314,13 +347,17 @@ def wait_qdrant_sync(qdrant_url: str, target: int, timeout_sec: int = 900) -> in
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Seed via public API (MySQL + Qdrant consistent)")
     p.add_argument("--sellers", type=int, default=40)
-    p.add_argument("--products", type=int, default=12_000)
-    p.add_argument("--concurrency", type=int, default=8,
-                   help="concurrent POST workers (default 8)")
+    p.add_argument("--products", type=int, default=100_000)
+    p.add_argument("--concurrency", type=int, default=32,
+                   help="concurrent POST workers (default 32). backend Tomcat default thread pool=200, "
+                        "HikariCP default pool=10. 32~64 가 일반적 sweet spot.")
     p.add_argument("--base-url", type=str, default="http://localhost:8080")
     p.add_argument("--qdrant-url", type=str, default="http://localhost:6333")
     p.add_argument("--no-reset", action="store_true",
-                   help="skip MySQL truncate + Qdrant recreate")
+                   help="skip MySQL truncate (and Qdrant recreate when --with-qdrant)")
+    p.add_argument("--with-qdrant", action="store_true",
+                   help="옛 hybrid 흐름 활성: Qdrant 컬렉션 재생성 + 등록 후 points_count polling. "
+                        "기본은 skip (검색 책임이 MySQL LIKE 로 회귀했고 인덱싱 listener 가 비활성).")
     return p.parse_args()
 
 
@@ -346,7 +383,8 @@ def main() -> int:
 
     if not args.no_reset:
         reset_mysql()
-        reset_qdrant(args.qdrant_url)
+        if args.with_qdrant:
+            reset_qdrant(args.qdrant_url)
 
     print("[signup] 40 sellers", file=sys.stderr)
     for i, mall in enumerate(sellers, start=1):
@@ -391,14 +429,18 @@ def main() -> int:
         file=sys.stderr,
     )
 
-    final_count = wait_qdrant_sync(args.qdrant_url, success)
-    if final_count < success:
-        print(
-            f"[warn] Qdrant sync short: {final_count}/{success}",
-            file=sys.stderr,
-        )
-        return 2
-    print(f"[done] MySQL={success} Qdrant={final_count}", file=sys.stderr)
+    if args.with_qdrant:
+        final_count = wait_qdrant_sync(args.qdrant_url, success)
+        if final_count < success:
+            print(
+                f"[warn] Qdrant sync short: {final_count}/{success}",
+                file=sys.stderr,
+            )
+            return 2
+        print(f"[done] MySQL={success} Qdrant={final_count}", file=sys.stderr)
+    else:
+        print(f"[done] MySQL={success} (Qdrant skipped, use --with-qdrant for legacy flow)",
+              file=sys.stderr)
     return 0
 
 

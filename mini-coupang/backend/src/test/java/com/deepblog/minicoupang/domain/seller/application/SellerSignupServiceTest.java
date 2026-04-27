@@ -3,8 +3,8 @@ package com.deepblog.minicoupang.domain.seller.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.deepblog.minicoupang.domain.auth.exception.DuplicateEmailException;
-import com.deepblog.minicoupang.domain.seller.exception.InvalidSellerException;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,7 +35,8 @@ class SellerSignupServiceTest {
 
         assertThatThrownBy(() -> sut.signup(
             new SellerSignupCommand("dup@example.com", "password456", "가게B", "2222222222", "대표B", "01033334444")
-        )).isInstanceOf(DuplicateEmailException.class);
+        )).isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.DUPLICATE_EMAIL);
     }
 
     @Test
@@ -44,6 +45,7 @@ class SellerSignupServiceTest {
 
         assertThatThrownBy(() -> sut.signup(
             new SellerSignupCommand("s2@example.com", "password456", "가게B", "9999999999", "대표B", "01033334444")
-        )).isInstanceOf(InvalidSellerException.class);
+        )).isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_SELLER);
     }
 }

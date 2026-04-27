@@ -7,7 +7,8 @@ import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.minicoupang.domain.auth.domain.Account;
 import com.deepblog.minicoupang.domain.common.BaseEntity;
-import com.deepblog.minicoupang.domain.member.exception.InvalidMemberException;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -67,19 +68,19 @@ public class Member extends BaseEntity {
 
     private static void validateAccount(Account account) {
         if (account == null) {
-            throw new InvalidMemberException("계정 정보가 올바르지 않습니다.");
+            throw new BusinessException(ErrorCode.INVALID_MEMBER,"계정 정보가 올바르지 않습니다.");
         }
     }
 
     private static void validateName(String name) {
         if (name == null || name.length() < 2 || name.length() > 50) {
-            throw new InvalidMemberException("이름은 2자 이상 50자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_MEMBER,"이름은 2자 이상 50자 이하여야 합니다.");
         }
     }
 
     private static void validatePhoneNumber(String phoneNumber) {
         if (phoneNumber == null || phoneNumber.length() < 10 || phoneNumber.length() > 11) {
-            throw new InvalidMemberException("전화번호는 10자 이상 11자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_MEMBER,"전화번호는 10자 이상 11자 이하여야 합니다.");
         }
     }
 
@@ -88,7 +89,7 @@ public class Member extends BaseEntity {
             return;
         }
         if (nickname.length() < 2 || nickname.length() > 30) {
-            throw new InvalidMemberException("닉네임은 2자 이상 30자 이하여야 합니다.");
+            throw new BusinessException(ErrorCode.INVALID_MEMBER,"닉네임은 2자 이상 30자 이하여야 합니다.");
         }
     }
 }

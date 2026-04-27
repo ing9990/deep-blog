@@ -3,7 +3,8 @@ package com.deepblog.minicoupang.domain.auth.resolver;
 import com.deepblog.minicoupang.domain.auth.annotation.LoginRequired;
 import com.deepblog.minicoupang.domain.auth.context.AuthContext;
 import com.deepblog.minicoupang.domain.auth.context.AuthContextHolder;
-import com.deepblog.minicoupang.domain.auth.exception.UnauthenticatedException;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
@@ -29,6 +30,6 @@ public class LoginAccountIdArgumentResolver implements HandlerMethodArgumentReso
     ) {
         return AuthContextHolder.get()
             .map(AuthContext::accountId)
-            .orElseThrow(UnauthenticatedException::new);
+            .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED));
     }
 }

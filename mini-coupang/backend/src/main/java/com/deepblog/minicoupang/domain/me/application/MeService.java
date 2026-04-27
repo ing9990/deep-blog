@@ -1,10 +1,11 @@
 package com.deepblog.minicoupang.domain.me.application;
 
 import com.deepblog.minicoupang.domain.auth.domain.Account;
-import com.deepblog.minicoupang.domain.auth.exception.UnauthenticatedException;
 import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,7 @@ public class MeService {
 
     public MeResult me(Long accountId) {
         Account account = accountRepository.findById(accountId)
-            .orElseThrow(UnauthenticatedException::new);
+            .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED));
 
         MeResult.MemberInfo memberInfo = memberRepository.findByAccountId(accountId)
             .map(m -> new MeResult.MemberInfo(m.getId(), m.getName(), m.getPhoneNumber(), m.getNickname()))
