@@ -1,0 +1,612 @@
+---
+title:
+  ko: "Testcontainers 입문"
+  en: "Testcontainers Essentials"
+slug: "testcontainers-essentials"
+date: 2026-04-27
+tags:
+  - backend
+  - testcontainers
+  - testing
+  - spring
+  - java
+keywords:
+  - Testcontainers
+  - GenericContainer
+  - "@Testcontainers"
+  - "@DynamicPropertySource"
+  - "@ServiceConnection"
+summary:
+  ko: "Testcontainers를 처음 만지는 사람이 BOM 의존성 추가, GenericContainer로 첫 컨테이너 띄우기, MySQL, Redis, Kafka 모듈 사용, Spring Boot 통합(@DynamicPropertySource와 @ServiceConnection), 그리고 per-test, per-class, Singleton 라이프사이클 선택 기준까지 한 번에 훑습니다."
+  en: "A getting-started guide to Testcontainers. Covers BOM dependencies, the GenericContainer entry point, MySQL, Redis, and Kafka modules, Spring Boot integration via @DynamicPropertySource and @ServiceConnection, and the three lifecycle patterns: per-test, per-class, and singleton reuse."
+category: language-backend
+draft: false
+---
+
+통합 테스트에서 가장 자주 막히는 지점은 "DB나 Redis나 Kafka를 어떻게 띄울 것인가" 입니다. H2나 embedded mock으로 우회하면 운영 환경과 미묘하게 어긋나고, Docker Compose를 따로 띄우면 테스트가 환경에 종속됩니다. Testcontainers는 그 자리를 테스트 코드 안으로 옮겨 옵니다. 이 글은 Testcontainers를 처음 만지는 사람이 의존성, 첫 컨테이너, 모듈, Spring 통합, 라이프사이클의 한 사이클을 한 번에 훑을 수 있도록 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - Testcontainers의 3-단 사다리(GenericContainer, 모듈 클래스, Spring 통합)를 이해한다
+  - per-test, per-class, Singleton 라이프사이클의 차이를 구분할 수 있다
+  - Spring Boot 테스트에서 동적 properties를 주입하는 두 방법(@DynamicPropertySource와 @ServiceConnection)을 선택하는 기준을 얻는다
+</Note>
+
+## Testcontainers란
+
+Testcontainers는 JVM 진영의 통합 테스트 라이브러리입니다. 한 문장으로 줄이면 "테스트 코드 안에서 Docker 컨테이너를 띄우고 끄는 facade"입니다. JUnit 5, Spock, Kotest 같은 테스트 러너 위에서 동작하며, 매 테스트(또는 매 클래스, 또는 JVM 생애)마다 컨테이너 라이프사이클을 자동 관리합니다.
+
+내부 구조는 세 층입니다.
+
+```text title="Testcontainers 호출 흐름"
+[ Test code ]                         ← @Container, .start(), .getMappedPort()
+       │
+[ Testcontainers Java client ]        ← 컨테이너 spec, ready check, port mapping
+       │
+[ Docker daemon (Docker Desktop, Colima, Podman) ]  ← 실제 컨테이너 실행
+```
+
+테스트가 `mysql.start()`를 부르면 Testcontainers 클라이언트가 Docker 데몬에 컨테이너 생성 요청을 보냅니다. 데몬은 이미지를 pull(없으면)하고 컨테이너를 띄우고, 호스트의 임의 포트를 컨테이너 내부 포트(예: 3306)에 매핑합니다. 클라이언트는 ready check(MySQL의 경우 JDBC 연결 시도, Kafka는 broker API 응답 등)가 통과할 때까지 블록한 뒤 테스트 본문으로 제어를 돌려줍니다.
+
+핵심 클래스는 두 종류입니다.
+
+| 클래스 | 역할 | 적합한 상황 |
+|---|---|---|
+| `GenericContainer<>` | 모든 컨테이너의 기본 부모. 임의 이미지 + 노출 포트 + 환경 변수 직접 지정 | 모듈이 없는 이미지(Redis, Elasticsearch 구버전 등) |
+| 모듈 클래스 (`MySQLContainer`, `KafkaContainer`, `PostgreSQLContainer` 등) | 특정 이미지에 맞게 wrapping된 서브 클래스. JDBC URL, bootstrap servers 같은 값을 메서드로 노출 | 해당 모듈이 존재하는 미들웨어 |
+
+`GenericContainer`만 있으면 모든 이미지를 띄울 수 있고, 모듈 클래스는 그 위에 편의 API를 얹은 형태입니다.
+
+## 왜 컨테이너인가
+
+Testcontainers를 쓰지 않으면 통합 테스트는 보통 세 갈래로 흐릅니다. H2 같은 내장 DB로 흉내내거나, embedded mock(embedded redis, embedded kafka)을 띄우거나, 외부 Docker Compose 환경을 손으로 띄워두고 거기에 붙입니다. 각 방식이 어느 지점에서 어긋나는지 보면 컨테이너 기반 테스트의 동기가 자연스럽게 드러납니다.
+
+| 방식 | 어긋나는 지점 |
+|---|---|
+| H2 + MySQL 호환 모드 | SQL 함수, 인덱스 힌트, 트랜잭션 격리 수준의 미묘한 차이. 테스트 통과 후 운영에서 처음 보는 쿼리 오류. |
+| Embedded Redis | 메인테너의 활동 정체로 Redis 7.x 신규 명령(`COPY`, Streams 일부) 미지원. |
+| Embedded Kafka | 빌드 시 Kafka/Zookeeper 의존성을 모두 끌어와 빌드 시간과 메모리 사용량이 비대해짐. |
+| Docker Compose 외부 환경 | 테스트가 환경 상태에 의존. CI 머신마다 컨테이너가 살아 있는지 확인하는 별도 스크립트 필요. |
+
+Testcontainers는 같은 위치에 다른 답을 둡니다. **테스트가 띄우는 컨테이너는 운영에서 쓰는 바로 그 이미지**(예: `mysql:8.4`)이며, 환경은 테스트 코드 옆에 같이 머뭅니다. 매번 컨테이너를 띄우는 데 1초에서 수 초의 비용이 들지만, 그 비용이 위 표의 어긋남을 한 자리에서 막아 줍니다.
+
+전제 조건은 한 가지입니다. **Docker 데몬이 동작하고 있어야 합니다**. 로컬에서는 Docker Desktop, Colima, Podman Desktop 등 어느 것이든 OCI 호환이면 동작합니다. CI에서는 GitHub Actions의 Ubuntu runner처럼 Docker가 기본 설치된 환경을 쓰거나, Docker-in-Docker를 활성화합니다.
+
+## 셋업
+
+셋업은 두 단계입니다. BOM(Bill of Materials)으로 모든 Testcontainers 모듈의 버전을 한 자리에 잡고, 필요한 모듈만 `testImplementation`으로 추가합니다.
+
+### BOM 의존성
+
+`testcontainers-bom`은 core, junit-jupiter, mysql, postgresql, kafka 등 수십 개 모듈의 호환 가능한 버전을 한 묶음으로 정의한 메타데이터입니다. BOM을 import하면 개별 모듈의 버전을 쓰지 않아도 일관된 버전이 자동으로 잡힙니다.
+
+<Tabs group="dsl">
+  <Tab label="Groovy DSL">
+    ```groovy title="build.gradle"
+    dependencies {
+        testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+        testImplementation 'org.testcontainers:junit-jupiter'
+        testImplementation 'org.testcontainers:mysql'
+        testImplementation 'org.testcontainers:kafka'
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin DSL">
+    ```kotlin title="build.gradle.kts"
+    dependencies {
+        testImplementation(platform("org.testcontainers:testcontainers-bom:1.20.4"))
+        testImplementation("org.testcontainers:junit-jupiter")
+        testImplementation("org.testcontainers:mysql")
+        testImplementation("org.testcontainers:kafka")
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`junit-jupiter` 모듈은 `@Testcontainers`와 `@Container` 어노테이션, JUnit 5 Extension을 제공합니다. 이 두 어노테이션 없이도 컨테이너를 직접 `start()`/`stop()` 할 수 있지만, 라이프사이클 자동화의 이점이 사라집니다.
+
+### Docker 데몬 확인
+
+Testcontainers가 사용할 Docker 데몬은 환경 변수 `DOCKER_HOST`로 지정되거나 OS 표준 위치(`/var/run/docker.sock`, Docker Desktop의 명명된 파이프 등)에서 자동 감지됩니다. Colima나 Podman을 쓰면 별도 설정이 필요할 수 있는데, 이 지점에서 막히면 보통 다음을 확인합니다.
+
+```bash
+# 데몬이 응답하는지 가장 단순한 확인
+docker ps
+```
+
+`docker ps`가 동작하면 Testcontainers도 동작한다고 봐도 무방합니다.
+
+## 첫 컨테이너
+
+가장 단순한 컨테이너부터 시작합니다. nginx 이미지를 띄우고 매핑된 포트로 HTTP 요청을 한 번 보내는 흐름입니다. 모듈 없이 `GenericContainer`만 쓰는 형태이며, 이 한 패턴이 머리에 들어오면 나머지 모든 컨테이너는 같은 모양의 변형입니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="NginxFirstTest.java"
+    @Testcontainers
+    class NginxFirstTest {
+
+        @Container
+        static GenericContainer<?> nginx = new GenericContainer<>(
+            DockerImageName.parse("nginx:1.27")
+        ).withExposedPorts(80);
+
+        @Test
+        void respondsTo200() throws Exception {
+            String url = "http://" + nginx.getHost() + ":" + nginx.getMappedPort(80);
+            HttpResponse<String> response = HttpClient.newHttpClient()
+                .send(HttpRequest.newBuilder(URI.create(url)).build(),
+                      HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(200);
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="NginxFirstTest.kt"
+    @Testcontainers
+    class NginxFirstTest {
+
+        companion object {
+            @Container
+            @JvmStatic
+            val nginx: GenericContainer<*> = GenericContainer(
+                DockerImageName.parse("nginx:1.27")
+            ).withExposedPorts(80)
+        }
+
+        @Test
+        fun `responds with 200`() {
+            val url = "http://${nginx.host}:${nginx.getMappedPort(80)}"
+            val response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(url)).build(),
+                HttpResponse.BodyHandlers.ofString(),
+            )
+
+            assertThat(response.statusCode()).isEqualTo(200)
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+이 짧은 코드에 4개의 핵심 API가 있습니다.
+
+| API | 역할 |
+|---|---|
+| `DockerImageName.parse("nginx:1.27")` | 이미지 좌표. 태그 고정을 권장(`latest` 회피) |
+| `.withExposedPorts(80)` | 컨테이너 내부의 어떤 포트를 호스트에 공개할지. 호스트 쪽 포트는 Testcontainers가 임의로 할당 |
+| `nginx.getHost()` | Docker 데몬에 접근 가능한 호스트(`localhost` 또는 Docker Machine IP) |
+| `nginx.getMappedPort(80)` | 컨테이너 내부 80에 매핑된 호스트 포트(테스트가 실제로 접속할 곳) |
+
+호스트 포트를 임의로 매핑하는 이유는 충돌 회피입니다. 같은 머신에서 여러 테스트가 동시에 돌아도 각자 다른 호스트 포트를 받기 때문에 포트 점유로 깨지지 않습니다. 테스트 코드는 항상 `getMappedPort(...)`로 받아 쓰는 것이 관용구입니다.
+
+## 모듈 사용
+
+`GenericContainer`만으로 모든 이미지를 띄울 수 있지만, 자주 쓰는 미들웨어는 모듈 클래스가 한 단계 더 편한 API를 제공합니다. 가장 자주 만나는 셋(MySQL, Redis, Kafka)을 살펴보면 같은 패턴의 변형이 보입니다.
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Testcontainers의 사용성은 **GenericContainer → 모듈 클래스 → Spring 통합**의 3-단 사다리입니다. 1단(GenericContainer)이 모든 이미지를 띄우는 기본기이고, 2단과 3단은 같은 모양 위에 편의를 얹은 형태입니다. 1단을 잡으면 나머지는 변형으로 자연스럽게 따라옵니다.
+</Callout>
+
+### MySQL
+
+`MySQLContainer`는 JDBC URL, username, password를 메서드로 노출합니다. 그 값이 바로 Spring `DataSource`나 raw `DriverManager`에 그대로 들어갑니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="MySQLIT.java"
+    @Testcontainers
+    class MySQLIT {
+
+        @Container
+        static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.4")
+            .withDatabaseName("shop")
+            .withUsername("test")
+            .withPassword("test");
+
+        @Test
+        void canConnect() throws Exception {
+            try (Connection conn = DriverManager.getConnection(
+                mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())) {
+                ResultSet rs = conn.createStatement().executeQuery("SELECT 1");
+                assertThat(rs.next()).isTrue();
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="MySQLIT.kt"
+    @Testcontainers
+    class MySQLIT {
+
+        companion object {
+            @Container
+            @JvmStatic
+            val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.4")
+                .withDatabaseName("shop")
+                .withUsername("test")
+                .withPassword("test")
+        }
+
+        @Test
+        fun `can connect`() {
+            DriverManager.getConnection(
+                mysql.jdbcUrl, mysql.username, mysql.password,
+            ).use { conn ->
+                val rs = conn.createStatement().executeQuery("SELECT 1")
+                assertThat(rs.next()).isTrue()
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+테스트 시작 시 `mysql:8.4` 이미지가 ready 상태(JDBC ping 성공)에 도달할 때까지 약 5에서 15초 정도 걸리며, 한 번 띄우면 클래스 단위로 재사용됩니다. 라이프사이클 패턴은 다음 절에서 다룹니다.
+
+### Redis
+
+Redis는 별도 모듈 클래스가 없습니다. `GenericContainer` + `redis` 이미지를 그대로 씁니다. nginx 예제와 동일한 모양에 포트만 6379로 바뀐 형태입니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="RedisIT.java"
+    @Testcontainers
+    class RedisIT {
+
+        @Container
+        static GenericContainer<?> redis = new GenericContainer<>(
+            DockerImageName.parse("redis:7")
+        ).withExposedPorts(6379);
+
+        @Test
+        void canPing() {
+            String host = redis.getHost();
+            int port = redis.getMappedPort(6379);
+
+            try (Jedis jedis = new Jedis(host, port)) {
+                assertThat(jedis.ping()).isEqualTo("PONG");
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="RedisIT.kt"
+    @Testcontainers
+    class RedisIT {
+
+        companion object {
+            @Container
+            @JvmStatic
+            val redis: GenericContainer<*> = GenericContainer(
+                DockerImageName.parse("redis:7"),
+            ).withExposedPorts(6379)
+        }
+
+        @Test
+        fun `can ping`() {
+            val host = redis.host
+            val port = redis.getMappedPort(6379)
+
+            Jedis(host, port).use { jedis ->
+                assertThat(jedis.ping()).isEqualTo("PONG")
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`GenericContainer`로도 충분한 이유는 Redis가 ready 신호로 TCP 포트 리스닝만으로도 식별 가능하기 때문입니다. Testcontainers의 기본 wait strategy인 `Wait.forListeningPort()`가 그대로 동작합니다.
+
+<RelatedPost slug="redis-essentials" type="parallel" />
+
+### Kafka
+
+`KafkaContainer`는 bootstrap servers 주소를 자동으로 만들어 줍니다. Confluent의 cp-kafka 이미지를 기본으로 받습니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="KafkaIT.java"
+    @Testcontainers
+    class KafkaIT {
+
+        @Container
+        static KafkaContainer kafka = new KafkaContainer(
+            DockerImageName.parse("confluentinc/cp-kafka:7.6.0")
+        );
+
+        @Test
+        void canProduceAndConsume() {
+            Properties props = new Properties();
+            props.put("bootstrap.servers", kafka.getBootstrapServers());
+            props.put("key.serializer", StringSerializer.class.getName());
+            props.put("value.serializer", StringSerializer.class.getName());
+
+            try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+                producer.send(new ProducerRecord<>("orders", "1", "created")).get();
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="KafkaIT.kt"
+    @Testcontainers
+    class KafkaIT {
+
+        companion object {
+            @Container
+            @JvmStatic
+            val kafka: KafkaContainer = KafkaContainer(
+                DockerImageName.parse("confluentinc/cp-kafka:7.6.0"),
+            )
+        }
+
+        @Test
+        fun `can produce and consume`() {
+            val props = Properties().apply {
+                put("bootstrap.servers", kafka.bootstrapServers)
+                put("key.serializer", StringSerializer::class.java.name)
+                put("value.serializer", StringSerializer::class.java.name)
+            }
+
+            KafkaProducer<String, String>(props).use { producer ->
+                producer.send(ProducerRecord("orders", "1", "created")).get()
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+세 모듈을 한 번에 보면 패턴이 한 줄로 정리됩니다. **이미지를 결정한다, `@Container`로 라이프사이클을 위임한다, 모듈이 노출한 접속 정보(`getJdbcUrl`, `getHost+getMappedPort`, `getBootstrapServers`)를 그대로 클라이언트에 넣는다**. 이 흐름은 PostgreSQL, MongoDB, Elasticsearch 같은 다른 모듈에도 그대로 적용됩니다.
+
+## Spring 통합
+
+Spring Boot 테스트의 어려움은 컨테이너의 호스트와 포트가 매번 다르다는 점입니다. `application.yml`에 `localhost:3306`이라고 못박아 두면 테스트마다 무용지물이 됩니다. Testcontainers는 이 자리를 두 가지 방법으로 메웁니다. Spring 5.2.5+의 `@DynamicPropertySource`와 Spring Boot 3.1+의 `@ServiceConnection`입니다.
+
+### @DynamicPropertySource
+
+`@DynamicPropertySource`는 정적 메서드 안에서 `DynamicPropertyRegistry`에 supplier(메서드 참조)를 등록하는 방식입니다. 빈 초기화 직전에 supplier가 호출되므로 그 시점의 컨테이너 값이 그대로 properties에 들어갑니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="OrderRepositoryIT.java"
+    @SpringBootTest
+    @Testcontainers
+    class OrderRepositoryIT {
+
+        @Container
+        static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.4");
+
+        @DynamicPropertySource
+        static void registerProps(DynamicPropertyRegistry registry) {
+            registry.add("spring.datasource.url", mysql::getJdbcUrl);
+            registry.add("spring.datasource.username", mysql::getUsername);
+            registry.add("spring.datasource.password", mysql::getPassword);
+        }
+
+        @Autowired OrderRepository orderRepository;
+
+        @Test
+        void savesOrder() {
+            Order saved = orderRepository.save(new Order("o-1"));
+            assertThat(saved.getId()).isNotNull();
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="OrderRepositoryIT.kt"
+    @SpringBootTest
+    @Testcontainers
+    class OrderRepositoryIT(
+        @Autowired private val orderRepository: OrderRepository,
+    ) {
+
+        companion object {
+            @Container
+            @JvmStatic
+            val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.4")
+
+            @DynamicPropertySource
+            @JvmStatic
+            fun registerProps(registry: DynamicPropertyRegistry) {
+                registry.add("spring.datasource.url", mysql::getJdbcUrl)
+                registry.add("spring.datasource.username", mysql::getUsername)
+                registry.add("spring.datasource.password", mysql::getPassword)
+            }
+        }
+
+        @Test
+        fun `saves order`() {
+            val saved = orderRepository.save(Order("o-1"))
+            assertThat(saved.id).isNotNull()
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+핵심은 `mysql::getJdbcUrl`이 `Supplier<String>` 형태로 등록된다는 점입니다. 즉시 평가되지 않고, Spring이 properties를 읽는 시점에 호출됩니다. 이 덕분에 `@Container`가 컨테이너를 띄우는 타이밍과 properties 평가 타이밍이 어긋나도 안전합니다.
+
+### @ServiceConnection
+
+Spring Boot 3.1부터 추가된 `@ServiceConnection`은 위 보일러플레이트를 한 줄로 줄입니다. Testcontainers의 모듈 클래스(`MySQLContainer`, `KafkaContainer` 등)에 대해 Spring Boot가 어떤 properties를 채워야 하는지 이미 알고 있으므로, 컨테이너에 `@ServiceConnection`을 붙이는 것만으로 자동 주입이 끝납니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="OrderRepositoryIT.java"
+    @SpringBootTest
+    @Testcontainers
+    class OrderRepositoryIT {
+
+        @Container
+        @ServiceConnection
+        static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.4");
+
+        @Autowired OrderRepository orderRepository;
+
+        @Test
+        void savesOrder() {
+            Order saved = orderRepository.save(new Order("o-1"));
+            assertThat(saved.getId()).isNotNull();
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="OrderRepositoryIT.kt"
+    @SpringBootTest
+    @Testcontainers
+    class OrderRepositoryIT(
+        @Autowired private val orderRepository: OrderRepository,
+    ) {
+
+        companion object {
+            @Container
+            @ServiceConnection
+            @JvmStatic
+            val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.4")
+        }
+
+        @Test
+        fun `saves order`() {
+            val saved = orderRepository.save(Order("o-1"))
+            assertThat(saved.id).isNotNull()
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`@ServiceConnection`을 쓸 수 있는 모듈은 Spring Boot가 알고 있는 것에 한합니다(MySQL, PostgreSQL, MongoDB, Redis, Kafka, RabbitMQ 등 주요 미들웨어 대부분). 모르는 모듈이거나 properties 키를 직접 제어하고 싶으면 `@DynamicPropertySource`로 돌아갑니다.
+
+| 선택지 | 적합한 상황 |
+|---|---|
+| `@DynamicPropertySource` | 모듈이 없는 이미지(`GenericContainer`)나, properties 키를 직접 제어하고 싶을 때 |
+| `@ServiceConnection` | 모듈 클래스를 쓰고 Spring Boot 3.1+ 환경, 보일러플레이트를 줄이고 싶을 때 |
+
+## 라이프사이클
+
+마지막 한 자리는 컨테이너의 수명을 어디에 두는가입니다. 같은 `MySQLContainer`라도 인스턴스 필드로 두느냐, static으로 두느냐, JVM 전역 Singleton으로 두느냐에 따라 테스트 시간이 크게 갈립니다.
+
+<Callout type="error" title="핵심 통찰: 환경이 코드 옆에 같이 머문다">
+  Testcontainers는 Docker 컨테이너를 테스트 코드의 일부로 만듭니다. 의존하는 환경이 외부 설정 파일이나 별도 프로세스가 아니라 테스트 코드 옆에 같이 머무르므로, 테스트 그린은 곧 그 환경에서의 동작 확인이 됩니다. 라이프사이클 선택은 그 환경을 얼마나 자주 새로 만들지를 정하는 일입니다.
+</Callout>
+
+세 가지 선택지를 비용과 격리 수준으로 정리하면 다음과 같습니다.
+
+| 패턴 | 컨테이너 수명 | 시작 횟수 | 격리 수준 | 적합한 상황 |
+|---|---|---|---|---|
+| per-test | 매 테스트 메서드 | N번 | 가장 강함 | 스키마 마이그레이션 테스트처럼 컨테이너 상태 자체가 검증 대상일 때 |
+| per-class | 클래스당 1번 | 1번 | 클래스 안에서만 공유 | 일반 통합 테스트(권장 기본값) |
+| Singleton | JVM 전체 | 1번 | 모든 IT 클래스가 공유 | 여러 IT 클래스가 같은 컨테이너를 쓰고, 빌드 시간을 최소화하고 싶을 때 |
+
+### per-test와 per-class
+
+JUnit 5에서 두 패턴은 필드 선언 방식 한 줄 차이입니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="라이프사이클 두 패턴"
+    // per-test: 인스턴스 필드 → 매 테스트마다 새 컨테이너
+    @Testcontainers
+    class PerTestIT {
+        @Container
+        MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.4");
+    }
+
+    // per-class: static 필드 → 클래스당 한 번
+    @Testcontainers
+    class PerClassIT {
+        @Container
+        static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.4");
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="라이프사이클 두 패턴"
+    // per-test: 인스턴스 필드 → 매 테스트마다 새 컨테이너
+    @Testcontainers
+    class PerTestIT {
+        @Container
+        val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.4")
+    }
+
+    // per-class: companion object의 @JvmStatic → 클래스당 한 번
+    @Testcontainers
+    class PerClassIT {
+        companion object {
+            @Container
+            @JvmStatic
+            val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.4")
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+per-test는 안전하지만 비쌉니다. MySQL이 5초에 시작한다고 가정하면 테스트 메서드 10개 = 50초가 컨테이너 부팅에만 듭니다. 일반 통합 테스트는 매 테스트마다 트랜잭션 롤백으로 충분히 격리되므로 per-class가 기본값입니다.
+
+### Singleton 재사용
+
+여러 IT 클래스가 같은 MySQL을 공유하면 클래스마다 컨테이너를 띄우는 비용도 사라집니다. 이를 구현하는 가장 깔끔한 방법은 base class와 `withReuse(true)` 조합입니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="IntegrationTestBase.java"
+    public abstract class IntegrationTestBase {
+        static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
+            .withReuse(true);
+
+        static {
+            MYSQL.start(); // 첫 호출에만 실제로 시작
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="IntegrationTestBase.kt"
+    abstract class IntegrationTestBase {
+        companion object {
+            @JvmStatic
+            val MYSQL: MySQLContainer<*> = MySQLContainer("mysql:8.4")
+                .withReuse(true)
+                .also { it.start() } // 첫 호출에만 실제로 시작
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`withReuse(true)`는 테스트 종료 시 `stop()`을 호출하지 않습니다. 다음 테스트가 같은 spec(이미지, 포트, 환경 변수)으로 컨테이너를 요청하면 살아 있는 인스턴스를 그대로 재사용합니다. 로컬에서 같은 테스트를 반복할 때 시작 비용이 0에 수렴합니다.
+
+전제 조건은 사용자 홈 디렉터리의 `.testcontainers.properties`에 reuse 활성화 플래그가 있어야 한다는 점입니다.
+
+```properties title="~/.testcontainers.properties"
+testcontainers.reuse.enable=true
+```
+
+이 파일은 사용자 단위 설정이라 CI 환경에는 두지 않는 것이 일반적입니다. CI는 매 빌드가 깨끗한 머신에서 시작되므로 reuse 자체가 의미가 없고, 컨테이너가 살아남으면 오히려 정리가 어렵습니다. 실무에서는 **로컬은 Singleton + reuse, CI는 per-class**의 분기를 두는 패턴을 자주 씁니다.
+
+## 마무리
+
+여기까지가 Testcontainers 입문의 한 사이클입니다. BOM으로 의존성을 잡고, `GenericContainer` 또는 모듈 클래스로 컨테이너를 정의하고, Spring 통합으로 properties를 동적 주입하고, 라이프사이클로 비용을 조정합니다. 가장 중요한 한 가지를 다시 짚으면, **Testcontainers는 환경을 테스트 코드 옆에 같이 머물게 하는 도구**라는 점입니다. 환경이 코드와 같이 버전 관리되는 순간, 통합 테스트의 그린 신호가 운영 동작과 거의 일치합니다.
+
+이 글은 어디서부터 시작하는가에 집중했으므로, 다음 단계는 별도 글로 이어집니다.
+
+- 네트워크 토폴로지: 여러 컨테이너를 같은 Docker network에 묶고 컨테이너 간 통신을 검증하는 패턴
+- TestcontainersExtension 커스터마이즈: 데이터 시드, init script, custom wait strategy
+- Cloud-native 통합: AWS LocalStack, Confluent Schema Registry 같은 사이드카 모듈
+
+## 참고 자료
+
+- [Testcontainers Java Documentation](https://java.testcontainers.org/)
+- [Spring Boot @ServiceConnection](https://docs.spring.io/spring-boot/docs/current/reference/html/features.html#features.testing.testcontainers.service-connections)
+- [Spring Framework @DynamicPropertySource](https://docs.spring.io/spring-framework/reference/testing/testcontext-framework/ctx-management/dynamic-property-sources.html)
+- [Testcontainers Reuse Configuration](https://java.testcontainers.org/features/reuse/)
