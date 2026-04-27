@@ -76,12 +76,12 @@ spring-grpc가 이 배선을 대신 처리합니다. 크게 네 가지입니다.
 | 외부 설정화 | 포트·TLS·keepalive·메시지 크기 상한을 `application.properties`로 외부화 |
 | 공용 인프라 | `SslBundles`, Micrometer Observation, Actuator Health를 gRPC 쪽에도 연결 |
 
-한 가지 오해만 짚어 두면, spring-grpc는 gRPC 자체를 대체하지 않습니다. 내부적으로는 여전히 `grpc-java`의 `Server`와 `ManagedChannel`을 씁니다. 스타터는 이 객체들을 만들고 라이프사이클에 맞춰 관리하고 설정 소스와 묶어주는 "배선 층"만 Spring Boot 스타일로 표준화한 것입니다. 따라서 `ServerInterceptor`, `ClientInterceptor`, `Metadata` 같은 `grpc-java` API는 그대로 유효합니다.
+한 가지 오해만 짚어 두면, spring-grpc는 gRPC 자체를 대체하지 않습니다. 내부적으로는 여전히 `grpc-java`의 `Server`와 `ManagedChannel`을 씁니다. 스타터는 이 객체들을 만들고 라이프사이클에 맞춰 관리하고 설정 소스와 묶어주는 <E>배선 층</E>만 Spring Boot 스타일로 표준화한 것입니다. 따라서 `ServerInterceptor`, `ClientInterceptor`, `Metadata` 같은 `grpc-java` API는 그대로 유효합니다.
 
 ## 기초 문법
 
 <Callout type="warning" title="이 글의 핵심 포인트">
-  spring-grpc는 `grpc-java`를 대체하지 않고 감쌉니다. 아래 다섯 가지 문법 단위는 전부 기존 `grpc-java` API 위에 Spring Boot의 자동설정, 의존성 주입, 외부 설정을 얹은 얇은 층입니다. 각 어노테이션과 설정 키를 볼 때 "이게 원래 `grpc-java`에서는 무엇이었는가"를 떠올리면 구조가 선명해집니다.
+  spring-grpc는 `grpc-java`를 대체하지 않고 감쌉니다. 아래 다섯 가지 문법 단위는 전부 기존 `grpc-java` API 위에 Spring Boot의 자동설정, 의존성 주입, 외부 설정을 얹은 얇은 층입니다. 각 어노테이션과 설정 키를 볼 때 <E>이게 원래 `grpc-java`에서는 무엇이었는가</E>를 떠올리면 구조가 선명해집니다.
 </Callout>
 
 <Callout type="error" title="핵심 통찰: spring-grpc는 새로운 RPC가 아니라 Boot 규칙으로의 재배선">
@@ -282,7 +282,7 @@ management.observations.annotations.enabled=true
 
 ## Gotchas
 
-처음 붙일 때 반복적으로 부딪히는 다섯 가지입니다. 전부 "사용법 앵커" 성격으로, 에러 메시지와 해결책을 함께 두었습니다.
+처음 붙일 때 반복적으로 부딪히는 다섯 가지입니다. 전부 <E>사용법 앵커</E> 성격으로, 에러 메시지와 해결책을 함께 두었습니다.
 
 <Callout type="warning" title="Netty 스타터와 Servlet 스타터 동시 선언">
   `spring-grpc-spring-boot-starter`(Netty)와 `spring-grpc-server-web-spring-boot-starter`(Servlet) 둘 다 있으면 자동설정이 경쟁해 `GrpcServerFactory`가 두 개 생기거나 포트 바인딩 시점에 의도하지 않은 쪽이 선택됩니다. 프로세스당 하나만 남겨야 합니다.

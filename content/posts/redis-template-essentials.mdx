@@ -32,7 +32,7 @@ Redis를 쓰는 Spring 애플리케이션에서 가장 먼저 만나는 클래�
 
 ## RedisTemplate란
 
-`RedisTemplate`은 Spring Data Redis가 제공하는 Redis 연동의 표준 추상 클래스입니다. 한 문장으로 줄이면 "Redis 명령을 Java나 Kotlin 메서드 호출처럼 쓸 수 있게 감싸 둔 facade"입니다.
+`RedisTemplate`은 Spring Data Redis가 제공하는 Redis 연동의 표준 추상 클래스입니다. 한 문장으로 줄이면 <E>Redis 명령을 Java나 Kotlin 메서드 호출처럼 쓸 수 있게 감싸 둔 facade</E>입니다.
 
 내부를 펼쳐 보면 세 층이 쌓여 있습니다.
 
@@ -165,7 +165,7 @@ spring:
   </Tab>
 </Tabs>
 
-여기서 한 가지 함정이 있습니다. 자동 등록된 `RedisTemplate<Object, Object>`의 기본 Serializer는 JDK 직렬화라, 그대로 `set("user:1", userObject)`을 호출하면 redis-cli에 `\xAC\xED\x00\x05`로 시작하는 바이너리가 들어갑니다. 입문자가 "왜 CLI에 키가 안 보이지?"로 가장 자주 막히는 지점입니다. 다음 절에서 이 부분을 본격적으로 다룹니다.
+여기서 한 가지 함정이 있습니다. 자동 등록된 `RedisTemplate<Object, Object>`의 기본 Serializer는 JDK 직렬화라, 그대로 `set("user:1", userObject)`을 호출하면 redis-cli에 `\xAC\xED\x00\x05`로 시작하는 바이너리가 들어갑니다. 입문자가 <E>왜 CLI에 키가 안 보이지?</E>로 가장 자주 막히는 지점입니다. 다음 절에서 이 부분을 본격적으로 다룹니다.
 
 ## 직렬화
 

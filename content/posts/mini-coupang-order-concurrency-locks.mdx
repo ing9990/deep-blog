@@ -24,7 +24,11 @@ category: mini-coupang-backend
 draft: false
 ---
 
-단건 주문 API가 단일 스레드 통합 테스트는 통과합니다. 재고 100인 옵션에 200 스레드가 동시에 주문을 던지자, 200건이 모두 성공으로 기록됐고 재고는 56에서 멈췄습니다. 이 글은 `OptionStock.decrease`를 어디서 어떻게 보호할 것인가를 세 가지 구조 (락 없음, `synchronized` + `TransactionTemplate`, 비관적 락) 로 단계별 구현하고 같은 200-thread 테스트로 success / insufficient / finalStock 분포 변화를 닫습니다.
+이 글에서는 동시 주문이 몰리는 서버에서 재고를 안전하게 차감하는 방법을 단계별로 비교합니다. 단일 스레드 통합 테스트는 통과하지만, 재고 100인 옵션에 200 스레드가 한꺼번에 주문하면 200건이 모두 성공으로 기록되고 재고가 56에서 멈춥니다. 락 없는 상태에서 출발해 `synchronized` + `TransactionTemplate`, 비관적 락까지 같은 200 스레드 시나리오로 성공 건수, 재고 부족 응답, 최종 재고가 어떻게 달라지는지 확인합니다.
+
+- 상품의 재고는 초기 100개라고 가정합니다.
+- 200명의 사용자가 같은 옵션에 동시에 주문하는 시나리오 테스트입니다.
+- 정합성을 지키면 성공 100건, 재고 부족 100건, 최종 재고 0이 되어야 합니다.
 
 ## 요구사항과 제약
 
@@ -40,18 +44,18 @@ draft: false
 | 메트릭 | 목표 | 출처 |
 |---|---|---|
 | 단건 주문 p95 | 150ms 이하 | 가설 |
-| 재고 정합성 위반 | 0건 (lost update 0) | 도메인 invariant |
+| 재고 정합성 위반 | 0건 (lost update 0) | 도메인 정합 조건 |
 | 옵션당 평시 처리량 | 50 RPS | 가설 |
 
 ### 트래픽 시나리오
 
 | 윈도 | 옵션당 RPS | 배수 | 비고 |
 |---|---|---|---|
-| 평시 | 50 | 1× | baseline |
+| 평시 | 50 | 1× | 기준값 |
 | 인기 상품 | 300 | 6× | 광고 노출 직후 |
 | 한정 수량 핫딜 | 1000–3000 | 20–60× | 초 단위 spike, 재고 빠르게 0 도달 |
 
-테스트가 모사하는 것은 한정 핫딜의 극단(200 thread × stock 100)입니다. 본 글의 정합성 목표는 SLO 완화가 아니라 무손실 invariant입니다.
+이 글에서 다루는 200 스레드 / 재고 100 시나리오는 한정 수량 핫딜처럼 트래픽이 한 번에 쏟아지는 상황을 단순화한 것입니다. 처리 속도를 끌어올리는 것이 아니라 재고가 단 한 건도 잘못 차감되지 않도록 만드는 것이 이 글의 목표입니다.
 
 ## 아키텍처 결정
 
@@ -77,18 +81,18 @@ draft: false
 
 번호 결정.
 
-1. 재고를 도메인 엔티티 상태로 (`OptionStock.quantity`) 보관. 결제·주문이 같은 행을 공격하므로 invariant는 도메인이 책임진다.
-2. `@Transactional` 단일 트랜잭션 안에서 SELECT, 검사, 차감, INSERT order/items를 한 번에.
-3. 락 없이 시작. 측정 전에 락을 깔면 어떤 락이 어떤 효과를 내는지 비교 base가 사라진다.
-4. 테스트로 baseline을 고정. 실패하는 테스트가 다음 단계의 명세서가 된다.
+1. 재고를 도메인 엔티티 상태(`OptionStock.quantity`)로 보관한다. 결제와 주문이 같은 행에 몰리므로 정합 조건은 도메인이 책임진다.
+2. `@Transactional` 한 트랜잭션 안에서 SELECT, 검사, 차감, Order/OrderItem INSERT를 한 번에 처리한다.
+3. 락 없이 시작한다. 측정 전부터 락을 깔아 두면 어떤 락이 어떤 효과를 내는지 비교할 기준이 사라진다.
+4. 테스트로 동작을 고정한다. 실패하는 테스트가 다음 단계의 명세서가 된다.
 
 임계 영역은 위 도해의 빨간 노드(`OptionStockRepository` → `option_stocks` 행)입니다. 이 글은 그 임계 영역을 어디에 두느냐를 세 단계로 옮기는 이야기입니다.
 
-## A. 락 없음 (baseline)
+## 1. 락 없음 (출발점)
 
 ### 개요
 
-JVM 동기화도, DB 행 락도, 분산 락도 없습니다. 도메인 메서드 `OptionStock.decrease`가 자기 invariant(요청 수량이 현재 quantity보다 큰가)만 검사하고 차감을 진행합니다. 단일 스레드 시나리오에서는 정상 작동하지만, 동시 트랜잭션이 같은 옵션 행을 공격할 때 read-modify-write race가 정합성을 깨뜨리는 시작 지점입니다.
+JVM 동기화도, DB 행 락도, 분산 락도 없습니다. 도메인 메서드 `OptionStock.decrease`가 자기 조건(요청 수량이 현재 quantity보다 큰가)만 검사하고 차감을 진행합니다. 단일 스레드에서는 잘 동작하지만, 동시에 들어온 트랜잭션이 같은 옵션 행을 보면 조회와 쓰기 사이의 race로 정합성이 깨지는 출발점입니다.
 
 ### 구현
 
@@ -118,7 +122,7 @@ JPA dirty checking이 만드는 UPDATE는 `SET quantity = 99` 같은 계산된 �
 
 ### 테스트 코드 및 결과
 
-동시성 테스트는 §A · §B · §C 모두 같은 200 thread / stock 100 시나리오를 사용합니다.
+동시성 테스트는 세 단계 모두 같은 200 스레드 / 재고 100 시나리오를 사용합니다.
 
 ```java title="PlaceOrder<Stage>ConcurrencyTest.java"
 @Test
@@ -153,13 +157,13 @@ void place_200concurrent_sameSku_stock100_only100succeed() throws Exception {
     }
     barrier.countDown();
     done.await(60, TimeUnit.SECONDS);
-    // ... assert success/insufficient/finalStock
+    // ... assert 결과: success / insufficient / 최종 재고
 }
 ```
 
 `BusinessException + ErrorCode.INSUFFICIENT_AMOUNT`만 재고 부족으로 카운트하고 그 외 예외는 `other`로 분리해, 의도하지 않은 거절(예: `OPTION_NOT_FOUND`)이 success 누락으로 위장되는 것을 막습니다.
 
-![§A no-lock 200 thread 측정 결과](/images/posts/mini-coupang-order-concurrency-locks/a-no-lock-200-thread-result.png)
+![1단계 락 없음 200 스레드 측정 결과](/images/posts/mini-coupang-order-concurrency-locks/a-no-lock-200-thread-result.png)
 
 | 항목 | 기대 | 실측 |
 |---|---|---|
@@ -174,20 +178,20 @@ void place_200concurrent_sameSku_stock100_only100succeed() throws Exception {
 
 읽기. 200 트랜잭션이 모두 `quantity=100` snapshot을 본 채 검사를 통과(insufficient=0)했습니다. 차감은 200번 시도되었으나 DB에 반영된 것은 `100 - 56 = 44회`, 56회분 차감이 lost update입니다. 주문 200건은 모두 INSERT되어 sum amount가 두 배로 부풀었습니다.
 
-### 다음 단계 (B 소개)
+### 다음 단계: synchronized 도입
 
-가장 직설적인 해법은 `synchronized`로 read, 검사, 차감, 커밋의 윈도를 직렬화하는 것입니다. 단일 인스턴스에서는 `success=100/insufficient=100/finalStock=0`으로 정합성이 회복되지만, 잠금이 트랜잭션 커밋 안쪽이어야 한다는 함정이 등장합니다.
+가장 직접적인 해법은 `synchronized`로 조회·검사·차감·커밋을 한 줄로 세우는 것입니다. 단일 인스턴스에서는 성공 100건, 재고 부족 100건, 최종 재고 0으로 정합성이 회복되지만, 잠금을 트랜잭션 커밋 안쪽에 둬야 한다는 함정이 새로 등장합니다.
 
-## B. synchronized + TransactionTemplate
+## 2. synchronized + TransactionTemplate
 
 ### 개요
 
-§A의 lost update는 read와 차감 사이에 다른 트랜잭션이 같은 행의 stale snapshot을 잡았기 때문입니다. JVM 안에서 가장 단순한 해법은 `synchronized`로 그 윈도를 직렬화하는 것. `OrderService` 안에 `private final Object lock = new Object();`를 두고 `placeOrder`가 항상 그 모니터를 잡고 진입합니다.
+1단계에서 lost update가 일어난 이유는 조회와 차감 사이에 다른 트랜잭션이 같은 행의 오래된 값을 잡았기 때문입니다. JVM 안에서 가장 단순한 해법은 `synchronized`로 그 구간을 한 줄로 세우는 것입니다. `OrderService` 안에 `private final Object lock = new Object();`를 두고 `placeOrder`가 항상 그 모니터를 잡고 진입합니다.
 
 함정이 하나 있습니다.
 
 <Callout type="warning" title="@Transactional + synchronized 만으로는 부족하다">
-  `@Transactional`만 두고 메서드 자체를 `synchronized`로 바꾸면 잠금이 트랜잭션 커밋보다 먼저 풀립니다. Spring AOP 프록시의 호출 순서는 `tx start → real method (synchronized 진입, 작업, 잠금 해제) → tx commit`이라, 락이 풀린 직후 다른 스레드가 진입하지만 첫 트랜잭션은 아직 커밋 전이라 또다시 stale한 stock 행을 봅니다. §A와 동일한 lost update가 그대로 재현됩니다.
+  `@Transactional`만 두고 메서드 자체를 `synchronized`로 바꾸면 잠금이 트랜잭션 커밋보다 먼저 풀립니다. Spring AOP 프록시의 호출 순서는 `tx start → real method (synchronized 진입, 작업, 잠금 해제) → tx commit`이라, 락이 풀린 직후 다른 스레드가 진입하지만 첫 트랜잭션은 아직 커밋 전이라 다시 옛 stock 행을 봅니다. 1단계와 동일한 lost update가 그대로 재현됩니다.
 </Callout>
 
 이를 막으려면 잠금 안쪽에서 `TransactionTemplate`으로 트랜잭션을 직접 열고 닫아 잠금이 커밋까지 포함하도록 합니다.
@@ -215,7 +219,7 @@ public class OrderServiceSynchronized {
         }
     }
 
-    // doPlaceOrder: §A 와 동일한 stock 조회 → decrease → 주문 INSERT
+    // doPlaceOrder: 1단계와 동일한 stock 조회 → decrease → 주문 INSERT
 }
 ```
 
@@ -226,11 +230,11 @@ public class OrderServiceSynchronized {
 
 ### 테스트 코드 및 결과
 
-§A와 동일한 200 thread / stock 100 시나리오 (`PlaceOrderSynchronizedConcurrencyTest`).
+1단계와 동일한 200 스레드 / 재고 100 시나리오입니다 (`PlaceOrderSynchronizedConcurrencyTest`).
 
-![§B synchronized 200 thread 측정 결과](/images/posts/mini-coupang-order-concurrency-locks/b-synchronized-200-thread-result.png)
+![2단계 synchronized 200 스레드 측정 결과](/images/posts/mini-coupang-order-concurrency-locks/b-synchronized-200-thread-result.png)
 
-| 항목 | 기대 | 실측 (§A 대비) |
+| 항목 | 기대 | 실측 (1단계 대비) |
 |---|---|---|
 | `success` | 100 | **100** (←200) |
 | `insufficient` | 100 | **100** (←0) |
@@ -239,24 +243,24 @@ public class OrderServiceSynchronized {
 | `orders saved` | 100 | **100** (←200) |
 | `sum amount` | 500,000 | **500,000** (←1,000,000) |
 
-200 트랜잭션이 직렬화돼 첫 100건만 성공, 나머지 100건은 빈 stock 행을 보고 `INSUFFICIENT_AMOUNT`로 거절됐습니다. lost update 0건. 도메인 invariant `success_count ≤ initial_stock`과 `final_stock ≥ 0` 모두 만족.
+200 트랜잭션이 직렬화돼 첫 100건만 성공하고 나머지 100건은 빈 stock 행을 보고 `INSUFFICIENT_AMOUNT`로 거절됐습니다. lost update 0건. 도메인 정합 조건 `success_count ≤ initial_stock`과 `final_stock ≥ 0` 모두 만족합니다.
 
-### 다음 단계 (C 소개)
+### 다음 단계: 비관적 락
 
 `synchronized`로 정합성은 회복했지만, 이 해결책은 단일 JVM 한정입니다. 두 가지 방향으로 깨집니다.
 
-1. **Scale-Out으로 무력화.** WAS가 두 대 이상 떠 있으면 각 인스턴스가 자기 모니터만 가집니다. 두 JVM의 `OrderServiceSynchronized` 빈은 서로 다른 `lock` 객체를 쥐고 있어, 서로 다른 인스턴스로 라우팅된 두 주문이 같은 옵션 행에 동시에 차감을 시도하면 §A의 lost update가 그대로 돌아옵니다. 핫딜 트래픽은 정확히 이런 부하를 만듭니다.
+1. **Scale-Out으로 무력화.** WAS가 두 대 이상 떠 있으면 각 인스턴스가 자기 모니터만 가집니다. 두 JVM의 `OrderServiceSynchronized` 빈은 서로 다른 `lock` 객체를 쥐고 있어, 서로 다른 인스턴스로 라우팅된 두 주문이 같은 옵션 행에 동시에 차감을 시도하면 1단계의 lost update가 그대로 돌아옵니다. 핫딜 트래픽은 정확히 이런 부하를 만듭니다.
 2. **`Map<Long, Object>` per-optionId 잠금도 같은 한계.** 개선 후보로 자주 꺼내지는 옵션 ID 단위 락 풀(`ConcurrentHashMap<Long, Object>`에서 옵션 ID별 모니터를 꺼내 잠그는 형태)은 단일 인스턴스 내부 처리량은 늘리지만 여전히 in-memory라 분산 환경에서는 동일하게 무력합니다. JVM monitor든, ReentrantLock per-key 풀이든, 잠금 객체가 한 프로세스 메모리에만 존재하는 한 결론은 같습니다.
 
-다음 단계 §C는 잠금 주체를 JVM 메모리에서 MySQL 행 락으로 옮깁니다.
+다음 단계는 잠금을 JVM 메모리에서 MySQL 행 락으로 옮깁니다.
 
-## C. 비관적 락
+## 3. 비관적 락
 
 ### 개요
 
 `SELECT ... FOR UPDATE`는 트랜잭션이 커밋/롤백될 때까지 해당 행에 대한 다른 모든 트랜잭션의 쓰기 락 획득을 막습니다. 인스턴스가 몇 개든 동일 행을 가리키는 트랜잭션을 직렬화합니다.
 
-JPA에서는 `@Lock(LockModeType.PESSIMISTIC_WRITE)`와 JPQL 한 줄로 같은 효과를 얻습니다. 옵션 stock 행의 read 시점에 락을 획득하고, `@Transactional` 경계에서 자동으로 해제됩니다. §B의 `TransactionTemplate` 같은 명시적 트랜잭션 제어가 필요 없습니다 (락 자체가 DB 트랜잭션 라이프사이클에 묶여 있기 때문).
+JPA에서는 `@Lock(LockModeType.PESSIMISTIC_WRITE)`와 JPQL 한 줄로 같은 효과를 얻습니다. 옵션 stock 행을 조회하는 시점에 락을 획득하고, `@Transactional` 경계에서 자동으로 풀립니다. 2단계의 `TransactionTemplate` 같은 명시적 트랜잭션 제어가 필요 없습니다 (락 자체가 DB 트랜잭션 라이프사이클에 묶여 있기 때문입니다).
 
 ### 구현
 
@@ -287,14 +291,14 @@ public class OrderService {
 }
 ```
 
-§B와 비교한 두 가지 차이.
+2단계와 비교한 두 가지 차이.
 
 1. `synchronized (lock)` 블록과 `TransactionTemplate.execute(...)`가 사라졌다. `@Transactional` 한 줄로 잠금 라이프사이클이 트랜잭션 경계에 일치한다.
 2. `findByOptionId` → `findByOptionIdForUpdate` 한 글자 차이. 발행되는 SQL 끝에 `for update`가 붙고 MySQL/H2(MySQL 모드)는 그 행에 X 락을 건다.
 
 ### 테스트 코드 및 결과
 
-§A · §B와 동일한 200 thread / stock 100 시나리오 (`PlaceOrderPessimisticConcurrencyTest`). `OrderService`가 빈으로 등록되므로 `@Autowired`로 받아 그대로 사용합니다.
+앞 두 단계와 동일한 200 스레드 / 재고 100 시나리오입니다 (`PlaceOrderPessimisticConcurrencyTest`). `OrderService`가 빈으로 등록되므로 `@Autowired`로 받아 그대로 사용합니다.
 
 검증을 위해 테스트 프로파일에 SQL 로깅을 켭니다.
 
@@ -313,7 +317,7 @@ logging:
 
 테스트 실행 시 200 스레드 모두 정확히 다음 모양의 쿼리를 발행합니다.
 
-![§C 비관적 락 SELECT FOR UPDATE 발행 로그](/images/posts/mini-coupang-order-concurrency-locks/c-pessimistic-for-update-sql.png)
+![3단계 비관적 락 SELECT FOR UPDATE 발행 로그](/images/posts/mini-coupang-order-concurrency-locks/c-pessimistic-for-update-sql.png)
 
 ```sql title="발행된 쿼리 (Hibernate)"
 /* select s from OptionStock s where s.optionId = :optionId */
@@ -331,9 +335,9 @@ where
 
 `org.hibernate.orm.jdbc.bind` TRACE 로그로 `binding parameter (1:BIGINT) <- [1]`까지 함께 확인합니다. JPA가 잠금 명시를 빠뜨리거나 다른 인덱스 경로로 우회하지 않았는지 검증되는 지점입니다.
 
-![§C 비관적 락 200 thread 측정 결과](/images/posts/mini-coupang-order-concurrency-locks/c-pessimistic-200-thread-result.png)
+![3단계 비관적 락 200 스레드 측정 결과](/images/posts/mini-coupang-order-concurrency-locks/c-pessimistic-200-thread-result.png)
 
-| 항목 | 기대 | 실측 (§B 대비) |
+| 항목 | 기대 | 실측 (2단계 대비) |
 |---|---|---|
 | `success` | 100 | **100** (동일) |
 | `insufficient` | 100 | **100** (동일) |
@@ -342,9 +346,9 @@ where
 | `orders saved` | 100 | 100 |
 | `sum amount` | 500,000 | 500,000 |
 
-단일 JVM과 단일 H2 인스턴스 환경에서는 §B와 정량적으로 같은 결과입니다. 의미 있는 차이는 적용 조건에 있습니다. §B는 단일 JVM 안에서만 직렬화하지만 §C는 동일 행을 가리키는 모든 트랜잭션을 DB 레벨에서 직렬화합니다. 단일 H2 환경에서는 두 결과가 일치하는 게 정상이며, scale-out 시뮬레이션 없이 정량적 우위를 보이려는 것은 측정 가짜를 만듭니다.
+단일 JVM과 단일 H2 인스턴스 환경에서는 2단계와 같은 숫자가 나옵니다. 의미 있는 차이는 적용 조건에 있습니다. 2단계는 단일 JVM 안에서만 직렬화하지만 3단계는 동일 행을 가리키는 모든 트랜잭션을 DB 레벨에서 직렬화합니다. 단일 H2 환경에서는 두 결과가 일치하는 것이 정상이며, scale-out 시뮬레이션 없이 정량적 우위를 보이려고 하면 측정값이 거짓이 됩니다.
 
-### 발견된 한계 (D 소개)
+### 발견된 한계: Redis와 Lua로 가는 길
 
 비관적 락이 정합성을 해결한 대가는 세 가지 비용으로 돌아옵니다.
 
@@ -354,7 +358,7 @@ where
 | DB connection 점유 | 락 보유 동안 connection 함께 점유 | 풀 사이즈(HikariCP 기본 10)와 충돌, 빠른 connection 고갈 |
 | 핫 row 라인업 | 인기 옵션 1개에 트래픽 집중 | 처리량이 1행 × 1 connection × 1 트랜잭션 시간으로 묶임 |
 
-다음 글에서 다룰 후보는 Redis 기반 분산 락과 Lua atomic decrement입니다. 잠금 주체를 DB에서 in-memory 키-값 저장소로 옮기면 락 보유 시간이 sub-millisecond 단위로 줄고, Lua 스크립트로 read-check-decrement를 atomic 한 번으로 묶어 락 자체를 생략하는 길도 열립니다. 그 대신 새로운 한계(Redis 단일 실패 지점, fence token, 클럭 스큐, 키 만료 race)가 따라옵니다.
+다음 글에서 다룰 후보는 Redis 기반 분산 락과 Lua atomic decrement입니다. 잠금을 DB에서 인메모리 키-값 저장소로 옮기면 락 보유 시간이 sub-millisecond 단위로 줄고, Lua 스크립트로 조회·검사·차감을 한 번에 묶어 락 자체를 생략하는 길도 열립니다. 그 대신 새로운 한계(Redis 단일 실패 지점, fence token, 클럭 스큐, 키 만료 race)가 따라옵니다.
 
 ## 결론
 
@@ -362,12 +366,12 @@ where
 
 | 단계 | 잠금 주체 | success | insufficient | final stock | 적용 조건 |
 |---|---|---|---|---|---|
-| §A no-lock | 없음 | 200 | 0 | 56 | 단일 스레드만 |
-| §B synchronized + TxTemplate | JVM 모니터 | 100 | 100 | 0 | 단일 JVM |
-| §C 비관적 락 | DB 행 락 | 100 | 100 | 0 | 단일 DB 인스턴스 |
+| 1단계 락 없음 | 없음 | 200 | 0 | 56 | 단일 스레드만 |
+| 2단계 synchronized + TxTemplate | JVM 모니터 | 100 | 100 | 0 | 단일 JVM |
+| 3단계 비관적 락 | DB 행 락 | 100 | 100 | 0 | 단일 DB 인스턴스 |
 
 <Callout type="error" title="핵심 통찰: 잠금은 없앨 수 없고 어디에 둘지를 정할 뿐이다">
-  임계 영역을 도메인 메서드 안(§A) → JVM 모니터(§B) → DB 행(§C)으로 옮긴 것이 본 글의 전부입니다. 어느 곳에 두느냐가 처리량, 분산 가능성, 운영 비용을 결정합니다.
+  잠금 위치를 도메인 메서드 안(1단계) → JVM 모니터(2단계) → DB 행(3단계)으로 옮긴 것이 이 글의 전부입니다. 어느 곳에 두느냐가 처리량, 분산 가능성, 운영 비용을 결정합니다.
 </Callout>
 
 남은 한계와 다음 단계.
