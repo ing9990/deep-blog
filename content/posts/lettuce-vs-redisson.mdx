@@ -1,0 +1,464 @@
+---
+title:
+  ko: "Lettuce vs Redisson"
+  en: "Lettuce vs Redisson"
+slug: "lettuce-vs-redisson"
+date: 2026-04-28
+tags:
+  - Backend
+  - Spring
+  - Redis
+  - Java
+  - Kotlin
+keywords:
+  - Lettuce
+  - Redisson
+  - RLock
+  - Watchdog
+  - Netty
+summary:
+  ko: "Spring 백엔드에서 가장 흔히 만나는 두 Redis 클라이언트의 차이를 내부 동작 수준에서 정리합니다. Lettuce는 명령을 그대로 보내는 얇은 클라이언트, Redisson은 분산 락과 자료구조를 Java/Kotlin 객체처럼 다루게 해주는 두꺼운 라이브러리입니다."
+  en: "A side-by-side look at the two Redis clients most Spring backends actually choose. Lettuce is a thin Netty-based command sender; Redisson is a thicker library that exposes distributed locks and structures as Java/Kotlin objects."
+category: language-backend
+draft: false
+---
+
+Spring Boot로 Redis를 붙이면 가장 먼저 마주치는 두 이름이 Lettuce와 Redisson입니다. 둘 다 Redis를 쓰는 도구지만 위치가 다릅니다. Lettuce는 Redis 명령을 그대로 보내는 얇은 클라이언트이고, Redisson은 그 위에 분산 락·맵·큐 같은 객체 추상을 얹어 둔 두꺼운 라이브러리입니다. 이 글은 둘이 어떤 일을 하고 어디서 갈라지는지를 코드와 동작 그림으로 비교합니다.
+
+<Note title="이 글의 학습 목표">
+  - Lettuce와 Redisson이 내부적으로 어떻게 다르게 동작하는지 이해한다
+  - 분산 락 구현에서 두 라이브러리가 어떻게 다른 코드를 강제하는지 구분할 수 있다
+  - 새 프로젝트에서 어떤 클라이언트를 고를지 판단하는 기준을 얻는다
+</Note>
+
+## 두 라이브러리
+
+먼저 한 줄 정의입니다.
+
+- **Lettuce**: Netty 기반의 non-blocking Redis 명령 클라이언트입니다. `GET`, `SET`, `EVAL` 같은 Redis 명령을 Java나 Kotlin 메서드 호출로 옮겨 주는 것이 전부입니다.
+- **Redisson**: 위와 같은 명령 송신 계층을 직접 구현한 뒤, 그 위에 `RLock`, `RMap`, `RQueue` 같은 분산 객체를 얹은 라이브러리입니다. 사용자는 분산 락이나 분산 자료구조를 <E>로컬 객체처럼</E> 호출합니다.
+
+Spring Data Redis 의존성(`spring-boot-starter-data-redis`)이 기본으로 끌어오는 드라이버는 Lettuce입니다. Redisson은 `redisson-spring-boot-starter`를 별도로 추가해야 들어옵니다. 즉 <E>아무 설정도 안 하면 Lettuce를 쓰고 있는 것</E>이고, Redisson은 의식적으로 도입하는 선택지입니다.
+
+<Diagram caption="두 클라이언트의 위치 (애플리케이션 ↔ Redis)">{`flowchart LR
+    subgraph App["JVM 애플리케이션"]
+      Code["서비스 코드"]
+      L["Lettuce<br/>RedisCommands"]
+      R["Redisson<br/>RLock / RMap / ..."]
+      RNetty["Redisson 내부<br/>Netty 명령 송신"]
+    end
+
+    Redis[("Redis 서버")]
+
+    Code -->|"redisTemplate.opsForValue().set(...)"| L
+    Code -->|"redissonClient.getLock('k').lock()"| R
+    R --> RNetty
+    L -->|"SET k v"| Redis
+    RNetty -->|"EVAL Lua 스크립트<br/>SUBSCRIBE channel"| Redis
+
+    classDef thin fill:transparent,stroke:#2563eb,stroke-width:1.5px;
+    classDef thick fill:transparent,stroke:#7c3aed,stroke-width:1.5px;
+    class L thin
+    class R,RNetty thick
+`}</Diagram>
+
+이 그림이 글 전체의 요약입니다. Lettuce는 Redis 명령 한 개를 한 개의 함수 호출로 매핑하고 끝납니다. Redisson은 사용자가 호출한 한 줄을 자신의 내부 로직으로 풀어, 다수의 Redis 명령(주로 Lua 스크립트)과 Pub/Sub 구독을 조합해 분산 객체의 의미를 만들어 냅니다.
+
+<RelatedPost slug="redis-template-essentials" type="prerequisite" />
+
+## 왜 갈라졌나
+
+Redis 자체는 명령 단위 자료구조 서버입니다. <E>키 K에 값 V를 저장하라</E>, <E>이 Hash의 필드 X를 1 증가시키라</E> 같은 단순 연산을 매우 빠르게 처리하는 것이 본업입니다. 분산 락이나 분산 큐 같은 <E>의미 단위</E>는 Redis 자체가 제공하는 게 아니라, 클라이언트가 여러 명령을 조합해 만들어 내야 하는 패턴입니다.
+
+여기서 두 가지 경로가 갈립니다.
+
+- **명령 경로 (Lettuce)**: Redis가 노출하는 명령을 그대로 SDK로 옮긴다. 의미 단위는 사용자가 직접 조합한다. 예: 분산 락은 `SET key value NX PX ttl`로 직접 짠다.
+- **객체 경로 (Redisson)**: 의미 단위(락, 큐, 맵)를 미리 구현해 두고 사용자에게 객체 인터페이스로 노출한다. 사용자는 `lock()`, `tryLock()`만 호출하고, 안에서 일어나는 Lua, Pub/Sub, 만료 갱신은 라이브러리가 처리한다.
+
+같은 도구로 같은 Redis 서버를 다루지만, 사용자가 보는 추상 단계가 다릅니다. Lettuce는 Redis의 RESP 프로토콜에 가깝고, Redisson은 `java.util.concurrent.locks.Lock` 같은 표준 자바 추상에 가깝습니다.
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Lettuce와 Redisson은 같은 Redis를 쓰는 두 클라이언트지만, **의미 단위를 누가 만드는가**라는 한 가지 결정에서 갈라집니다. 명령을 직접 조합할 것인지, 라이브러리가 만들어 둔 분산 객체를 빌릴 것인지가 선택의 본질입니다.
+</Callout>
+
+## 내부 동작
+
+### Lettuce: Netty 단일 connection 멀티플렉싱
+
+Lettuce는 Netty 기반 non-blocking 클라이언트입니다. 가장 큰 특징은 <E>여러 스레드가 단 하나의 TCP connection을 공유</E>하면서도 안전하게 동작한다는 점입니다.
+
+<Diagram caption="Lettuce의 명령 송신 (단일 connection 멀티플렉싱)">{`sequenceDiagram
+    participant T1 as Thread 1
+    participant T2 as Thread 2
+    participant L as Lettuce<br/>Netty Channel
+    participant R as Redis Server
+
+    T1->>L: SET k1 v1
+    T2->>L: GET k2
+    Note over L: 두 명령을 같은 connection<br/>으로 차례차례 write
+    L->>R: SET k1 v1
+    L->>R: GET k2
+    R-->>L: OK
+    R-->>L: "v2"
+    Note over L: 응답이 도착한 순서대로<br/>대응되는 호출자에게 전달
+    L-->>T1: OK
+    L-->>T2: "v2"
+`}</Diagram>
+
+Redis 자체가 단일 스레드로 명령을 순차 처리하므로, 클라이언트 측에서 connection을 여러 개 들고 있어도 처리 속도가 늘지 않습니다. Lettuce는 이 점을 받아들여 connection을 풀로 관리하지 않고 하나로 충분히 운용합니다. 명령을 보낸 순서와 응답이 돌아온 순서가 같다는 RESP 프로토콜의 보장(파이프라이닝)을 그대로 활용합니다.
+
+이 모델 덕에 사용자는 별도 풀 설정 없이 `RedisTemplate`을 여러 스레드에서 공유해도 안전합니다. 반면 Jedis는 connection-per-thread 모델이라 풀이 사실상 필수입니다. Spring Boot가 기본 드라이버를 Lettuce로 바꾼 이유가 여기 있습니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="ProductCacheRepository.java"
+    @Repository
+    public class ProductCacheRepository {
+        private final StringRedisTemplate redis;
+
+        public ProductCacheRepository(StringRedisTemplate redis) {
+            this.redis = redis;
+        }
+
+        public Optional<String> findName(long productId) {
+            String name = redis.opsForValue().get("product:" + productId);
+            return Optional.ofNullable(name);
+        }
+
+        public void cacheName(long productId, String name, Duration ttl) {
+            redis.opsForValue().set("product:" + productId, name, ttl);
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="ProductCacheRepository.kt"
+    @Repository
+    class ProductCacheRepository(
+        private val redis: StringRedisTemplate,
+    ) {
+        fun findName(productId: Long): String? =
+            redis.opsForValue().get("product:$productId")
+
+        fun cacheName(productId: Long, name: String, ttl: Duration) {
+            redis.opsForValue().set("product:$productId", name, ttl)
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+여기서 `StringRedisTemplate` 안에서 일어나는 일은 단순합니다. `set("product:1", "milk", 10s)` 한 줄이 그대로 `SET product:1 milk EX 10` 한 명령으로 직렬화되어 Netty 채널을 타고 Redis에 도달합니다. <E>한 줄 호출 = 한 줄 명령</E>이라는 점이 Lettuce의 멘탈 모델입니다.
+
+### Redisson: 분산 객체 + 백그라운드 갱신
+
+Redisson은 같은 Netty 송신 계층을 직접 구현하면서, 그 위에 분산 객체를 얹습니다. 가장 자주 쓰이는 객체는 `RLock`이며, 이 안에서 두 가지 장치가 함께 작동합니다.
+
+<Callout type="error" title="핵심 통찰: Redisson의 객체 추상은 공짜가 아니다">
+  Redisson의 `lock()` 한 줄은 내부적으로 Lua 스크립트 실행, Pub/Sub 채널 구독, 백그라운드 만료 갱신 스레드(watchdog)를 함께 돌립니다. Java 표준 락과 같은 인터페이스를 제공하기 위해 그만큼의 Redis 부하와 백그라운드 작업이 늘 따라붙습니다.
+</Callout>
+
+#### RLock의 락 획득 흐름
+
+`RLock.lock()`을 호출하면 다음 순서로 동작합니다.
+
+<Diagram caption="Redisson RLock 락 획득 시퀀스">{`sequenceDiagram
+    participant App as 애플리케이션 스레드
+    participant R as Redisson 클라이언트
+    participant Redis as Redis 서버
+
+    App->>R: lock.lock()
+    R->>Redis: EVAL (Lua: 락 획득 시도)
+    alt 락 비어있음
+      Redis-->>R: nil (성공, PEXPIRE 30s 적용)
+      R-->>App: 반환 (임계 영역 진입)
+    else 다른 holder가 점유 중
+      Redis-->>R: pttl(남은 TTL ms)
+      R->>Redis: SUBSCRIBE redisson_lock__channel:{key}
+      Note over R,Redis: 해제 신호를 기다림
+      Redis-->>R: PUBLISH 수신 (다른 holder 해제)
+      R->>Redis: 다시 EVAL (재시도)
+      Redis-->>R: nil (성공)
+      R-->>App: 반환
+    end
+`}</Diagram>
+
+핵심은 두 가지입니다.
+
+- **Lua 스크립트로 원자성 확보**: 락 점유 여부 확인, 획득, 만료 시각 설정을 한 번의 `EVAL` 안에서 처리합니다. Hash 자료구조에 thread UUID를 필드로 두고 카운트를 올리는 방식이라 동일 스레드 재진입(reentrant)도 자연스럽게 됩니다.
+- **Pub/Sub로 대기 효율화**: 다른 holder가 점유 중일 때 단순 폴링 대신 채널을 구독하고 기다립니다. 해제 시 publish가 오기 때문에 깨어나는 시점이 정확합니다.
+
+Lua 스크립트 한 토막을 보면 의미가 더 분명해집니다. 아래는 `RLock.lock()`이 사용하는 락 획득 스크립트의 핵심부입니다.
+
+```lua title="lock-acquire.lua (요약)"
+if (redis.call('exists', KEYS[1]) == 0) then
+    redis.call('hincrby', KEYS[1], ARGV[2], 1);     -- ARGV[2] = thread UUID
+    redis.call('pexpire', KEYS[1], ARGV[1]);        -- ARGV[1] = lease ms
+    return nil;                                      -- 획득 성공
+end;
+if (redis.call('hexists', KEYS[1], ARGV[2]) == 1) then
+    redis.call('hincrby', KEYS[1], ARGV[2], 1);     -- 재진입 카운트 증가
+    redis.call('pexpire', KEYS[1], ARGV[1]);
+    return nil;
+end;
+return redis.call('pttl', KEYS[1]);                 -- 다른 holder의 남은 TTL
+```
+
+`RLock`이 Redis Hash 자료구조를 쓰는 이유가 여기서 보입니다. 같은 키 안에 여러 스레드 UUID와 카운트를 담을 수 있어야 재진입 락이 가능합니다. 단순 `SET k v NX EX`로는 표현이 안 되는 의미입니다.
+
+<RelatedPost slug="redis-lua-scripting" type="deep-dive" />
+
+#### Watchdog (만료 자동 갱신)
+
+`lock(leaseTime, unit)` 형태로 만료 시간을 직접 주지 않고 인자 없는 `lock()`을 호출하면, Redisson이 백그라운드에서 락의 TTL을 주기적으로 늘려 줍니다. 이를 watchdog이라 부릅니다.
+
+<Diagram caption="Watchdog 만료 갱신 (기본값 lease 30s, 갱신 주기 10s)">{`sequenceDiagram
+    participant App as 애플리케이션 스레드
+    participant W as Redisson Watchdog
+    participant Redis as Redis 서버
+
+    App->>Redis: lock 획득 (PEXPIRE 30s)
+    Note over W: 10s 마다 한 번씩
+    W->>Redis: PEXPIRE key 30s (재설정)
+    W->>Redis: PEXPIRE key 30s
+    W->>Redis: PEXPIRE key 30s
+    Note over App: 임계 영역 작업 진행 중
+    App->>Redis: unlock (HDEL + PUBLISH)
+    Note over W: 더 이상 갱신하지 않음
+`}</Diagram>
+
+설계 의도는 단순합니다. 락 보유 스레드가 어떤 이유로든 길어져도, JVM이 살아 있는 한 락은 만료되지 않습니다. 반대로 JVM이 죽으면 watchdog도 멈추므로 락은 다음 만료 시각에 자연스럽게 풀립니다(기본 30초). 짧은 leaseTime을 명시적으로 주면 watchdog은 비활성화되고, 사용자가 직접 만료를 책임집니다.
+
+<Callout type="warning" title="watchdog이 항상 켜지는 것은 아니다">
+  `lock(leaseTime, unit)`이나 `tryLock(waitTime, leaseTime, unit)`처럼 leaseTime을 명시하면 watchdog은 동작하지 않습니다. 짧은 leaseTime을 줘서 임계 영역이 끝나기 전에 락이 풀리면 데이터 정합성이 깨질 수 있으므로, watchdog 동작 여부는 항상 명확히 알고 있어야 합니다.
+</Callout>
+
+## 분산 락에서 차이
+
+두 라이브러리의 사용 차이가 가장 잘 드러나는 곳이 분산 락입니다. <E>재고 1개를 두 사용자가 동시에 차감</E> 같은 상황에서, 어떤 코드가 나오는지 비교해 보겠습니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="StockService.java (Lettuce 직접 구현)"
+    @Service
+    public class StockService {
+        private static final Duration LOCK_TTL = Duration.ofSeconds(3);
+        private final StringRedisTemplate redis;
+        private final StockRepository stockRepository;
+
+        public boolean decrementWithLettuce(long productId) {
+            String key = "lock:stock:" + productId;
+            String token = UUID.randomUUID().toString();
+
+            Boolean acquired = redis.opsForValue()
+                .setIfAbsent(key, token, LOCK_TTL);                  // [!code highlight]
+            if (!Boolean.TRUE.equals(acquired)) {
+                return false;
+            }
+            try {
+                return stockRepository.decrement(productId);
+            } finally {
+                releaseIfMine(key, token);                            // [!code highlight]
+            }
+        }
+
+        private void releaseIfMine(String key, String token) {
+            String script =
+                "if redis.call('get', KEYS[1]) == ARGV[1] " +
+                "then return redis.call('del', KEYS[1]) else return 0 end";
+            redis.execute(
+                new DefaultRedisScript<>(script, Long.class),
+                List.of(key),
+                token);
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="StockService.kt (Lettuce 직접 구현)"
+    @Service
+    class StockService(
+        private val redis: StringRedisTemplate,
+        private val stockRepository: StockRepository,
+    ) {
+        fun decrementWithLettuce(productId: Long): Boolean {
+            val key = "lock:stock:$productId"
+            val token = UUID.randomUUID().toString()
+
+            val acquired = redis.opsForValue()
+                .setIfAbsent(key, token, LOCK_TTL)                    // [!code highlight]
+            if (acquired != true) return false
+
+            return try {
+                stockRepository.decrement(productId)
+            } finally {
+                releaseIfMine(key, token)                              // [!code highlight]
+            }
+        }
+
+        private fun releaseIfMine(key: String, token: String) {
+            val script = """
+                if redis.call('get', KEYS[1]) == ARGV[1]
+                then return redis.call('del', KEYS[1])
+                else return 0 end
+            """.trimIndent()
+            redis.execute(
+                DefaultRedisScript(script, Long::class.java),
+                listOf(key),
+                token,
+            )
+        }
+
+        companion object {
+            private val LOCK_TTL: Duration = Duration.ofSeconds(3)
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+직접 구현하면 신경 써야 할 항목이 다섯 가지 정도 떠오릅니다.
+
+| 항목 | 책임자 |
+|---|---|
+| `SET NX EX`로 원자 획득 | 사용자 코드 |
+| 토큰 생성 (소유자 식별) | 사용자 코드 |
+| 해제 시 토큰 검증 (다른 holder 락 삭제 방지) | 사용자 코드 |
+| TTL이 너무 짧을 때 임계 영역 도중 만료 | 사용자 책임, 직접 갱신 필요 |
+| 재진입 (같은 스레드 재호출) | 직접 구현 필요 |
+
+같은 일을 Redisson으로 옮기면 표 다섯 줄이 사실상 사라집니다.
+
+<Tabs group="lang">
+  <Tab label="Java">
+    ```java title="StockService.java (Redisson)"
+    @Service
+    public class StockService {
+        private final RedissonClient redisson;
+        private final StockRepository stockRepository;
+
+        public boolean decrementWithRedisson(long productId) {
+            RLock lock = redisson.getLock("lock:stock:" + productId);
+            lock.lock();                                              // [!code highlight]
+            try {
+                return stockRepository.decrement(productId);
+            } finally {
+                lock.unlock();                                         // [!code highlight]
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="StockService.kt (Redisson)"
+    @Service
+    class StockService(
+        private val redisson: RedissonClient,
+        private val stockRepository: StockRepository,
+    ) {
+        fun decrementWithRedisson(productId: Long): Boolean {
+            val lock = redisson.getLock("lock:stock:$productId")
+            lock.lock()                                                // [!code highlight]
+            try {
+                return stockRepository.decrement(productId)
+            } finally {
+                lock.unlock()                                          // [!code highlight]
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`lock()` 한 줄 안에서 토큰 발급, Lua 기반 원자 획득, watchdog 등록까지 다 끝납니다. `unlock()`은 Lua로 자기 토큰을 검증한 뒤 해제하고 Pub/Sub로 대기자를 깨웁니다. <E>잘못 짤 여지 자체가 줄어든다</E>는 점이 Redisson의 가장 큰 매력입니다.
+
+대신 한 줄 호출에 가려진 비용도 같이 늘어납니다.
+
+- `lock()` 호출 한 번에 Redis로 가는 명령은 보통 `EVAL` + `SUBSCRIBE`가 함께 발생합니다. 점유율이 높은 키에서는 단순 `SET NX`보다 트래픽이 큽니다.
+- watchdog은 JVM에 백그라운드 스케줄링 작업을 추가합니다. 락이 많을수록 스케줄러 부담도 커집니다.
+- 잘못된 사용(만료를 지정하지 않은 채로 한 번도 풀지 않은 락 등)은 watchdog이 무한 갱신해 키가 사실상 영구 점유될 수 있습니다.
+
+<RelatedPost slug="mini-coupang-order-concurrency-locks" type="parallel" />
+
+## 실전 문제
+
+운영 환경에서 두 라이브러리는 다음 지점에서 자주 갈립니다.
+
+### 의존성 크기와 클래스로딩
+
+`spring-boot-starter-data-redis`는 Lettuce + Spring Data Redis만 끌어옵니다. Redisson을 추가하면 Netty 일부와 codec 계열 라이브러리가 추가로 들어와 jar 크기가 커집니다. 컨테이너 이미지 사이즈를 신경 쓰는 환경(예: serverless, Lambda)에서는 무시할 수 없는 차이입니다.
+
+### 두 라이브러리를 섞을 때의 connection
+
+Lettuce를 그대로 쓰면서 락만 Redisson으로 처리하는 구성을 고르는 팀이 많습니다. 이때 같은 Redis 서버에 connection이 두 종류로 따로 떠 있게 됩니다. Redisson과 Spring Data Redis를 통합하고 싶다면 `redisson-spring-data` 모듈로 `RedisConnectionFactory`를 Redisson 기반으로 교체할 수 있습니다.
+
+```kotlin title="RedisConfig.kt (Redisson을 ConnectionFactory로 사용)"
+@Configuration
+class RedisConfig {
+    @Bean(destroyMethod = "shutdown")
+    fun redissonClient(): RedissonClient {
+        val config = Config().apply {
+            useSingleServer().address = "redis://localhost:6379"
+        }
+        return Redisson.create(config)
+    }
+
+    @Bean
+    fun redisConnectionFactory(redisson: RedissonClient): RedisConnectionFactory =
+        RedissonConnectionFactory(redisson)                            // [!code highlight]
+}
+```
+
+이렇게 두면 `RedisTemplate`도 Redisson의 connection 위에서 돕니다. connection 종류가 한 군데로 묶이는 대신, Lettuce가 아닌 Redisson의 송신 계층 동작 특성을 따르게 된다는 점은 인지해야 합니다.
+
+### 디버깅과 장애 가시성
+
+직접 구현한 락은 문제가 생겼을 때 `redis-cli MONITOR`로 명령 흐름을 따라가면 그대로 보입니다. Redisson은 `EVAL`로 오는 명령이 Lua 스크립트라, 어떤 의미의 호출인지 즉시 알기 어렵습니다. Redisson 디버깅은 보통 라이브러리 내부 로깅 레벨을 올리거나, RLock 키 네이밍 규칙을 외워 두는 식으로 보완합니다.
+
+### Cluster·Sentinel에서의 동작
+
+두 라이브러리 모두 Redis Cluster와 Sentinel을 지원합니다. 다만 Redisson의 분산 락은 클러스터 환경에서 <E>같은 키 슬롯 안</E>에서만 의미가 명확합니다. 여러 마스터에 걸쳐 락의 안전성을 보장하려면 RedLock 알고리즘을 별도로 활성화해야 하며, 이는 Martin Kleppmann이 제기한 이슈처럼 항상 안전하지는 않습니다. 단일 마스터 + replica 구조에서는 큰 차이를 만들지 않지만, 멀티 마스터 위에서 분산 락의 정합성이 정말 필요하면 별도 검토가 필요합니다.
+
+## 트레이드오프
+
+| 기준 | Lettuce | Redisson |
+|---|---|---|
+| 추상 단계 | Redis 명령 그대로 | 분산 객체 (Lock, Map, Queue 등) |
+| 분산 락 코드 | 직접 구현 (`SET NX EX` + Lua 해제) | `RLock.lock()` 한 줄 |
+| 만료 갱신 | 사용자 책임 | watchdog 자동 갱신 |
+| 재진입 | 직접 구현 필요 | 기본 지원 |
+| 의존성 무게 | 가벼움 | 무거움 |
+| 디버깅 가시성 | 명령 단위로 명확 | Lua 안에서 실행되어 추적 어려움 |
+| Spring Boot 기본 | 기본 드라이버 | 별도 starter 추가 |
+| 학습 곡선 | Redis 명령을 알면 충분 | Redisson 객체 의미 + 내부 동작 학습 필요 |
+
+판단 기준은 단순히 <E>편한 쪽</E>이 아니라 <E>어떤 비용을 사용자가 계속 들고 갈 것인가</E>입니다. 락이 없거나 단순한 캐시·카운터 위주라면 Lettuce 한 가지로 충분합니다. 분산 락, 분산 큐, 분산 맵 같은 의미를 여러 곳에서 반복 사용해야 한다면, 매번 직접 구현하는 비용보다 Redisson이라는 한 번의 도입 비용이 작아질 가능성이 큽니다.
+
+### 새 프로젝트라면
+
+대략 다음과 같이 결정해 보면 됩니다.
+
+| 상황 | 권장 |
+|---|---|
+| 캐시·카운터·세션·간단한 키 조회만 | Lettuce 단독 |
+| 분산 락이 1~2 곳, 직접 짜고 싶지 않음 | Lettuce + Redisson 락만 사용 |
+| 분산 락·분산 큐·분산 맵을 여러 곳에서 사용 | Redisson 중심 + `RedissonConnectionFactory` |
+| 컨테이너 크기·콜드 스타트 민감 (FaaS 등) | Lettuce 단독, 락은 직접 구현 |
+| Redis Cluster 위에서 락의 정합성이 핵심 KPI | Lettuce + 별도 분산 락 솔루션(예: ZooKeeper) 검토 |
+
+<Callout type="success" title="실무 팁">
+  Redisson을 도입할 때 `lock()`만 쓰지 말고 codec, watchdog timeout, retry interval을 한번 점검하세요. 기본값(30s lease, 10s 갱신)은 짧은 임계 영역에는 괜찮지만 외부 IO가 길게 걸리는 작업에는 빠듯할 수 있습니다.
+</Callout>
+
+## 마무리
+
+Lettuce와 Redisson은 같은 Redis를 다루지만 사용자에게 보여 주는 추상 단계가 다른 두 도구입니다. Lettuce는 Redis 명령을 메서드 호출로 옮긴 얇은 클라이언트이고, Redisson은 그 위에 분산 락과 자료구조를 객체로 얹은 두꺼운 라이브러리입니다. 어느 쪽이 더 좋다는 비교는 의미가 없고, <E>의미 단위를 누가 만들 것인가</E>라는 질문에 어떤 답을 내리느냐에 따라 자연스럽게 한쪽이 정해집니다. 새 프로젝트에서 Redis 사용 패턴이 단순하다면 Lettuce 한 가지로 충분하며, 분산 락이나 분산 자료구조의 의미가 도메인 곳곳에 등장한다면 Redisson이라는 한 번의 도입 비용이 더 경제적입니다.
+
+## 참고 자료
+
+- [Lettuce 공식 문서](https://redis.github.io/lettuce/)
+- [Redisson 공식 위키](https://github.com/redisson/redisson/wiki)
+- [Redisson 분산 락 페이지](https://github.com/redisson/redisson/wiki/8.-Distributed-locks-and-synchronizers)
+- [Spring Data Redis Reference](https://docs.spring.io/spring-data/redis/reference/)
+- [Martin Kleppmann, "How to do distributed locking"](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)
+- [Redis Pub/Sub 공식 문서](https://redis.io/docs/latest/develop/interact/pubsub/)
