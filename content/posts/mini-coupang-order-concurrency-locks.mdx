@@ -211,10 +211,21 @@ public class OrderServiceSynchronized {
 
 ### 다음 단계: 비관적 락
 
-`synchronized`로 정합성은 회복했지만, 이 해결책은 단일 JVM 한정입니다. 두 가지 방향으로 깨집니다.
+`synchronized`로 단일 인스턴스 정합성은 회복했지만, 이 해결책은 한 프로세스 메모리에 묶인 락 객체가 전제입니다. WAS가 두 대 이상이거나 `ConcurrentHashMap<Long, Object>`로 옵션 ID 단위 락 풀을 끼워 넣어도 결론은 같습니다. 두 JVM의 모니터는 서로 다른 객체이므로 같은 옵션 행에 동시 차감이 들어오면 1단계의 lost update가 그대로 돌아옵니다.
 
-1. **Scale-Out으로 무력화.** WAS가 두 대 이상 떠 있으면 각 인스턴스가 자기 모니터만 가집니다. 두 JVM의 `OrderServiceSynchronized` 빈은 서로 다른 `lock` 객체를 쥐고 있어, 서로 다른 인스턴스로 라우팅된 두 주문이 같은 옵션 행에 동시에 차감을 시도하면 1단계의 lost update가 그대로 돌아옵니다. 핫딜 트래픽은 정확히 이런 부하를 만듭니다.
-2. **`Map<Long, Object>` per-optionId 잠금도 같은 한계.** 개선 후보로 자주 꺼내지는 옵션 ID 단위 락 풀(`ConcurrentHashMap<Long, Object>`에서 옵션 ID별 모니터를 꺼내 잠그는 형태)은 단일 인스턴스 내부 처리량은 늘리지만 여전히 in-memory라 분산 환경에서는 동일하게 무력합니다. JVM monitor든, ReentrantLock per-key 풀이든, 잠금 객체가 한 프로세스 메모리에만 존재하는 한 결론은 같습니다.
+<Diagram caption="2단계의 in-memory 락은 분산 환경에서 무력: 두 WAS가 각자의 모니터를 잡고 같은 option_stocks 행에 동시 차감">{`flowchart LR
+    subgraph WAS_A["WAS-A (JVM 1)"]
+        T1["주문 #1"] -->|synchronized| L1["lock object"]
+    end
+    subgraph WAS_B["WAS-B (JVM 2)"]
+        T2["주문 #2"] -->|synchronized| L2["lock object"]
+    end
+    L1 -->|UPDATE| DB[("option_stocks row")]
+    L2 -->|UPDATE| DB
+
+    classDef hot stroke:#dc2626,stroke-width:2px;
+    class DB hot
+`}</Diagram>
 
 다음 단계는 잠금을 JVM 메모리에서 MySQL 행 락으로 옮깁니다.
 
