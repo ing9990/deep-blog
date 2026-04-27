@@ -4,7 +4,6 @@ import com.deepblog.minicoupang.domain.member.domain.Member;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
 import com.deepblog.minicoupang.domain.order.domain.Order;
 import com.deepblog.minicoupang.domain.order.repository.OrderRepository;
-import com.deepblog.minicoupang.domain.product.domain.OptionStock;
 import com.deepblog.minicoupang.domain.product.domain.Product;
 import com.deepblog.minicoupang.domain.product.domain.ProductOption;
 import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
@@ -15,9 +14,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// Unit 2 §C: 비관적 락(SELECT ... FOR UPDATE)으로 재고 차감의 임계 영역을
-// DB 행 락에 위임한다. 트랜잭션이 커밋/롤백될 때 락이 해제되므로,
-// JVM 인스턴스가 여러 개여도 동일 행을 가리키는 모든 트랜잭션이 직렬화된다.
+// Unit 2 §C: 비관적 락을 @Modifying UPDATE 한 줄로 압축한다.
+// quantity >= :qty 조건이 SET 절과 함께 들어가 조회·검사·차감이 한 SQL 안에서 원자화되고,
+// UPDATE 가 잡는 행 X 락이 트랜잭션 커밋까지 유지돼 동시 UPDATE 가 직렬화된다.
+// 별도 SELECT ... FOR UPDATE 가 필요 없고 JPA dirty checking 도 거치지 않는다.
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -34,16 +34,13 @@ public class OrderService {
 
         ProductOption option = productOptionRepository.findById(command.optionId())
             .orElseThrow(() -> new BusinessException(ErrorCode.OPTION_NOT_FOUND));
-        OptionStock stock = optionStockRepository.findByOptionIdForUpdate(command.optionId())
-            .orElseThrow(() -> new BusinessException(ErrorCode.STOCK_NOT_FOUND));
 
-        try {
-            stock.decrease(command.quantity());
-        } catch (BusinessException e) {
-            if (e.errorCode() == ErrorCode.INSUFFICIENT_STOCK) {
-                throw new BusinessException(ErrorCode.INSUFFICIENT_AMOUNT, e);
-            }
-            throw e;
+        int updated = optionStockRepository.decreaseQuantityIfEnough(
+            command.optionId(), command.quantity());
+        if (updated == 0) {
+            // affected=0 은 (a) stock 행 부재 또는 (b) quantity < qty 둘 중 하나.
+            // 시드/트리거로 옵션과 stock 행이 1:1 보장되므로, 운영상 의미는 재고 부족이다.
+            throw new BusinessException(ErrorCode.INSUFFICIENT_AMOUNT);
         }
 
         Product product = option.getProduct();
