@@ -23,7 +23,7 @@ category: language-backend
 draft: false
 ---
 
-통합 테스트에서 가장 자주 막히는 지점은 "DB나 Redis나 Kafka를 어떻게 띄울 것인가" 입니다. H2나 embedded mock으로 우회하면 운영 환경과 미묘하게 어긋나고, Docker Compose를 따로 띄우면 테스트가 환경에 종속됩니다. Testcontainers는 그 자리를 테스트 코드 안으로 옮겨 옵니다. 이 글은 Testcontainers를 처음 만지는 사람이 의존성, 첫 컨테이너, 모듈, Spring 통합, 라이프사이클의 한 사이클을 한 번에 훑을 수 있도록 정리합니다.
+통합 테스트에서 가장 자주 막히는 지점은 <E>DB나 Redis나 Kafka를 어떻게 띄울 것인가</E> 입니다. H2나 embedded mock으로 우회하면 운영 환경과 미묘하게 어긋나고, Docker Compose를 따로 띄우면 테스트가 환경에 종속됩니다. Testcontainers는 그 자리를 테스트 코드 안으로 옮겨 옵니다. 이 글은 Testcontainers를 처음 만지는 사람이 의존성, 첫 컨테이너, 모듈, Spring 통합, 라이프사이클의 한 사이클을 한 번에 훑을 수 있도록 정리합니다.
 
 <Note title="이 글의 학습 목표">
   - Testcontainers의 3-단 사다리(GenericContainer, 모듈 클래스, Spring 통합)를 이해한다
@@ -33,7 +33,7 @@ draft: false
 
 ## Testcontainers란
 
-Testcontainers는 JVM 진영의 통합 테스트 라이브러리입니다. 한 문장으로 줄이면 "테스트 코드 안에서 Docker 컨테이너를 띄우고 끄는 facade"입니다. JUnit 5, Spock, Kotest 같은 테스트 러너 위에서 동작하며, 매 테스트(또는 매 클래스, 또는 JVM 생애)마다 컨테이너 라이프사이클을 자동 관리합니다.
+Testcontainers는 JVM 진영의 통합 테스트 라이브러리입니다. 한 문장으로 줄이면 <E>테스트 코드 안에서 Docker 컨테이너를 띄우고 끄는 facade</E>입니다. JUnit 5, Spock, Kotest 같은 테스트 러너 위에서 동작하며, 매 테스트(또는 매 클래스, 또는 JVM 생애)마다 컨테이너 라이프사이클을 자동 관리합니다.
 
 내부 구조는 세 층입니다.
 

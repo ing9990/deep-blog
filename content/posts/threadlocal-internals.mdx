@@ -21,10 +21,10 @@ category: language-backend
 draft: false
 ---
 
-`SecurityContextHolder.getContext()`나 `MDC.get("traceId")`는 어디서 호출해도 "지금 요청을 처리 중인 스레드"의 값을 돌려줍니다. 인자를 넘기지 않았는데 context가 따라옵니다. 이 마법의 정체는 하나의 구조적 결정입니다: **값을 전역에 두지 않고, 각 Thread 객체 자체가 자기 Map을 필드로 들게** 합니다. 이 글에서는 그 구조가 어떻게 동시성 비용 없는 격리를 만들고, 동시에 왜 스레드 풀에서 메모리 누수를 부르는지 추적합니다.
+`SecurityContextHolder.getContext()`나 `MDC.get("traceId")`는 어디서 호출해도 <E>지금 요청을 처리 중인 스레드</E>의 값을 돌려줍니다. 인자를 넘기지 않았는데 context가 따라옵니다. 이 마법의 정체는 하나의 구조적 결정입니다: **값을 전역에 두지 않고, 각 Thread 객체 자체가 자기 Map을 필드로 들게** 합니다. 이 글에서는 그 구조가 어떻게 동시성 비용 없는 격리를 만들고, 동시에 왜 스레드 풀에서 메모리 누수를 부르는지 추적합니다.
 
 <Note title="이 글의 학습 목표">
-  - "전역처럼 보이는데 스레드별로 다르다"가 Thread 객체 내부 Map으로 구현됨을 이해한다
+  - <E>전역처럼 보이는데 스레드별로 다르다</E>가 Thread 객체 내부 Map으로 구현됨을 이해한다
   - 키 `WeakReference`와 값 strong reference의 비대칭이 만드는 stale entry 청소 메커니즘을 구분할 수 있다
   - 스레드 풀, Virtual Thread, 비동기 경계에서 ThreadLocal을 피하고 ScopedValue로 가야 할 기준을 얻는다
 </Note>
@@ -33,30 +33,30 @@ draft: false
 
 ThreadLocal은 **같은 변수를 참조해도 스레드마다 다른 값이 조회되는** 저장 메커니즘입니다. 문법만 보면 전역 변수 같지만, `set` · `get`의 결과는 호출한 스레드마다 완전히 독립적입니다. A 스레드가 `userId.set(42)`를 했고 B 스레드가 `userId.get()`을 부르면, B는 42가 아니라 자기 스레드가 이전에 넣었던 값(없으면 `initialValue()` 결과)을 받습니다.
 
-흔히 "ThreadLocal은 변수를 스레드별로 복사한다"고 설명하지만 이건 감각적 비유이고 내부 구조와는 다릅니다. 실제로는 **변수가 복사되는 것이 아니라, 각 Thread 객체가 자기만의 Map을 들고 있고 그 Map의 키가 ThreadLocal 인스턴스**입니다. ThreadLocal 인스턴스 자체는 프로세스 전체에 하나뿐입니다. 이 인스턴스가 그저 "Map 조회용 key" 역할을 합니다. 따라서 정확한 그림은 "스레드별로 복사된 변수"가 아니라 "**스레드가 자기 Map에서 이 key로 조회해 꺼내온 값**"입니다.
+흔히 <E>ThreadLocal은 변수를 스레드별로 복사한다</E>고 설명하지만 이건 감각적 비유이고 내부 구조와는 다릅니다. 실제로는 **변수가 복사되는 것이 아니라, 각 Thread 객체가 자기만의 Map을 들고 있고 그 Map의 키가 ThreadLocal 인스턴스**입니다. ThreadLocal 인스턴스 자체는 프로세스 전체에 하나뿐입니다. 이 인스턴스가 그저 <E>Map 조회용 key</E> 역할을 합니다. 따라서 정확한 그림은 <E>스레드별로 복사된 변수</E>가 아니라 <E>**스레드가 자기 Map에서 이 key로 조회해 꺼내온 값**</E>입니다.
 
-Java 표준 라이브러리의 대표 사용자가 여럿 있습니다. SLF4J의 MDC (Mapped Diagnostic Context), Spring Security의 `SecurityContextHolder`, Spring의 트랜잭션 매니저 (`TransactionSynchronizationManager`), Hibernate의 `CurrentSessionContext`가 모두 같은 메커니즘 위에 올라갑니다. 우리가 "현재 요청의 사용자 ID"를 어디서든 `SecurityContextHolder.getContext().getAuthentication()`으로 꺼낼 수 있는 이유는, 그 값이 요청을 처리 중인 스레드의 `ThreadLocalMap`에 들어 있기 때문입니다.
+Java 표준 라이브러리의 대표 사용자가 여럿 있습니다. SLF4J의 MDC (Mapped Diagnostic Context), Spring Security의 `SecurityContextHolder`, Spring의 트랜잭션 매니저 (`TransactionSynchronizationManager`), Hibernate의 `CurrentSessionContext`가 모두 같은 메커니즘 위에 올라갑니다. 우리가 <E>현재 요청의 사용자 ID</E>를 어디서든 `SecurityContextHolder.getContext().getAuthentication()`으로 꺼낼 수 있는 이유는, 그 값이 요청을 처리 중인 스레드의 `ThreadLocalMap`에 들어 있기 때문입니다.
 
 API 표면은 네 개뿐입니다: `set(T)`, `get()`, `remove()`, 그리고 팩토리 `ThreadLocal.withInitial(Supplier<T>)`. 변형 하나 `InheritableThreadLocal`은 **부모 스레드가 새 Thread를 생성(`new Thread(...)`)할 때** 부모의 ThreadLocal 값들을 자식이 복사해 가져갑니다. 단 이름이 오해를 부릅니다: 스레드 풀에서는 사실상 작동하지 않습니다. 풀은 스레드를 재사용할 뿐 새로 생성하지 않기 때문에 상속이 일어날 시점이 없습니다.
 
-마지막으로 경계를 그어두면, ThreadLocal은 **"스레드 간 통신"을 위한 도구가 아닙니다**. 오히려 반대입니다. 스레드들이 서로의 값을 보지 못하도록 격리하는 것이 목적입니다. 스레드 간 공유가 필요하면 `ConcurrentHashMap`, `AtomicReference`, 메시지 큐 같은 동시성 도구를 써야 하지 ThreadLocal은 해답이 아닙니다.
+마지막으로 경계를 그어두면, ThreadLocal은 **<E>스레드 간 통신</E>을 위한 도구가 아닙니다**. 오히려 반대입니다. 스레드들이 서로의 값을 보지 못하도록 격리하는 것이 목적입니다. 스레드 간 공유가 필요하면 `ConcurrentHashMap`, `AtomicReference`, 메시지 큐 같은 동시성 도구를 써야 하지 ThreadLocal은 해답이 아닙니다.
 
 ## 왜 필요한가
 
-서비스 하나의 호출 스택을 떠올려 봅시다. 웹 컨트롤러가 요청을 받아 `OrderService.place(order)`를 부르고, 그게 `InventoryService.reserve(items)`를 부르고, 그 안에서 `AuditLogger.record(event)`가 호출됩니다. 이제 감사 로그에 "이 작업을 수행한 사용자 ID"를 남겨야 한다고 해봅시다. 값은 컨트롤러에만 있습니다 (로그인한 사용자의 JWT에서 뽑아낸 값). `AuditLogger`까지 이 값이 도달하려면 중간에 있는 모든 함수 시그니처에 `Long userId` 인자를 추가해야 합니다. `place(order, userId)`, `reserve(items, userId)`, `record(event, userId)`. traceId, tenantId, locale까지 추가되면 인자 4개가 10개 레이어를 관통합니다. 이를 **parameter pollution** 또는 **parameter threading**이라 부릅니다.
+서비스 하나의 호출 스택을 떠올려 봅시다. 웹 컨트롤러가 요청을 받아 `OrderService.place(order)`를 부르고, 그게 `InventoryService.reserve(items)`를 부르고, 그 안에서 `AuditLogger.record(event)`가 호출됩니다. 이제 감사 로그에 <E>이 작업을 수행한 사용자 ID</E>를 남겨야 한다고 해봅시다. 값은 컨트롤러에만 있습니다 (로그인한 사용자의 JWT에서 뽑아낸 값). `AuditLogger`까지 이 값이 도달하려면 중간에 있는 모든 함수 시그니처에 `Long userId` 인자를 추가해야 합니다. `place(order, userId)`, `reserve(items, userId)`, `record(event, userId)`. traceId, tenantId, locale까지 추가되면 인자 4개가 10개 레이어를 관통합니다. 이를 **parameter pollution** 또는 **parameter threading**이라 부릅니다.
 
 가장 순진한 우회는 `public static Long currentUserId`처럼 전역 변수를 두는 것입니다. 즉시 무너집니다. 서버는 동시에 수백 개 요청을 처리하는데, 그중 한 스레드가 `currentUserId = 42`로 쓴 순간 다른 요청을 처리 중인 스레드도 42를 봅니다. 요청 격리가 깨지면 보안 사고입니다.
 
-두 번째 우회는 `ConcurrentHashMap`을 두고 `Thread.currentThread().getId()`를 키로 쓰는 것입니다. 동시성 문제는 해결되지만 모든 읽기와 쓰기에 맵 해싱과 잠금 분할 경쟁이 들어가고, 요청이 끝날 때 엔트리를 직접 지워주지 않으면 영구 누수가 됩니다. 거기다 `Thread.getId()`는 풀에서 재사용되는 숫자라 "요청 경계"와 맞지 않습니다.
+두 번째 우회는 `ConcurrentHashMap`을 두고 `Thread.currentThread().getId()`를 키로 쓰는 것입니다. 동시성 문제는 해결되지만 모든 읽기와 쓰기에 맵 해싱과 잠금 분할 경쟁이 들어가고, 요청이 끝날 때 엔트리를 직접 지워주지 않으면 영구 누수가 됩니다. 거기다 `Thread.getId()`는 풀에서 재사용되는 숫자라 <E>요청 경계</E>와 맞지 않습니다.
 
-ThreadLocal이 해결하는 핵심은 "**전역 API처럼 보이지만 저장소가 스레드별로 격리되어 있는 저장 슬롯**"입니다. 저장소를 어디에 두느냐로 이 특성이 나옵니다. 전역 Map에 두는 대신, Thread 객체 자체가 자기만의 Map을 필드로 들게 만듭니다. 내 스레드의 Map은 나만 쓰므로 잠금이 필요 없고, 다른 스레드는 애초에 이 Map에 접근할 경로가 없어 격리가 구조적으로 보장됩니다. 이 "저장소가 스레드 객체 안에 있다"는 한 가지 설계 결정이 ThreadLocal의 거의 모든 성질 (동시성 비용 없음, 자연 격리, 뒤에서 다룰 풀 스레드 누수) 을 만들어냅니다.
+ThreadLocal이 해결하는 핵심은 <E>**전역 API처럼 보이지만 저장소가 스레드별로 격리되어 있는 저장 슬롯**</E>입니다. 저장소를 어디에 두느냐로 이 특성이 나옵니다. 전역 Map에 두는 대신, Thread 객체 자체가 자기만의 Map을 필드로 들게 만듭니다. 내 스레드의 Map은 나만 쓰므로 잠금이 필요 없고, 다른 스레드는 애초에 이 Map에 접근할 경로가 없어 격리가 구조적으로 보장됩니다. 이 <E>저장소가 스레드 객체 안에 있다</E>는 한 가지 설계 결정이 ThreadLocal의 거의 모든 성질 (동시성 비용 없음, 자연 격리, 뒤에서 다룰 풀 스레드 누수) 을 만들어냅니다.
 
-이 메커니즘이 풀리면 "현재 요청의 컨텍스트"를 AOP, 인터셉터, 필터 같은 횡단 관심사 (cross-cutting concern) 에서 자연스럽게 쓸 수 있게 됩니다. 만약 이 메커니즘이 없다면 Spring은 모든 `@Transactional` 메서드에 자동으로 `Connection conn` 인자를 주입해야 했을 것이고, 그게 불가능하니 `@Transactional` 자체가 성립하지 않습니다.
+이 메커니즘이 풀리면 <E>현재 요청의 컨텍스트</E>를 AOP, 인터셉터, 필터 같은 횡단 관심사 (cross-cutting concern) 에서 자연스럽게 쓸 수 있게 됩니다. 만약 이 메커니즘이 없다면 Spring은 모든 `@Transactional` 메서드에 자동으로 `Connection conn` 인자를 주입해야 했을 것이고, 그게 불가능하니 `@Transactional` 자체가 성립하지 않습니다.
 
 ## 동작 원리
 
 <Callout type="warning" title="이 구조를 이해하는 핵심">
-  ThreadLocal은 "변수를 스레드별로 복사"하는 게 아닙니다. **각 Thread 객체가 자기 Map을 필드로 들고, ThreadLocal 인스턴스를 그 Map의 key로 씁니다**. 저장소가 Thread 내부에 있다는 이 한 가지 결정이 동시성 비용이 없는 이유와 풀 스레드 누수가 발생하는 이유를 동시에 설명합니다.
+  ThreadLocal은 <E>변수를 스레드별로 복사</E>하는 게 아닙니다. **각 Thread 객체가 자기 Map을 필드로 들고, ThreadLocal 인스턴스를 그 Map의 key로 씁니다**. 저장소가 Thread 내부에 있다는 이 한 가지 결정이 동시성 비용이 없는 이유와 풀 스레드 누수가 발생하는 이유를 동시에 설명합니다.
 </Callout>
 
 ### 저장소는 Thread 객체 안에 있다
@@ -74,7 +74,7 @@ public class Thread implements Runnable {
 }
 ```
 
-그래서 `ThreadLocal.set(v)`는 실제로는 "현재 스레드를 찾아가, 그 스레드 객체의 `threadLocals` Map에 `this` (ThreadLocal 인스턴스 자기 자신) 를 키로 `v`를 저장"합니다. 이 한 문장이 ThreadLocal의 거의 모든 성질을 결정합니다. 저장소가 스레드 객체 안에 있으므로 **잠금이 필요 없고** (소유 스레드만 자기 필드를 만집니다), 스레드가 끝나 GC되면 Map도 같이 사라져 **자동 정리가 되는 것처럼 보입니다**. 뒤에서 이 "것처럼 보입니다"가 함정이 되는 지점이 나옵니다.
+그래서 `ThreadLocal.set(v)`는 실제로는 <E>현재 스레드를 찾아가, 그 스레드 객체의 `threadLocals` Map에 `this` (ThreadLocal 인스턴스 자기 자신) 를 키로 `v`를 저장</E>합니다. 이 한 문장이 ThreadLocal의 거의 모든 성질을 결정합니다. 저장소가 스레드 객체 안에 있으므로 **잠금이 필요 없고** (소유 스레드만 자기 필드를 만집니다), 스레드가 끝나 GC되면 Map도 같이 사라져 **자동 정리가 되는 것처럼 보입니다**. 뒤에서 이 <E>것처럼 보입니다</E>가 함정이 되는 지점이 나옵니다.
 
 <ThreadLocalMapStructure />
 
@@ -125,7 +125,7 @@ void doSomething() {
 
 <RelatedPost slug="jvm-gc-intro" type="prerequisite" />
 
-그런데 이게 "절반의 방어"인 이유는, 값 (value) 은 여전히 strong reference로 붙들려 있기 때문입니다. 키가 null로 바뀌어도 Entry 객체 자체, 그리고 그 안의 `value` 필드는 Map의 Entry 배열에 자리를 잡고 계속 살아있습니다. 스레드가 살아있는 한 그 Map도 살아있고, Map이 살아있는 한 Entry 배열도 살아있고, Entry 배열 안의 value도 살아있습니다. 1MB 버퍼는 키만 사라진 좀비 Entry 안에 그대로 갇혀 있습니다.
+그런데 이게 <E>절반의 방어</E>인 이유는, 값 (value) 은 여전히 strong reference로 붙들려 있기 때문입니다. 키가 null로 바뀌어도 Entry 객체 자체, 그리고 그 안의 `value` 필드는 Map의 Entry 배열에 자리를 잡고 계속 살아있습니다. 스레드가 살아있는 한 그 Map도 살아있고, Map이 살아있는 한 Entry 배열도 살아있고, Entry 배열 안의 value도 살아있습니다. 1MB 버퍼는 키만 사라진 좀비 Entry 안에 그대로 갇혀 있습니다.
 
 왜 값까지 `WeakReference`로 만들지 않았느냐는 자연스러운 반문이 있을 수 있습니다. 그렇게 하면 정상 사용 중에도 값이 조기에 사라져 버립니다. 보통 사용자는 ThreadLocal 인스턴스를 `static final`로 선언하는데, 그러면 값 쪽만 약하게 붙드는 건 말이 안 됩니다. 값이 GC에 먹히지 않을 유일한 강한 참조 경로가 Map 하나뿐이니까요. 그래서 값은 strong, 키는 weak라는 비대칭이 나옵니다.
 
@@ -133,7 +133,7 @@ void doSomething() {
 
 JDK는 stale entry를 별도 백그라운드 스레드로 쓸지 않습니다. 청소는 **다음번 이 Map에 대한 `set` · `get` · `remove`가 들어올 때 probing 경로에서 만나면 그때** 청소하는 lazy 방식입니다. 구체적으로는 `expungeStaleEntry(slot)`라는 내부 함수가 호출됩니다. 해당 slot의 Entry를 완전히 비우고 (key와 value 모두 null), 그 다음 빈 slot을 만날 때까지 뒤 slot들을 재해시해 다시 제자리를 찾아줍니다. 이는 open addressing linear probing의 불변식을 유지하기 위한 필수 단계입니다.
 
-여기서 "다음번 접근이 와야만 청소된다"는 점이 치명적입니다. 스레드 풀 스레드가 이 ThreadLocal을 다시는 안 쓴다면 청소 기회 자체가 오지 않습니다. value는 영원히 삽니다. 이게 뒤 섹션에서 다룰 풀 스레드 누수의 정확한 수학입니다.
+여기서 <E>다음번 접근이 와야만 청소된다</E>는 점이 치명적입니다. 스레드 풀 스레드가 이 ThreadLocal을 다시는 안 쓴다면 청소 기회 자체가 오지 않습니다. value는 영원히 삽니다. 이게 뒤 섹션에서 다룰 풀 스레드 누수의 정확한 수학입니다.
 
 ### open addressing을 쓰는 이유
 
@@ -166,13 +166,13 @@ table[i] = new Entry(key, value);                             // 빈 slot에 삽
 
 ### 쓰기 좋은 자리
 
-ThreadLocal이 자연스럽게 맞아 들어가는 공통 패턴은 "**한 요청이 시작부터 끝까지 단일 스레드에서 수행되며, 그 스레드는 풀에서 와서 풀로 돌아간다**"는 구조입니다. 전통적인 Spring MVC + Tomcat 조합이 정확히 이 모델입니다. 이 환경에서 잘 맞는 세 가지:
+ThreadLocal이 자연스럽게 맞아 들어가는 공통 패턴은 <E>**한 요청이 시작부터 끝까지 단일 스레드에서 수행되며, 그 스레드는 풀에서 와서 풀로 돌아간다**</E>는 구조입니다. 전통적인 Spring MVC + Tomcat 조합이 정확히 이 모델입니다. 이 환경에서 잘 맞는 세 가지:
 
 1. **요청 스코프 컨텍스트 전파**: `SecurityContextHolder` (현재 인증 정보), SLF4J MDC (traceId, userId), Spring의 `TransactionSynchronizationManager` (현재 트랜잭션과 커넥션). 이들은 필터나 인터셉터에서 `set`하고 AOP, Repository, Service 어느 깊이에서나 `get`합니다.
 2. **재사용 비용이 큰 non-thread-safe 객체 캐싱**: `SimpleDateFormat`, 비싼 정규식 `Matcher`, 무거운 크립토 객체. 스레드마다 한 번 만들고 계속 쓰면 초기화 비용을 상각합니다. `Random`도 과거엔 이렇게 썼지만 지금은 `ThreadLocalRandom`이 JDK 표준이라 직접 쓸 필요 없습니다.
 3. **레이어 간 인자 오염 제거**: 앞 섹션에서 본 parameter threading 문제. AOP와 횡단 관심사의 밥줄입니다.
 
-공통 조건은 **try / finally로 `remove()` 보장**입니다. 이 조건을 지키지 않으면 아래 "피해야 할 자리"로 넘어갑니다.
+공통 조건은 **try / finally로 `remove()` 보장**입니다. 이 조건을 지키지 않으면 아래 <E>피해야 할 자리</E>로 넘어갑니다.
 
 ### 풀 스레드에 값을 남겨두지 말 것
 
@@ -203,7 +203,7 @@ public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
 
 ### 실행이 스레드 경계를 넘어갈 때
 
-ThreadLocal의 유일한 저장소는 "지금 실행 중인 스레드"의 Map입니다. 이 전제가 깨지는 순간 ThreadLocal은 무력해집니다. 전형적인 경계 세 가지를 차례로 봅시다.
+ThreadLocal의 유일한 저장소는 <E>지금 실행 중인 스레드</E>의 Map입니다. 이 전제가 깨지는 순간 ThreadLocal은 무력해집니다. 전형적인 경계 세 가지를 차례로 봅시다.
 
 <Tabs>
   <Tab label="CompletableFuture">
@@ -239,13 +239,13 @@ ThreadLocal의 유일한 저장소는 "지금 실행 중인 스레드"의 Map입
   </Tab>
 </Tabs>
 
-이 환경들이 공통으로 말하는 것은 **"실행 컨텍스트"와 "스레드"가 1:1이 아니다**입니다. ThreadLocal은 이 1:1 가정 위에서만 동작합니다. Spring Security의 `DelegatingSecurityContextRunnable`, SLF4J의 `MDC.getCopyOfContextMap()` → `MDC.setContextMap()` 패턴, Alibaba의 `TransmittableThreadLocal` (TTL) 같은 우회책이 전부 "ThreadLocal 값을 다른 스레드로 수동 이식"하는 일을 합니다. 즉 내장 해결책이 아니라 **애플리케이션이 책임지는 보정 레이어**라는 뜻입니다.
+이 환경들이 공통으로 말하는 것은 **<E>실행 컨텍스트</E>와 <E>스레드</E>가 1:1이 아니다**입니다. ThreadLocal은 이 1:1 가정 위에서만 동작합니다. Spring Security의 `DelegatingSecurityContextRunnable`, SLF4J의 `MDC.getCopyOfContextMap()` → `MDC.setContextMap()` 패턴, Alibaba의 `TransmittableThreadLocal` (TTL) 같은 우회책이 전부 <E>ThreadLocal 값을 다른 스레드로 수동 이식</E>하는 일을 합니다. 즉 내장 해결책이 아니라 **애플리케이션이 책임지는 보정 레이어**라는 뜻입니다.
 
 <RelatedPost slug="coroutine-primer" type="deep-dive" />
 
 ### InheritableThreadLocal의 함정
 
-JDK는 "자식 스레드에 값을 전파"하는 변형으로 `InheritableThreadLocal`을 제공합니다. `Thread` 생성자가 호출될 때, 부모 스레드의 `inheritableThreadLocals` Map을 자식 스레드의 Map으로 복사하는 방식입니다.
+JDK는 <E>자식 스레드에 값을 전파</E>하는 변형으로 `InheritableThreadLocal`을 제공합니다. `Thread` 생성자가 호출될 때, 부모 스레드의 `inheritableThreadLocals` Map을 자식 스레드의 Map으로 복사하는 방식입니다.
 
 여기서 오해가 생깁니다. 이 전파는 **`new Thread(...)` 시점에만** 일어납니다. 스레드 풀은 스레드를 새로 생성하지 않고 재사용하므로, 풀에 제출된 작업은 제출 시점의 부모 context를 상속받지 못합니다. `InheritableThreadLocal`이 동작하는 경우는 직접 `new Thread(runnable).start()`처럼 명시적으로 새 스레드를 만드는 드문 시나리오뿐입니다. 프로덕션 코드의 99%가 풀을 쓰는 오늘날 이 클래스는 대부분 무용이며, 앞서 언급한 `TransmittableThreadLocal` 같은 서드파티가 공백을 메우고 있습니다.
 
@@ -279,24 +279,24 @@ ScopedValue.where(USER_ID, 42L).run(() -> {
 
 ### 암시적 전역 상태와 디버깅 비용
 
-ThreadLocal의 장점 ("전역 API로 읽고 쓴다") 이 그대로 단점이 됩니다. 어떤 함수 안에서 `SecurityContextHolder.getContext().getAuthentication()`이 `null`이면 "누가 언제 어느 레이어에서 set하지 않았는가"를 추적해야 하는데, 이 정보는 호출 스택 어디에도 없습니다. 인자로 받는 값이 아니므로 IDE의 "find usages"도 도움이 제한적입니다. 이 디버깅 난이도 때문에 대형 프레임워크들은 ThreadLocal 위에 래퍼 API (`RequestContextHolder`, `SecurityContextHolder`) 를 얹고 그 래퍼에서만 set과 get을 강제합니다. 애플리케이션 코드가 직접 `new ThreadLocal<>()`로 컨텍스트를 만들면 이 규율이 깨집니다.
+ThreadLocal의 장점 (<E>전역 API로 읽고 쓴다</E>) 이 그대로 단점이 됩니다. 어떤 함수 안에서 `SecurityContextHolder.getContext().getAuthentication()`이 `null`이면 <E>누가 언제 어느 레이어에서 set하지 않았는가</E>를 추적해야 하는데, 이 정보는 호출 스택 어디에도 없습니다. 인자로 받는 값이 아니므로 IDE의 <E>find usages</E>도 도움이 제한적입니다. 이 디버깅 난이도 때문에 대형 프레임워크들은 ThreadLocal 위에 래퍼 API (`RequestContextHolder`, `SecurityContextHolder`) 를 얹고 그 래퍼에서만 set과 get을 강제합니다. 애플리케이션 코드가 직접 `new ThreadLocal<>()`로 컨텍스트를 만들면 이 규율이 깨집니다.
 
 테스트에서도 비슷한 비용이 있습니다. JUnit은 테스트 메서드들을 같은 스레드에서 순차 실행하는 것이 기본이라, 앞 테스트가 `set`한 뒤 `remove`하지 않으면 **다음 테스트가 그 값을 물려받습니다**. 단독 실행 시엔 통과하고 스위트로 실행하면 실패하는 유명한 버그 패턴입니다. 병렬 테스트에서는 스레드가 여러 개라 또 다른 누수 경로가 생깁니다. Spring의 `@DirtiesContext`나 JUnit extension으로 테스트 경계에서 ThreadLocal을 강제 청소하는 이유가 이것입니다.
 
 ### 프레임워크 암시 의존성
 
-프로덕션 코드가 `SecurityContextHolder.getContext()` 같은 호출에 의존하기 시작하면, 이 코드는 Spring Security 컨텍스트가 세팅된 환경 밖에서는 실행되지 않습니다. 독립 유닛 테스트에서 부르면 `null`이 튀어나오고, 배치 스크립트, 스케줄러, CLI 도구에서 재사용하려면 컨텍스트를 수동으로 채워 넣어야 합니다. 이는 ThreadLocal만의 책임은 아니지만 "암시적 전역 상태"를 통한 설계 결정의 자연스러운 귀결입니다. "인자로 받으면" 이런 문제가 없는 대신 parameter pollution으로 돌아갑니다. 정확히 이 트레이드오프 사이의 균형점이 ScopedValue의 등장을 설명합니다. 구조적 스코프로 암시성을 줄이면서도 parameter threading은 피합니다.
+프로덕션 코드가 `SecurityContextHolder.getContext()` 같은 호출에 의존하기 시작하면, 이 코드는 Spring Security 컨텍스트가 세팅된 환경 밖에서는 실행되지 않습니다. 독립 유닛 테스트에서 부르면 `null`이 튀어나오고, 배치 스크립트, 스케줄러, CLI 도구에서 재사용하려면 컨텍스트를 수동으로 채워 넣어야 합니다. 이는 ThreadLocal만의 책임은 아니지만 <E>암시적 전역 상태</E>를 통한 설계 결정의 자연스러운 귀결입니다. <E>인자로 받으면</E> 이런 문제가 없는 대신 parameter pollution으로 돌아갑니다. 정확히 이 트레이드오프 사이의 균형점이 ScopedValue의 등장을 설명합니다. 구조적 스코프로 암시성을 줄이면서도 parameter threading은 피합니다.
 
 ## 마무리
 
-ThreadLocal의 모든 성질은 "저장소를 Thread 객체 내부에 둔다"는 한 가지 구조적 결정에서 출발합니다. 이 결정이 잠금 없는 격리와 전역스러운 API 표면을 선물했고, 같은 결정이 풀 스레드 누수와 `remove()` 의무라는 대가를 지웠습니다. 키를 `WeakReference`로 감싼 것은 이 대가를 절반쯤 깎으려는 시도였지만, 값은 여전히 strong이라 완벽하지 않습니다. 그래서 JDK는 `ScopedValue`라는 다른 답을 구조적 스코프로 새로 만들고 있습니다.
+ThreadLocal의 모든 성질은 <E>저장소를 Thread 객체 내부에 둔다</E>는 한 가지 구조적 결정에서 출발합니다. 이 결정이 잠금 없는 격리와 전역스러운 API 표면을 선물했고, 같은 결정이 풀 스레드 누수와 `remove()` 의무라는 대가를 지웠습니다. 키를 `WeakReference`로 감싼 것은 이 대가를 절반쯤 깎으려는 시도였지만, 값은 여전히 strong이라 완벽하지 않습니다. 그래서 JDK는 `ScopedValue`라는 다른 답을 구조적 스코프로 새로 만들고 있습니다.
 
-독자가 이 글에서 가져가야 할 한 문장이 있다면 이것입니다: **ThreadLocal은 "스레드 = 실행 단위"라는 가정 위에서만 안전합니다**. 이 가정이 깨지는 모든 자리 (비동기, 코루틴, Virtual Thread, 풀에서 `remove` 누락) 에서 ThreadLocal은 조용히 오동작합니다. 그래서 쓸 때마다 이 가정이 유효한지 확인하는 것이 기본 점검입니다.
+독자가 이 글에서 가져가야 할 한 문장이 있다면 이것입니다: **ThreadLocal은 <E>스레드 = 실행 단위</E>라는 가정 위에서만 안전합니다**. 이 가정이 깨지는 모든 자리 (비동기, 코루틴, Virtual Thread, 풀에서 `remove` 누락) 에서 ThreadLocal은 조용히 오동작합니다. 그래서 쓸 때마다 이 가정이 유효한지 확인하는 것이 기본 점검입니다.
 
 ## 참고 자료
 
 - [JEP 464: Scoped Values (Second Preview)](https://openjdk.org/jeps/464)
 - [Java Thread Source (OpenJDK)](https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/lang/Thread.java)
 - [Java ThreadLocal Source (OpenJDK)](https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/lang/ThreadLocal.java)
-- [Brian Goetz, "Scoped Values"](https://inside.java/2022/05/20/loom-scoped-values/)
+- [Brian Goetz, <E>Scoped Values</E>](https://inside.java/2022/05/20/loom-scoped-values/)
 - [Alibaba TransmittableThreadLocal](https://github.com/alibaba/transmittable-thread-local)

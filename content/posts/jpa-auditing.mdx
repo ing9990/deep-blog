@@ -38,13 +38,13 @@ draft: false
 
 ### 한 문장 정의
 
-JPA Auditing은 Spring Data JPA가 제공하는 기능으로, 엔티티가 영속화되는 순간 "언제 만들어졌는지(`@CreatedDate`)"와 "언제 마지막으로 수정되었는지(`@LastModifiedDate`)"를 자동으로 주입해 줍니다. 작성자까지 함께 추적하려면 `@CreatedBy` / `@LastModifiedBy`도 씁니다.
+JPA Auditing은 Spring Data JPA가 제공하는 기능으로, 엔티티가 영속화되는 순간 <E>언제 만들어졌는지(`@CreatedDate`)</E>와 <E>언제 마지막으로 수정되었는지(`@LastModifiedDate`)</E>를 자동으로 주입해 줍니다. 작성자까지 함께 추적하려면 `@CreatedBy` / `@LastModifiedBy`도 씁니다.
 
 핵심은 **영속화 시점에 값이 박힌다**는 것입니다. 서비스 레이어에서 `entity.setCreatedAt(Instant.now())`를 손으로 부르는 코드가 사라집니다. 주입은 엔티티 lifecycle 콜백(`@PrePersist`/`@PreUpdate`)이라는 JPA 표준 훅 위에서 일어납니다.
 
 ### 손으로 할 때의 문제
 
-감사 필드는 도메인의 책임이 아닙니다. 회원의 이메일이나 판매자의 사업자등록번호는 그 도메인이 관리하지만, `created_at`·`updated_at`은 "어느 시각의 상태인가"라는 저장소 메타데이터입니다. 그런데 이 필드를 엔티티마다, 서비스마다 손으로 박으면 다음이 망가집니다.
+감사 필드는 도메인의 책임이 아닙니다. 회원의 이메일이나 판매자의 사업자등록번호는 그 도메인이 관리하지만, `created_at`·`updated_at`은 <E>어느 시각의 상태인가</E>라는 저장소 메타데이터입니다. 그런데 이 필드를 엔티티마다, 서비스마다 손으로 박으면 다음이 망가집니다.
 
 - **누락**: 새 엔티티를 만들 때마다 `createdAt` 세팅을 기억해야 합니다. 엔티티가 열 개면 열 번, 벌크 생성 코드에서는 더 자주 빠집니다.
 - **시간 소스 불일치**: 어떤 곳에선 `LocalDateTime.now()`, 어떤 곳에선 `Instant.now()`, 어떤 곳에선 DB의 `NOW()`. 서로 다른 시각이 섞입니다.
@@ -106,10 +106,10 @@ public class JpaConfig {
 
 ### 작성자 추적
 
-시간만이 아니라 "누가 만들었나"도 같이 추적할 수 있습니다. 두 가지가 더 필요합니다.
+시간만이 아니라 <E>누가 만들었나</E>도 같이 추적할 수 있습니다. 두 가지가 더 필요합니다.
 
 1. 필드에 `@CreatedBy` / `@LastModifiedBy`
-2. `AuditorAware<T>` 빈 등록. Spring Data가 이 빈에 "지금 누구냐"를 물어봅니다.
+2. `AuditorAware<T>` 빈 등록. Spring Data가 이 빈에 <E>지금 누구냐</E>를 물어봅니다.
 
 ```java title="AuditorAware 빈 예시"
 @Bean
@@ -160,7 +160,7 @@ public class Account extends BaseEntity {
 }
 ```
 
-`@MappedSuperclass`는 "이 클래스는 테이블이 없고 필드만 자식에게 상속시킨다"는 선언입니다. `@Inheritance(strategy=JOINED)` 같은 테이블 상속과 **완전히 다른 축**이라는 점이 중요합니다. JPA Auditing 관용 패턴에서는 언제나 `@MappedSuperclass`만 씁니다.
+`@MappedSuperclass`는 <E>이 클래스는 테이블이 없고 필드만 자식에게 상속시킨다</E>는 선언입니다. `@Inheritance(strategy=JOINED)` 같은 테이블 상속과 **완전히 다른 축**이라는 점이 중요합니다. JPA Auditing 관용 패턴에서는 언제나 `@MappedSuperclass`만 씁니다.
 
 ### 전역 등록 방식
 
@@ -178,7 +178,7 @@ public class Account extends BaseEntity {
 </entity-mappings>
 ```
 
-장점은 엔티티 코드가 깨끗해지는 것. 단점은 "이 엔티티가 audit 대상인가"가 코드에서 즉시 드러나지 않는 것입니다. 실전에서는 `BaseEntity` 방식이 코드 측 가시성 때문에 더 자주 선택됩니다.
+장점은 엔티티 코드가 깨끗해지는 것. 단점은 <E>이 엔티티가 audit 대상인가</E>가 코드에서 즉시 드러나지 않는 것입니다. 실전에서는 `BaseEntity` 방식이 코드 측 가시성 때문에 더 자주 선택됩니다.
 
 ### 시간 소스 커스터마이즈
 
@@ -223,11 +223,11 @@ public class TestJpaConfig { }
 이 후처리기는 다음 두 가지를 배선합니다.
 
 1. `AuditingEntityListener`를 **Spring 빈 정의로 등록**합니다. 이로써 listener 인스턴스가 Spring 컨테이너를 거쳐 생성될 수 있게 됩니다.
-2. Hibernate에게 "listener를 만들 때 Spring 컨테이너를 사용하라"고 지시하는 연결(`SpringBeanContainer`)이 활성화됩니다. Spring Boot는 `HibernatePropertiesCustomizer`로 이 연결을 자동 구성합니다.
+2. Hibernate에게 <E>listener를 만들 때 Spring 컨테이너를 사용하라</E>고 지시하는 연결(`SpringBeanContainer`)이 활성화됩니다. Spring Boot는 `HibernatePropertiesCustomizer`로 이 연결을 자동 구성합니다.
 
 결과적으로 Hibernate가 listener를 새로 찍을 때마다 Spring이 개입해 `ObjectFactory<AuditingHandler>`를 setter로 주입합니다. listener는 핸들러 참조를 들고 런타임에 진입합니다.
 
-`@EnableJpaAuditing`을 빠뜨리면 이 모든 배선이 걸리지 않습니다. `AuditingEntityListener`는 JPA가 콜백은 부를지 몰라도, 내부 핸들러 참조가 없어 아무 필드도 채우지 못합니다. 예외도 로그도 없이 `createdAt`이 `null`로 남습니다. 이게 실전에서 가장 흔한 "조용한 실패" 모드입니다.
+`@EnableJpaAuditing`을 빠뜨리면 이 모든 배선이 걸리지 않습니다. `AuditingEntityListener`는 JPA가 콜백은 부를지 몰라도, 내부 핸들러 참조가 없어 아무 필드도 채우지 못합니다. 예외도 로그도 없이 `createdAt`이 `null`로 남습니다. 이게 실전에서 가장 흔한 <E>조용한 실패</E> 모드입니다.
 
 ### 실행 경로 세 갈래
 
@@ -253,7 +253,7 @@ persistence context에 MANAGED 상태로 등록
 (flush 시점에 SQL INSERT)
 ```
 
-핵심은 **`@PrePersist`가 INSERT 시점이 아니라 `persist()` 호출 시점에 발화**한다는 것. 그리고 이 경로에서 `createdAt`과 `updatedAt`이 **같은 값으로 함께 세팅**됩니다. "신규 생성 엔티티는 `updatedAt`이 `null`일 것"이라는 가정은 틀립니다.
+핵심은 **`@PrePersist`가 INSERT 시점이 아니라 `persist()` 호출 시점에 발화**한다는 것. 그리고 이 경로에서 `createdAt`과 `updatedAt`이 **같은 값으로 함께 세팅**됩니다. <E>신규 생성 엔티티는 `updatedAt`이 `null`일 것</E>이라는 가정은 틀립니다.
 
 **경로 B: 변경 감지 (UPDATE)**
 
@@ -299,7 +299,7 @@ updated_at 그대로 (stale)
 이 경로는 listener 세계와 **완전히 무관**합니다. JPQL이든 native query든 벌크 UPDATE는 JPA의 엔티티 생명주기를 우회해 바로 SQL을 내보냅니다.
 
 <Callout type="error" title="핵심 통찰: updated_at은 호출 시점이 아니라 DB 쓰기 시점을 기록한다">
-  Auditing의 계약은 "엔티티를 수정하면 시각이 올라간다"가 아니라 "**Hibernate가 실제로 UPDATE를 내보내면** 시각이 올라간다"입니다. 평소에는 두 기준이 겹치기 때문에 이 차이가 드러나지 않지만, 변경 없는 `save()`, 벌크 UPDATE, readonly 트랜잭션 경계에서 그 차이가 갈라집니다.
+  Auditing의 계약은 <E>엔티티를 수정하면 시각이 올라간다</E>가 아니라 <E>**Hibernate가 실제로 UPDATE를 내보내면** 시각이 올라간다</E>입니다. 평소에는 두 기준이 겹치기 때문에 이 차이가 드러나지 않지만, 변경 없는 `save()`, 벌크 UPDATE, readonly 트랜잭션 경계에서 그 차이가 갈라집니다.
 </Callout>
 
 ### 값이 언제 박히는가
@@ -313,12 +313,12 @@ updated_at 그대로 (stale)
 | 발화 조건 | `persist()` 혹은 그 cascade | flush 시점 dirty 필드 존재 |
 | 발화 안 하는 조건 | 없음(`persist`를 부르면 무조건) | dirty 필드 없음, readonly 트랜잭션, 벌크 UPDATE |
 
-"`save()`를 부르면 `updatedAt`이 갱신된다"는 가정은 대체로 맞지만, **엄밀히 말해서 틀립니다**. Spring Data JPA의 `SimpleJpaRepository.save(entity)`는 내부에서 `entityInformation.isNew(entity)`를 봅니다.
+<E>`save()`를 부르면 `updatedAt`이 갱신된다</E>는 가정은 대체로 맞지만, **엄밀히 말해서 틀립니다**. Spring Data JPA의 `SimpleJpaRepository.save(entity)`는 내부에서 `entityInformation.isNew(entity)`를 봅니다.
 
 - `isNew()`가 true면 `em.persist()` → 경로 A (`@PrePersist` 발화, `createdAt`/`updatedAt` 둘 다 세팅)
 - `isNew()`가 false면 `em.merge()` → merged 엔티티가 managed 상태로 들어오고, flush 시점에 dirty 검사 수행
 
-후자에서 변경된 필드가 하나도 없으면 `@PreUpdate`는 **발화하지 않습니다**. 이 지점이 경로 B와 함께 앞의 핵심 통찰을 정당화합니다. audit는 "`save()` 호출 횟수"가 아니라 "**Hibernate가 실제로 UPDATE를 내보내는 순간**"을 기준으로 움직입니다.
+후자에서 변경된 필드가 하나도 없으면 `@PreUpdate`는 **발화하지 않습니다**. 이 지점이 경로 B와 함께 앞의 핵심 통찰을 정당화합니다. audit는 <E>`save()` 호출 횟수</E>가 아니라 <E>**Hibernate가 실제로 UPDATE를 내보내는 순간**</E>을 기준으로 움직입니다.
 
 ### 시간 소스 파이프라인
 
@@ -349,7 +349,7 @@ AuditableBeanWrapper로 target의 audit 필드 발견
 
 ### 실전 함정
 
-배선과 실행 흐름을 이해하면 다음 세 가지가 같은 뿌리의 증상이라는 게 보입니다. 공통점은 "`save()`만 부르면 알아서 될 것"이라는 기대가 깨지는 경계에 있다는 것입니다.
+배선과 실행 흐름을 이해하면 다음 세 가지가 같은 뿌리의 증상이라는 게 보입니다. 공통점은 <E>`save()`만 부르면 알아서 될 것</E>이라는 기대가 깨지는 경계에 있다는 것입니다.
 
 **(1) 벌크 UPDATE의 `updated_at` stale**
 
@@ -365,9 +365,9 @@ int markVerified(@Param("ids") List<Long> ids, @Param("now") Instant now);
 
 **(2) 변경 없는 `save()`가 `updatedAt`을 안 올림**
 
-`@PreUpdate`는 dirty checking이 **실제 변경**을 찾은 엔티티에만 발화합니다. 불러와서 아무 필드도 바꾸지 않고 `save()`를 다시 부르면 UPDATE SQL 자체가 나가지 않습니다. "무언가 찍혔다는 사실"을 기록하려고 `updatedAt`을 강제로 올리고 싶다면 의도적으로 dummy 필드를 건드려야 합니다.
+`@PreUpdate`는 dirty checking이 **실제 변경**을 찾은 엔티티에만 발화합니다. 불러와서 아무 필드도 바꾸지 않고 `save()`를 다시 부르면 UPDATE SQL 자체가 나가지 않습니다. <E>무언가 찍혔다는 사실</E>을 기록하려고 `updatedAt`을 강제로 올리고 싶다면 의도적으로 dummy 필드를 건드려야 합니다.
 
-이건 버그가 아니라 정의의 문제입니다. `updatedAt`은 "`save()` 호출 횟수"가 아니라 "**Hibernate가 실제로 UPDATE를 내보낸 순간**"을 기록합니다. 애초부터 그게 약속이었습니다.
+이건 버그가 아니라 정의의 문제입니다. `updatedAt`은 <E>`save()` 호출 횟수</E>가 아니라 <E>**Hibernate가 실제로 UPDATE를 내보낸 순간**</E>을 기록합니다. 애초부터 그게 약속이었습니다.
 
 **(3) DateTimeProvider 타입 변환이 시스템 기본 타임존을 끌어온다**
 
@@ -388,7 +388,7 @@ public DateTimeProvider utcInstantProvider() {
 
 ## 마무리
 
-JPA Auditing은 "엔티티 lifecycle 콜백 위에 올라탄 얇은 자동화"입니다. 그래서 콜백이 발화하는 지점에서만 작동하고, 콜백을 우회하는 모든 경로(벌크 UPDATE, 변경 없는 `save`)에서 침묵합니다. 이 단순한 계약을 기억하면 실전에서 만나는 대부분의 함정이 같은 뿌리의 증상으로 읽힙니다.
+JPA Auditing은 <E>엔티티 lifecycle 콜백 위에 올라탄 얇은 자동화</E>입니다. 그래서 콜백이 발화하는 지점에서만 작동하고, 콜백을 우회하는 모든 경로(벌크 UPDATE, 변경 없는 `save`)에서 침묵합니다. 이 단순한 계약을 기억하면 실전에서 만나는 대부분의 함정이 같은 뿌리의 증상으로 읽힙니다.
 
 배선은 `@EnableJpaAuditing` 한 줄이면 끝이지만, 그 한 줄 뒤에는 `JpaAuditingRegistrar` → `AuditingBeanFactoryPostProcessor` → `SpringBeanContainer` → Hibernate listener 인스턴스화까지의 긴 체인이 있습니다. 이 체인이 성립한다는 전제를 이해하면, `createdAt`이 조용히 `null`로 남는 순간에도 어디를 먼저 의심해야 할지가 자명해집니다.
 
