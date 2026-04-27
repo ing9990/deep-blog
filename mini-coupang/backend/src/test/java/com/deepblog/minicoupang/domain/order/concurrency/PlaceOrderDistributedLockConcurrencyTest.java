@@ -33,19 +33,19 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-// Unit 2 §D (asset). OrderServiceDistributedLock 은 빈으로 등록하지 않으므로
-// @BeforeEach 수동 조립으로 사용한다. application-test.yaml 이 RedissonAutoConfigurationV2 를
-// 기본 제외하므로, 이 테스트만 @TestConfiguration 으로 RedissonClient 빈을 직접 정의해
-// Testcontainers Redis 에 연결한다 (auto-config 우회).
+// Unit 2 §D (asset). OrderServiceDistributedLock 은 placeOrder 에 @Transactional 을 사용하므로
+// AOP 프록시를 받기 위해 Spring 빈으로 등록해야 한다. 운영 코드(@Service) 등록 대신
+// @TestConfiguration 으로 이 테스트에서만 빈을 만들어 다른 테스트 컨텍스트에 영향을 주지 않는다.
+// application-test.yaml 이 RedissonAutoConfigurationV2 를 기본 제외하므로,
+// RedissonClient 도 같은 @TestConfiguration 에서 Testcontainers Redis 에 연결해 직접 등록한다.
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
-@Import(PlaceOrderDistributedLockConcurrencyTest.RedissonTestConfig.class)
+@Import(PlaceOrderDistributedLockConcurrencyTest.DistributedLockTestConfig.class)
 @DisplayName("주문 동시성 §D Redis 분산 락 (200 thread, asset)")
 class PlaceOrderDistributedLockConcurrencyTest {
 
@@ -57,7 +57,8 @@ class PlaceOrderDistributedLockConcurrencyTest {
         .withExposedPorts(6379);
 
     @TestConfiguration
-    static class RedissonTestConfig {
+    static class DistributedLockTestConfig {
+
         @Bean(destroyMethod = "shutdown")
         RedissonClient redissonClient() {
             Config config = new Config();
@@ -65,9 +66,22 @@ class PlaceOrderDistributedLockConcurrencyTest {
                 .setAddress("redis://" + redis.getHost() + ":" + redis.getMappedPort(6379));
             return Redisson.create(config);
         }
+
+        @Bean
+        OrderServiceDistributedLock orderServiceDistributedLock(
+            MemberRepository memberRepository,
+            ProductOptionRepository productOptionRepository,
+            OptionStockRepository optionStockRepository,
+            OrderRepository orderRepository,
+            RedissonClient redissonClient
+        ) {
+            return new OrderServiceDistributedLock(
+                memberRepository, productOptionRepository, optionStockRepository,
+                orderRepository, redissonClient);
+        }
     }
 
-    private OrderServiceDistributedLock orderService;
+    @Autowired private OrderServiceDistributedLock orderService;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OptionStockRepository optionStockRepository;
     @Autowired private ProductRepository productRepository;
@@ -76,8 +90,6 @@ class PlaceOrderDistributedLockConcurrencyTest {
     @Autowired private AccountRepository accountRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private ProductOptionRepository productOptionRepository;
-    @Autowired private PlatformTransactionManager transactionManager;
-    @Autowired private RedissonClient redissonClient;
 
     private OrderConcurrencyScenario scenario;
     private Prepared prepared;
@@ -89,9 +101,6 @@ class PlaceOrderDistributedLockConcurrencyTest {
             memberRepository, orderRepository, passwordEncoder);
         scenario.clearAll();
         prepared = scenario.prepare("distributed-lock", INITIAL_STOCK);
-        orderService = new OrderServiceDistributedLock(
-            memberRepository, productOptionRepository, optionStockRepository, orderRepository,
-            transactionManager, redissonClient);
     }
 
     @Test
