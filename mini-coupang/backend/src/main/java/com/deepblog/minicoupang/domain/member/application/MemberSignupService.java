@@ -1,10 +1,11 @@
 package com.deepblog.minicoupang.domain.member.application;
 
 import com.deepblog.minicoupang.domain.auth.domain.Account;
-import com.deepblog.minicoupang.domain.auth.exception.DuplicateEmailException;
 import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import com.deepblog.minicoupang.domain.member.domain.Member;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,7 @@ public class MemberSignupService {
     @Transactional
     public MemberSignupResult signup(MemberSignupCommand command) {
         if (accountRepository.existsByEmail(command.email())) {
-            throw new DuplicateEmailException("이미 가입된 이메일입니다: " + command.email());
+            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL, "이미 가입된 이메일입니다: " + command.email());
         }
         Account account = accountRepository.save(
             Account.create(command.email(), passwordEncoder.encode(command.rawPassword()))

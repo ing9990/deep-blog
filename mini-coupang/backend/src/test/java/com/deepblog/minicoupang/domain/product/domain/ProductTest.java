@@ -3,8 +3,9 @@ package com.deepblog.minicoupang.domain.product.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.deepblog.minicoupang.domain.product.exception.InvalidProductException;
 import com.deepblog.minicoupang.domain.seller.domain.Seller;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 
 class ProductTest {
@@ -39,35 +40,40 @@ class ProductTest {
     @Test
     void create_nullSeller_throws() {
         assertThatThrownBy(() -> Product.create(null, 1L, "텀블러", "설명", 15_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("판매자");
     }
 
     @Test
     void create_nullCategoryId_throws() {
         assertThatThrownBy(() -> Product.create(SELLER, null, "텀블러", "설명", 15_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("카테고리");
     }
 
     @Test
     void create_nullName_throws() {
         assertThatThrownBy(() -> Product.create(SELLER, 1L, null, "설명", 15_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("상품명");
     }
 
     @Test
     void create_blankName_throws() {
         assertThatThrownBy(() -> Product.create(SELLER, 1L, "   ", "설명", 15_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("상품명");
     }
 
     @Test
     void create_tooShortName_throws() {
         assertThatThrownBy(() -> Product.create(SELLER, 1L, "a", "설명", 15_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("상품명");
     }
 
@@ -75,21 +81,24 @@ class ProductTest {
     void create_tooLongName_throws() {
         String longName = "a".repeat(201);
         assertThatThrownBy(() -> Product.create(SELLER, 1L, longName, "설명", 15_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("상품명");
     }
 
     @Test
     void create_nullBasePrice_throws() {
         assertThatThrownBy(() -> Product.create(SELLER, 1L, "텀블러", "설명", null))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("가격");
     }
 
     @Test
     void create_negativeBasePrice_throws() {
         assertThatThrownBy(() -> Product.create(SELLER, 1L, "텀블러", "설명", -1L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("가격");
     }
 
@@ -115,7 +124,8 @@ class ProductTest {
         product.suspend();
 
         assertThatThrownBy(product::suspend)
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("판매 중");
     }
 
@@ -134,7 +144,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(product::resume)
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("정지");
     }
 
@@ -153,7 +164,8 @@ class ProductTest {
         product.suspend();
 
         assertThatThrownBy(product::markSoldOut)
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("판매 중");
     }
 
@@ -164,7 +176,7 @@ class ProductTest {
         product.addOption("색상-빨강, 사이즈-M", "TUMBLER-RED-M", 1_000L);
 
         assertThat(product.getOptions()).hasSize(1);
-        ProductOption option = product.getOptions().get(0);
+        ProductOption option = product.getOptions().iterator().next();
         assertThat(option.getOptionName()).isEqualTo("색상-빨강, 사이즈-M");
         assertThat(option.getSku()).isEqualTo("TUMBLER-RED-M");
         assertThat(option.getAdditionalPrice()).isEqualTo(1_000L);
@@ -188,7 +200,8 @@ class ProductTest {
         product.addOption("빨강-M", "TUMBLER-RED-M", 1_000L);
 
         assertThatThrownBy(() -> product.addOption("빨강-M-v2", "TUMBLER-RED-M", 1_500L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("SKU");
     }
 
@@ -197,7 +210,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption(null, "TUMBLER-RED-M", 1_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("옵션명");
     }
 
@@ -206,7 +220,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("a", "TUMBLER-RED-M", 1_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("옵션명");
     }
 
@@ -216,7 +231,8 @@ class ProductTest {
         String longName = "a".repeat(101);
 
         assertThatThrownBy(() -> product.addOption(longName, "TUMBLER-RED-M", 1_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("옵션명");
     }
 
@@ -225,7 +241,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("빨강-M", null, 1_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("SKU");
     }
 
@@ -234,7 +251,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("빨강-M", "   ", 1_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("SKU");
     }
 
@@ -244,7 +262,8 @@ class ProductTest {
         String longSku = "S".repeat(51);
 
         assertThatThrownBy(() -> product.addOption("빨강-M", longSku, 1_000L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("SKU");
     }
 
@@ -253,7 +272,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("빨강-M", "TUMBLER-RED-M", null))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("추가 가격");
     }
 
@@ -262,7 +282,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addOption("빨강-M", "TUMBLER-RED-M", -1L))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("추가 가격");
     }
 
@@ -272,7 +293,7 @@ class ProductTest {
 
         product.addOption("기본", "TUMBLER-DEFAULT", 0L);
 
-        assertThat(product.getOptions().get(0).getAdditionalPrice()).isZero();
+        assertThat(product.getOptions().iterator().next().getAdditionalPrice()).isZero();
     }
 
     @Test
@@ -333,7 +354,8 @@ class ProductTest {
         product.addImage("https://cdn.example.com/main.jpg", true);
 
         assertThatThrownBy(() -> product.addImage("https://cdn.example.com/another.jpg", true))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("대표 이미지");
     }
 
@@ -342,7 +364,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addImage(null, true))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("이미지");
     }
 
@@ -351,7 +374,8 @@ class ProductTest {
         Product product = activeProduct();
 
         assertThatThrownBy(() -> product.addImage("   ", true))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("이미지");
     }
 
@@ -361,7 +385,8 @@ class ProductTest {
         String longUrl = "https://cdn.example.com/" + "a".repeat(500);
 
         assertThatThrownBy(() -> product.addImage(longUrl, true))
-            .isInstanceOf(InvalidProductException.class)
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PRODUCT)
             .hasMessageContaining("이미지");
     }
 

@@ -14,10 +14,11 @@ import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.product.seller.application.RegisterProductCommand.ImageCommand;
 import com.deepblog.minicoupang.domain.product.seller.application.RegisterProductCommand.OptionCommand;
 import com.deepblog.minicoupang.domain.seller.domain.Seller;
-import com.deepblog.minicoupang.domain.seller.exception.SellerNotRegisteredException;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
-import com.deepblog.minicoupang.domain.stock.domain.OptionStock;
-import com.deepblog.minicoupang.domain.stock.repository.OptionStockRepository;
+import com.deepblog.minicoupang.domain.product.domain.OptionStock;
+import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -166,8 +167,8 @@ class SellerProductServiceTest {
         );
 
         assertThatThrownBy(() -> service.registerProduct(100L, command))
-            .isInstanceOf(SellerNotRegisteredException.class)
-            .hasMessageContaining("판매자");
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SELLER_NOT_REGISTERED);
 
         verify(eventPublisher, never()).publishEvent(any(ProductRegistered.class));
     }

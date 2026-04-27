@@ -1,11 +1,11 @@
 package com.deepblog.minicoupang.domain.seller.application;
 
 import com.deepblog.minicoupang.domain.auth.domain.Account;
-import com.deepblog.minicoupang.domain.auth.exception.DuplicateEmailException;
 import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import com.deepblog.minicoupang.domain.seller.domain.Seller;
-import com.deepblog.minicoupang.domain.seller.exception.InvalidSellerException;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
+import com.deepblog.minicoupang.global.exception.BusinessException;
+import com.deepblog.minicoupang.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,10 +22,10 @@ public class SellerSignupService {
     @Transactional
     public SellerSignupResult signup(SellerSignupCommand c) {
         if (accountRepository.existsByEmail(c.email())) {
-            throw new DuplicateEmailException("이미 가입된 이메일입니다: " + c.email());
+            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL, "이미 가입된 이메일입니다: " + c.email());
         }
         if (sellerRepository.existsByBusinessRegistrationNumber(c.businessRegistrationNumber())) {
-            throw new InvalidSellerException("이미 등록된 사업자등록번호입니다.");
+            throw new BusinessException(ErrorCode.INVALID_SELLER, "이미 등록된 사업자등록번호입니다.");
         }
         Account account = accountRepository.save(
             Account.create(c.email(), passwordEncoder.encode(c.rawPassword()))

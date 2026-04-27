@@ -9,6 +9,8 @@ import { KeywordLink } from '@/components/blog/KeywordLink'
 import { RelatedPost } from '@/components/blog/RelatedPost'
 import { Callout } from '@/components/mdx/Callout'
 import { CodeFigure } from '@/components/mdx/CodeFigure'
+import { Diagram } from '@/components/mdx/Diagram'
+import { Emphasis } from '@/components/mdx/Emphasis'
 import { Note } from '@/components/mdx/Note'
 import { Tab, Tabs } from '@/components/mdx/Tabs'
 import { CacheStampedeDefenseTimeline } from '@/components/visualizations/CacheStampedeDefenseTimeline'
@@ -143,7 +145,9 @@ export const mdxComponents: MDXComponents = {
   DDDAggregate,
   DDDBoundedContext,
   DDDTermConfusion,
+  Diagram,
   DualWriteFailureWindows,
+  E: Emphasis,
   EventLoopDance,
   IdempotencyCausalityChain,
   IdempotencyKeyFlow,
