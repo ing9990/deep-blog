@@ -262,11 +262,6 @@ public class OrderService {
 }
 ```
 
-2단계와 비교한 두 가지 차이.
-
-1. `synchronized (lock)` 블록이 사라졌다. 잠금 주체가 JVM 모니터에서 DB 행 자체로 옮겨졌다.
-2. 도메인 dirty checking(`stock.decrease()`) 대신 `@Modifying` UPDATE 한 SQL 이 발행된다. 조회·검사·차감이 한 번에 끝나고, UPDATE 가 잡는 행 X 락이 동일 행에 들어오는 다른 UPDATE 를 직렬화한다.
-
 ### 테스트 코드 및 결과
 
 앞 두 단계와 동일한 200 스레드 / 재고 100 시나리오입니다 (`PlaceOrderPessimisticConcurrencyTest`). `OrderService` 가 빈으로 등록되므로 `@Autowired` 로 받아 그대로 사용합니다.
