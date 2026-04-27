@@ -49,9 +49,8 @@ public class OrderServiceDistributedLock {
     @Transactional
     public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
         RLock lock = redissonClient.getLock(LOCK_KEY_PREFIX + command.optionId());
-        boolean acquired = false;
         try {
-            acquired = lock.tryLock(WAIT_TIME_SECONDS, TimeUnit.SECONDS);
+             boolean acquired = lock.tryLock(WAIT_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new BusinessException(ErrorCode.LOCK_ACQUIRE_FAILED);
             }
@@ -60,9 +59,7 @@ public class OrderServiceDistributedLock {
             Thread.currentThread().interrupt();
             throw new BusinessException(ErrorCode.LOCK_INTERRUPTED, e);
         } finally {
-            if (acquired && lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
+            lock.unlock();
         }
     }
 
