@@ -50,7 +50,7 @@ public class OrderServiceDistributedLock {
     public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
         RLock lock = redissonClient.getLock(LOCK_KEY_PREFIX + command.optionId());
         try {
-             boolean acquired = lock.tryLock(WAIT_TIME_SECONDS, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(WAIT_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new BusinessException(ErrorCode.LOCK_ACQUIRE_FAILED);
             }
