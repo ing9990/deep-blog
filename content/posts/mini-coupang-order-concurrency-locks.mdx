@@ -233,9 +233,9 @@ public class OrderServiceSynchronized {
 
 ### 개요
 
-`SELECT ... FOR UPDATE`는 트랜잭션이 커밋/롤백될 때까지 해당 행에 대한 다른 모든 트랜잭션의 쓰기 락 획득을 막습니다. 인스턴스가 몇 개든 동일 행을 가리키는 트랜잭션을 직렬화합니다.
+DB 행 X 락은 트랜잭션이 커밋/롤백될 때까지 다른 트랜잭션의 쓰기 락 획득을 막습니다. 인스턴스가 몇 개든 동일 행을 가리키는 트랜잭션을 직렬화합니다. 락 라이프사이클이 DB 트랜잭션 라이프사이클에 묶여 있어 2단계의 트랜잭션 경계 함정이 자연스럽게 사라집니다.
 
-JPA에서는 `@Lock(LockModeType.PESSIMISTIC_WRITE)`와 JPQL 한 줄로 같은 효과를 얻습니다. 옵션 stock 행을 조회하는 시점에 락을 획득하고, `@Transactional` 경계에서 자동으로 풀립니다. 락 라이프사이클이 DB 트랜잭션 라이프사이클에 묶여 있어 2단계의 트랜잭션 경계 함정이 자연스럽게 사라집니다.
+JPA에서 이 락을 얻는 방법은 두 가지입니다. 명시적인 `SELECT ... FOR UPDATE`(`@Lock(PESSIMISTIC_WRITE)`)와 `@Modifying` UPDATE 한 줄. UPDATE 가 잡는 행 X 락도 SELECT FOR UPDATE 와 동일하게 트랜잭션 커밋까지 유지됩니다. 3단계는 후자를 씁니다. 조회·검사·차감을 한 SQL 안에 원자화할 수 있고, JPA dirty checking 이 발행하는 두 번째 UPDATE 도 끼지 않습니다.
 
 ### 구현
 
@@ -244,11 +244,15 @@ public interface OptionStockRepository extends JpaRepository<OptionStock, Long> 
 
     Optional<OptionStock> findByOptionId(Long optionId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)                                       // [!code highlight]
-    @Query("select s from OptionStock s where s.optionId = :optionId")          // [!code highlight]
-    Optional<OptionStock> findByOptionIdForUpdate(@Param("optionId") Long optionId);
+    @Modifying                                                                       // [!code highlight]
+    @Query("update OptionStock s set s.quantity = s.quantity - :qty " +              // [!code highlight]
+        "where s.optionId = :optionId and s.quantity >= :qty")                       // [!code highlight]
+    int decreaseQuantityIfEnough(@Param("optionId") Long optionId,                   // [!code highlight]
+                                 @Param("qty") long qty);                            // [!code highlight]
 }
 ```
+
+WHERE 절의 `quantity >= :qty` 가 재고 부족 검사를 SET 절과 한 번에 수행합니다. 반환값 affected 가 1이면 차감 성공, 0이면 재고 부족입니다.
 
 ```java title="OrderService.java"
 @Service
@@ -258,9 +262,11 @@ public class OrderService {
     @Transactional
     public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
         // member, option 조회 (생략)
-        OptionStock stock = optionStockRepository.findByOptionIdForUpdate(command.optionId()) // [!code highlight]
-            .orElseThrow(() -> new BusinessException(ErrorCode.STOCK_NOT_FOUND));
-        stock.decrease(command.quantity());                                                    // [!code highlight]
+        int updated = optionStockRepository.decreaseQuantityIfEnough(                // [!code highlight]
+            command.optionId(), command.quantity());                                 // [!code highlight]
+        if (updated == 0) {                                                          // [!code highlight]
+            throw new BusinessException(ErrorCode.INSUFFICIENT_AMOUNT);              // [!code highlight]
+        }
         // Order 조립 + INSERT (생략)
     }
 }
@@ -269,11 +275,11 @@ public class OrderService {
 2단계와 비교한 두 가지 차이.
 
 1. `synchronized (lock)` 블록이 사라졌다. `@Transactional` 한 줄로 잠금 라이프사이클이 트랜잭션 경계에 일치한다.
-2. `findByOptionId` → `findByOptionIdForUpdate` 한 글자 차이. 발행되는 SQL 끝에 `for update`가 붙고 MySQL/H2(MySQL 모드)는 그 행에 X 락을 건다.
+2. 도메인 dirty checking(`stock.decrease()`) 대신 `@Modifying` UPDATE 한 SQL 이 발행된다. 조회·검사·차감이 한 번에 끝나고, UPDATE 가 잡는 행 X 락이 트랜잭션 커밋까지 유지돼 동일 행에 들어오는 다른 UPDATE 가 직렬화된다.
 
 ### 테스트 코드 및 결과
 
-앞 두 단계와 동일한 200 스레드 / 재고 100 시나리오입니다 (`PlaceOrderPessimisticConcurrencyTest`). `OrderService`가 빈으로 등록되므로 `@Autowired`로 받아 그대로 사용합니다.
+앞 두 단계와 동일한 200 스레드 / 재고 100 시나리오입니다 (`PlaceOrderPessimisticConcurrencyTest`). `OrderService` 가 빈으로 등록되므로 `@Autowired` 로 받아 그대로 사용합니다.
 
 검증을 위해 테스트 프로파일에 SQL 로깅을 켭니다.
 
@@ -290,25 +296,20 @@ logging:
     org.hibernate.orm.jdbc.bind: TRACE  # [!code highlight]
 ```
 
-테스트 실행 시 200 스레드 모두 정확히 다음 모양의 쿼리를 발행합니다.
-
-![3단계 비관적 락 SELECT FOR UPDATE 발행 로그](/images/posts/mini-coupang-order-concurrency-locks/c-pessimistic-for-update-sql.png)
+테스트 실행 시 200 스레드 모두 다음 모양의 UPDATE 한 문장을 발행합니다.
 
 ```sql title="발행된 쿼리 (Hibernate)"
-/* select s from OptionStock s where s.optionId = :optionId */
-select
-    os1_0.option_stock_id,
-    os1_0.created_at,
-    os1_0.option_id,
-    os1_0.quantity,
-    os1_0.updated_at
-from
-    option_stocks os1_0
+/* update OptionStock s set s.quantity = s.quantity - :qty
+   where s.optionId = :optionId and s.quantity >= :qty */
+update
+    option_stocks
+set
+    quantity=quantity-?
 where
-    os1_0.option_id=? for update              -- [!code highlight]
+    option_id=? and quantity>=?               -- [!code highlight]
 ```
 
-`org.hibernate.orm.jdbc.bind` TRACE 로그로 `binding parameter (1:BIGINT) <- [1]`까지 함께 확인합니다. JPA가 잠금 명시를 빠뜨리거나 다른 인덱스 경로로 우회하지 않았는지 검증되는 지점입니다.
+`org.hibernate.orm.jdbc.bind` TRACE 로그로 차감량·option id·재고 임계값 세 바인딩이 함께 찍힙니다. JPA 가 dirty checking SELECT 를 추가로 발행하지 않는지, WHERE 절의 `quantity >= ?` 가 정확히 들어갔는지 확인되는 지점입니다.
 
 ![3단계 비관적 락 200 스레드 측정 결과](/images/posts/mini-coupang-order-concurrency-locks/c-pessimistic-200-thread-result.png)
 
@@ -406,10 +407,7 @@ public class OrderServiceDistributedLock {
 }
 ```
 
-3단계 대비 두 가지 차이.
-
-1. `findByOptionIdForUpdate(...).orElseThrow().decrease(...)` 3 단계가 `decreaseQuantityIfEnough` 한 줄로 압축됐다. 조회·검사·차감이 한 SQL UPDATE에 들어간다.
-2. `@Transactional` 메서드 안에서 Redis 락을 잡지만, 정합성은 락이 풀려도 깨지지 않는다. 행 X 락이 커밋까지 유지되기 때문이다.
+3단계 대비 한 가지가 추가됐다. UPDATE 가 잡는 행 X 락은 그대로지만, 그 위에 Redis 락이 같은 옵션 키(`lock:option:{optionId}`) 를 가리키는 모든 JVM 인스턴스의 트랜잭션 진입을 미리 직렬화한다. UPDATE 락은 정합성, Redis 락은 분산 코디네이션을 맡는다.
 
 `tryLock(WAIT_TIME_SECONDS, TimeUnit.SECONDS)` 시그니처는 leaseTime을 명시하지 않습니다. 그러면 Redisson의 watchdog 모드가 활성화돼 락 보유 동안 약 10초 주기로 만료를 자동 연장합니다 (default lock watchdog timeout 30초). 트랜잭션이 길어져도 만료 race가 발생하지 않고, 클라이언트가 죽으면 watchdog도 멈춰 default timeout 후 자동 해제됩니다 (deadlock 방지).
 
