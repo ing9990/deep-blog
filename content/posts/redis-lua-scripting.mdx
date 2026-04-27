@@ -1,0 +1,483 @@
+---
+title:
+  ko: "Redis Lua Scripting"
+  en: "Redis Lua Scripting"
+slug: "redis-lua-scripting"
+date: 2026-04-27
+tags:
+  - Backend
+  - Infrastructure
+  - Redis
+  - Scripting
+keywords:
+  - Redis Lua
+  - EVAL
+  - EVALSHA
+  - Script Cache
+  - redis.call
+  - lua-time-limit
+  - Redis Functions
+summary:
+  ko: "Redis에서 Lua 스크립트가 왜 필요한지(다중 명령 원자성과 RTT 절감), 단일 스레드 이벤트 루프 위에서 어떻게 실행되는지(스크립트 캐시, KEYS/ARGV, redis.call), 운영에서 마주치는 블로킹/비결정성/Cluster 제약을 정리합니다."
+  en: "Explains why Redis Lua scripting exists (multi-command atomicity and RTT reduction), how it executes on the single-threaded event loop (script cache, KEYS/ARGV, redis.call), and operational pitfalls around blocking, non-determinism, and Cluster constraints."
+category: infrastructure
+draft: false
+---
+
+Redis는 단일 명령에 대해서는 이미 원자적입니다. 문제는 여러 명령을 묶어 하나의 논리 연산으로 처리할 때 생깁니다. 분산 락 해제, rate limiter, compare-and-set 같은 패턴은 클라이언트와 Redis 사이를 여러 번 왕복하면 그 사이에 다른 클라이언트가 끼어들 수 있고, 그 race condition이 곧 데이터 사고로 이어집니다. Lua 스크립트는 이 문제를 "한 덩어리로 실행되는 코드"로 풉니다. 이 글에서는 Lua 스크립트가 단일 스레드 모델 위에서 어떻게 원자성을 얻는지, 그리고 그 대가가 무엇인지 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - Redis Lua 스크립트가 단일 스레드 이벤트 루프 위에서 어떻게 원자성을 보장하는지 이해한다
+  - `EVAL`과 `EVALSHA`의 캐시 흐름, `KEYS`/`ARGV` 분리가 Cluster 라우팅에 강제되는 이유를 구분할 수 있다
+  - 블로킹, 비결정성, Cluster 제약을 고려해 Lua 스크립트와 다른 대안(MULTI/EXEC, Redis Functions, 분산 락) 사이에서 선택하는 기준을 얻는다
+</Note>
+
+## Redis Lua란
+
+Redis Lua 스크립팅은 **Redis 서버 프로세스 안에서 임베디드 Lua 인터프리터로 실행되는 스크립트**입니다. 클라이언트가 `EVAL` 명령으로 스크립트 본문을 보내면, Redis는 그 스크립트가 끝날 때까지 다른 명령을 일절 처리하지 않고 한 번에 실행합니다.
+
+핵심 구성 요소는 다음과 같습니다.
+
+| 요소 | 역할 |
+|---|---|
+| `EVAL <script> <numkeys> <key1>...<keyN> <arg1>...<argM>` | 스크립트 본문을 매번 전송해 실행 |
+| `EVALSHA <sha1> <numkeys> <key1>... <arg1>...` | 한 번 캐시된 스크립트를 SHA1로 호출하여 RTT 절감 |
+| `KEYS` 배열 | 스크립트가 접근할 데이터 키 목록. Cluster의 hash slot 라우팅이 이 값으로 결정됩니다 |
+| `ARGV` 배열 | 스크립트가 받는 임의 값 목록. 키가 아닌 모든 입력 |
+| `redis.call("GET", KEYS[1])` | 스크립트 안에서 Redis 명령을 실행하는 함수 |
+| Lua 5.1 (Redis 7.4+에서는 호환 LuaJIT 옵션도 가능) | 사용 가능한 Lua 버전 |
+
+가장 작은 예시:
+
+```bash title="redis-cli로 EVAL/EVALSHA 호출"
+# 키 1개, ARGV 1개로 SET 실행
+redis-cli EVAL "return redis.call('SET', KEYS[1], ARGV[1])" 1 mykey hello
+# OK
+
+# 같은 스크립트를 캐시한 뒤 SHA1으로 재호출
+redis-cli SCRIPT LOAD "return redis.call('SET', KEYS[1], ARGV[1])"
+# "fcf6c1e85c7e8fa1c9d7e2..."
+redis-cli EVALSHA fcf6c1e85c7e8fa1c9d7e2... 1 mykey world
+# OK
+```
+
+Redis 7.0부터는 한 단계 위 형태인 **Redis Functions**가 추가되었습니다. EVAL이 임시로 캐시되는 ephemeral 스크립트라면, Functions는 `FUNCTION LOAD`로 영구 등록되고 RDB/AOF에 같이 보존되는 라이브러리 단위입니다. 이 글에서는 EVAL과 EVALSHA를 중심으로 다루고, 차이는 트레이드오프 섹션에서 비교합니다.
+
+`KEYS`와 `ARGV`를 굳이 나누는 이유가 처음 보면 어색할 수 있습니다. "그냥 인자 하나로 넘기면 안 되나?" 안 됩니다. Redis Cluster는 모든 명령을 키 기반으로 슬롯에 라우팅하므로, 스크립트가 어떤 키들을 만질지 미리 선언해야 같은 슬롯에 모든 키가 있는지 검증할 수 있습니다. ARGV는 라우팅과 무관한 값이라 분리됩니다. 자세한 메커니즘은 내부 동작 섹션에서 다룹니다.
+
+## 왜 필요한가
+
+<RelatedPost slug="redis-essentials" type="prerequisite" />
+
+Redis 자체는 단일 명령에 대해 이미 원자적입니다 (`INCR`, `SET`, `LPUSH`). 문제는 여러 명령을 묶어서 하나의 논리 연산으로 처리해야 할 때 시작됩니다. 가장 흔한 두 가지 동기는 다음과 같습니다.
+
+- **다중 명령 원자성**: 여러 명령이 사이에 다른 클라이언트가 끼어들지 않은 채 한 덩어리로 실행되어야 하는 경우
+- **네트워크 RTT 절감**: 클라이언트와 Redis 사이를 여러 번 왕복하는 대신, 한 번의 호출로 서버 안에서 다 처리
+
+세 번째로 "서버 측 로직 캡슐화"가 있지만 부수적 동기에 가깝습니다. 도입의 진짜 이유는 위 두 가지입니다.
+
+가장 잘 알려진 예시는 분산 락 해제입니다. 락을 풀 때는 "내가 건 락이 맞을 때만 풀어야" 합니다.
+
+```kotlin title="Lua 없이: race condition 위험"
+val ownerInRedis = redis.get("lock:order:42")  // (1) RTT 1회
+if (ownerInRedis == myToken) {                 // (2) 클라이언트에서 비교
+    redis.del("lock:order:42")                  // (3) RTT 2회. 사이에 락 만료 + 다른 클라가 락 잡음 가능
+}
+```
+
+(1)번과 (3)번 사이에 락이 TTL로 만료되고 다른 클라이언트가 같은 키로 새 락을 잡았다면, (3)번의 `DEL`은 남의 락을 풀어버립니다. 이건 클라이언트 측 비교 + 별도 명령이라는 구조 자체가 만든 race condition입니다.
+
+```lua title="Lua로: 한 덩어리 안에서 비교 + 삭제"
+-- compare-and-delete: 내 토큰일 때만 DEL
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1])
+else
+  return 0
+end
+```
+
+이 스크립트가 실행되는 동안 Redis는 다른 명령을 하나도 처리하지 않습니다. GET, 비교, DEL이 외부에서 보면 단일 시점에 일어난 것처럼 보입니다. 이게 원자성의 본질입니다.
+
+<Callout type="warning" title="Lua 스크립트는 트랜잭션이 아니다">
+  원자성(atomicity)은 보장되지만, ACID에서 말하는 롤백 가능한 트랜잭션은 아닙니다. 스크립트 중간에 `LPUSH`가 성공한 뒤 다음 명령이 오류로 멈춰도 이미 실행된 `LPUSH`는 취소되지 않습니다.
+</Callout>
+
+## 내부 동작
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Lua 스크립트의 원자성은 트랜잭션 매니저가 잠금을 거는 것이 아니라, **단일 스레드 이벤트 루프가 스크립트가 끝날 때까지 다른 명령을 처리하지 않는 구조**에서 옵니다. 이 한 가지 구조가 내부 동작의 모든 디자인 결정을 강제합니다.
+</Callout>
+
+### 단일 스레드 모델
+
+Redis는 명령 처리를 단일 스레드로 합니다 (Redis 6.0의 I/O threading은 네트워크 부분만 멀티 스레드이고 명령 실행은 여전히 단일 스레드). 이벤트 루프가 클라이언트로부터 명령을 하나씩 꺼내 처리하고, 완료되면 다음 명령을 꺼냅니다.
+
+`EVAL`이 들어오면 이 루프 안에서 하나의 명령처럼 취급됩니다. Redis는 임베디드 Lua 인터프리터를 깨워 스크립트를 실행하고, 스크립트가 끝날 때까지 이벤트 루프는 다음 명령을 처리하러 가지 않습니다. 이게 원자성의 본질입니다. 트랜잭션 매니저가 잠금을 거는 것이 아니라, 물리적으로 다른 명령이 끼어들 시점이 없는 구조입니다.
+
+| 시점 | 이벤트 루프의 동작 |
+|---|---|
+| T0 | 클라이언트A의 `GET` 처리, 응답 |
+| T1 | 클라이언트B의 `EVAL`이 들어옴. Lua 인터프리터 진입 |
+| T1 동안 | 스크립트가 `redis.call("GET")`, 비교, `redis.call("DEL")`을 순차 실행. 다른 클라이언트의 명령은 큐에 쌓이지만 처리되지 않음 |
+| T2 | `EVAL` 완료, 응답 반환 |
+| T3 | 큐에 쌓인 클라이언트C의 `SET` 처리 |
+
+이 모델의 강점이자 약점은 같은 자리에서 옵니다. 다른 모든 클라이언트는 EVAL이 끝날 때까지 블로킹됩니다. 1ms짜리 스크립트는 문제 없지만 100ms 걸리는 스크립트는 그 시간 동안 모든 요청의 latency tail을 만듭니다. 이 함정은 실전 문제 섹션에서 깊이 다룹니다.
+
+### 스크립트 캐시: EVAL → EVALSHA → NOSCRIPT 폴백
+
+스크립트 본문을 매번 네트워크로 보내는 건 낭비입니다. 동일한 스크립트를 1초에 1000번 호출한다면 본문도 1000번 전송됩니다. Redis는 이를 막기 위해 서버 측 스크립트 캐시를 둡니다. 캐시 key는 스크립트 본문의 SHA1 해시이고, value는 컴파일된 Lua 함수입니다.
+
+<Callout type="error" title="핵심 통찰: EVALSHA는 캐시 hit을 가정한 최적화일 뿐, 본문 전송을 영구 제거하지 않는다">
+  스크립트 캐시는 서버 인스턴스 단위이고 재시작과 `SCRIPT FLUSH`에 사라지므로, 클라이언트는 항상 EVAL 폴백을 갖춰야 합니다. 라이브러리가 자동으로 처리하는 이 폴백을 모르면 운영 중 NOSCRIPT 에러로 장애가 납니다.
+</Callout>
+
+전체 흐름은 아래에서 단계별로 따라갈 수 있습니다.
+
+<RedisScriptCacheFlow />
+
+대부분의 클라이언트 라이브러리(Jedis, Lettuce, redis-py, ioredis 등)는 NOSCRIPT 폴백을 투명하게 처리합니다. 코드에서는 그냥 `eval(script, keys, args)`만 호출하면 라이브러리가 첫 호출 때 SHA1을 계산해 EVALSHA를 시도하고, NOSCRIPT가 오면 EVAL로 폴백한 뒤 다음 호출부터는 캐시 hit입니다.
+
+```kotlin title="Lettuce에서의 일반적 사용"
+val script = """
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+      return redis.call("DEL", KEYS[1])
+    else
+      return 0
+    end
+""".trimIndent()
+
+// 라이브러리가 내부적으로 EVALSHA를 시도하고, NOSCRIPT면 EVAL로 폴백
+val result: Long = redis.sync()
+    .eval(script, ScriptOutputType.INTEGER, arrayOf("lock:order:42"), myToken)
+```
+
+캐시는 서버 인스턴스 단위입니다. Redis를 재시작하거나 `SCRIPT FLUSH`를 호출하면 캐시가 비워지고 모든 EVALSHA가 다음 호출에서 NOSCRIPT를 만납니다. Failover로 새 마스터가 등장한 직후에도 마찬가지입니다 (replication은 effects만 복제하고 스크립트 자체는 복제되지 않음). 라이브러리의 자동 폴백이 운영에서 중요한 이유입니다.
+
+### Cluster의 KEYS 강제
+
+Redis Cluster는 키 공간을 **16384개의 hash slot**으로 나눠 노드 사이에 분배합니다. 어떤 키가 어느 슬롯에 속하는지는 $\text{CRC16(key)} \bmod 16384$로 결정됩니다. 클라이언트가 `GET foo`를 보내면 Cluster는 `foo`의 슬롯을 계산해 그 슬롯을 가진 노드로 명령을 라우팅합니다.
+
+EVAL은 단일 키 명령이 아니라 여러 키를 만질 수 있는 명령입니다. Cluster가 이 명령을 라우팅하려면 스크립트가 어떤 키들을 만질지 미리 알아야 하고, 그게 `KEYS` 배열을 분리한 진짜 이유입니다. ARGV는 라우팅과 무관한 임의 값이라 분리됩니다.
+
+규칙은 단순합니다: `KEYS`에 들어간 모든 키는 같은 hash slot에 있어야 한다. 다른 슬롯이면 `CROSSSLOT` 에러로 거절됩니다.
+
+```bash title="Cluster에서 CROSSSLOT 발생 예시"
+# user:1과 user:2는 다른 슬롯일 가능성이 높음
+redis-cli -c EVAL "return redis.call('GET', KEYS[1])" 2 user:1 user:2
+# (error) CROSSSLOT Keys in request don't hash to the same slot
+```
+
+해법은 **hash tag**입니다. 키 이름 안에 `{...}` 영역을 두면 그 부분만 슬롯 계산에 사용됩니다.
+
+```bash title="hash tag로 같은 슬롯 강제"
+# {order:42} 부분만 슬롯 계산. 둘 다 같은 슬롯
+redis-cli -c EVAL "return redis.call('MGET', KEYS[1], KEYS[2])" 2 \
+  "lock:{order:42}" "meta:{order:42}"
+```
+
+이 제약은 단점이 아니라 분산 시스템의 정직한 표현입니다. KEYS 선언 없이 스크립트가 임의 키를 만질 수 있다면 Cluster는 라우팅을 결정할 수 없거나 모든 노드에 브로드캐스트해야 합니다. 어느 쪽도 수평 확장과 양립하지 않습니다. 또한 스크립트 안에서 `KEYS`에 선언하지 않은 키를 만지는 것은 단일 노드에서는 동작하지만 Cluster에서는 명세 위반입니다.
+
+### redis.call vs redis.pcall
+
+스크립트 안에서 Redis 명령을 호출하는 방법은 두 가지이고, 에러 처리 방식이 다릅니다.
+
+| 함수 | 명령이 에러를 내면 | 사용 시점 |
+|---|---|---|
+| `redis.call(cmd, ...)` | 스크립트 전체를 즉시 중단하고 클라이언트로 에러 전파 | "이 단계가 실패하면 스크립트도 실패해야 함". 일반적 선택 |
+| `redis.pcall(cmd, ...)` | 에러를 Lua 테이블로 반환, 스크립트는 계속 실행 | 에러를 잡아 분기 처리하거나 부분 실패를 허용 |
+
+```lua title="redis.call: 즉시 중단"
+-- INCR이 실패하면(예: WRONGTYPE) 스크립트가 여기서 끝남
+local n = redis.call("INCR", KEYS[1])
+return n
+```
+
+```lua title="redis.pcall: 에러 객체로 받아 분기"
+local result = redis.pcall("INCR", KEYS[1])
+if type(result) == "table" and result.err then
+  -- 에러를 무시하거나 대체 동작
+  return redis.error_reply("INCR failed: " .. result.err)
+end
+return result
+```
+
+기본 선택은 `redis.call`입니다. 스크립트 중간에서 한 명령이 실패했는데 나머지를 계속 진행하면 부분 적용된 상태가 남아 추적이 어려워집니다 (앞서 본 "트랜잭션이 아니다"의 같은 맥락입니다). `pcall`은 정말로 에러를 봐야 분기가 결정되는 경우에만 씁니다.
+
+### Lua → RESP 응답 변환
+
+스크립트가 `return`한 값은 Redis가 RESP(Redis Serialization Protocol) 응답으로 변환해 클라이언트에 보냅니다. 직관적이지 않은 매핑이 몇 개 있어 미리 알아두면 디버깅이 쉽습니다.
+
+| Lua 값 | RESP 응답 | 비고 |
+|---|---|---|
+| `number` (정수) | Integer reply | `return 42`이 `:42`로 변환 |
+| `number` (실수) | Integer reply (소수점 절삭) | `return 3.7`이 `:3`으로 변환. 의도치 않은 손실 |
+| `string` | Bulk string reply | `return "hi"`이 `$2\r\nhi`로 변환 |
+| `boolean true` | Integer reply `1` | |
+| `boolean false` | Nil reply | `false`와 `nil`이 클라이언트에서 같이 보임 |
+| `nil` | Nil reply | |
+| `table (배열)` | Array reply | 첫 nil 항목에서 잘림 |
+| `table { err = "..." }` | Error reply | `redis.error_reply("...")`도 동일 |
+| `table { ok = "..." }` | Status reply | `redis.status_reply("...")`도 동일 |
+
+특히 두 가지가 자주 사고를 만듭니다.
+
+- **float가 정수로 절삭됨**: 소수가 필요하면 문자열로 직렬화해 반환하고 클라이언트에서 파싱합니다.
+- **배열의 nil은 그 자리에서 잘림**: `{1, nil, 3}`을 반환하면 클라이언트는 `[1]`만 받습니다. 빈 슬롯이 필요하면 `false` 대신 명시적 placeholder(빈 문자열, `0` 등)를 씁니다.
+
+```lua title="흔한 함정: float 손실"
+local rate = 0.85
+return rate          -- 클라이언트가 받는 값: 0 (절삭됨)
+return tostring(rate) -- 안전: "0.85" 문자열로 반환
+```
+
+`redis.status_reply("OK")`와 `redis.error_reply("custom error")`는 명시적으로 RESP 타입을 지정하는 헬퍼입니다. 둘 다 표의 `table` 케이스를 사람이 읽기 쉽게 감싼 것입니다.
+
+## 실전 문제
+
+이 섹션이 이 글의 가장 큰 축입니다. 실제로 운영하다 보면 부딪히는 함정 네 가지를 정리합니다.
+
+### 블로킹과 lua-time-limit
+
+내부 동작에서 본 단일 스레드 모델은 양면이 있습니다. 원자성을 무료로 주는 대신, 스크립트가 길어지면 그 시간 동안 모든 클라이언트가 멈춥니다. 이건 기능이 느린 게 아니라 **Redis 전체가 멈춘 것처럼 보이는** 현상입니다. 평소 0.5ms로 응답하던 인스턴스가 100ms짜리 스크립트 하나에 모든 명령이 같이 100ms 지연됩니다.
+
+Redis는 이를 막기 위해 `lua-time-limit` 설정을 둡니다 (기본값 5000ms). 단, 이 값을 초과해도 스크립트가 자동으로 중단되지는 않습니다. 대신 다른 클라이언트의 명령에 `BUSY` 에러가 응답되고, 다른 클라이언트는 `SCRIPT KILL` 또는 `SHUTDOWN NOSAVE`만 보낼 수 있게 됩니다.
+
+```text title="lua-time-limit 초과 시 다른 클라이언트의 응답"
+> GET mykey
+(error) BUSY Redis is busy running a script. You can only call SCRIPT KILL or SHUTDOWN NOSAVE.
+```
+
+여기서 함정이 두 개 있습니다.
+
+- **`SCRIPT KILL`은 만능이 아니다**: 스크립트가 이미 쓰기 명령을 실행(`SET`, `DEL`, `LPUSH` 등)했다면 `SCRIPT KILL`이 거절됩니다. 부분 적용된 상태로 죽이면 데이터 일관성이 깨지기 때문입니다. 이 시점부터 회복 수단은 `SHUTDOWN NOSAVE`로 인스턴스를 강제 종료하는 것뿐이고, 그러면 마지막 RDB 이후의 모든 변경이 사라집니다.
+- **`lua-time-limit`은 hard timeout이 아니다**: 스크립트가 의도적으로 무한 루프에 들어갔다면 시간이 지난 뒤에도 계속 돌아갑니다. 단지 클라이언트들이 BUSY 에러를 받기 시작할 뿐입니다.
+
+방어책은 결국 "스크립트는 짧게"입니다. 운영 가이드라인:
+
+| 항목 | 권장 |
+|---|---|
+| 단일 EVAL 실행 시간 | 1ms 이내 목표, 5ms 초과 시 의심 |
+| 스크립트 안에서 만지는 키 개수 | 가급적 한 자릿수, `KEYS` 50개 이상이면 재설계 신호 |
+| Lua 루프(`for`) | 들어가지 않는 것이 안전. 들어간다면 매우 작은 N |
+| 큰 자료구조 순회 | `redis.call("HGETALL", ...)` 후 Lua에서 가공보다 클라이언트로 가져와 처리 |
+
+### 비결정성과 effects replication
+
+Redis 6.x까지 기본 복제 방식은 **script replication**이었습니다. 마스터가 받은 EVAL 스크립트의 본문을 그대로 복제 슬레이브와 AOF에 기록하고, 슬레이브가 같은 스크립트를 자기 메모리 위에서 다시 실행하는 구조입니다. RDBMS의 statement-based replication과 같은 사고 방식입니다.
+
+이 방식은 스크립트가 결정적(deterministic)이어야 동작합니다. 같은 입력에 같은 출력이 나와야 마스터와 슬레이브의 상태가 일치합니다. 다음 호출들은 모두 비결정성을 만들고, 마스터/슬레이브 분기를 일으킵니다.
+
+| 비결정성의 원인 | 왜 위험한가 |
+|---|---|
+| `math.random()` | 마스터와 슬레이브가 다른 난수를 만들어 다른 키에 다른 값을 씀 |
+| `os.time()`, `redis.call("TIME")` | 마스터의 T0와 슬레이브의 T1이 달라 다른 분기 |
+| Lua 테이블 순회 순서 (`pairs`) | 해시 순서가 구현 의존이라 마스터/슬레이브가 달리 순회 가능 |
+| `SRANDMEMBER`, `RANDOMKEY` | 같은 입력이 같은 출력 보장 안 함 |
+
+Redis는 이를 막기 위해 마스터가 스크립트 내부에서 비결정적 명령을 호출하면 에러를 내거나 경고를 띄웠습니다. `math.random`은 Redis가 고정 시드로 wrap해 같은 시퀀스가 나오도록 강제했고요.
+
+**Redis 7.0부터 effects replication**이 기본이 됐습니다. 마스터가 스크립트를 실행하는 동안 실제로 일어난 쓰기 명령들의 결과(SET, DEL 등)를 복제 스트림에 기록하고, 슬레이브는 스크립트를 다시 실행하지 않고 그 명령들만 적용합니다. RDBMS의 row-based replication과 같은 사고입니다. 이렇게 되면 비결정성은 마스터에서만 발생하고 슬레이브는 그저 결과를 복제하므로 분기가 일어나지 않습니다.
+
+이게 함정이 될 수 있는 지점은 **Redis 6.x 시절에 작성된 코드를 7.x로 옮길 때**입니다. 6.x 시절 회피했던 비결정적 호출(고정 시드 처리, 외부에서 난수 주입 등)이 7.x에서는 그냥 동작합니다. 동작은 하지만 6.x 스타일의 우회가 코드에 남아 있다면 불필요한 복잡도입니다. Redis Functions(7.0+)는 처음부터 effects replication 전제로 설계됐습니다.
+
+### 스크립트 캐시 누수와 글로벌 변수
+
+스크립트 캐시는 SHA1과 컴파일된 Lua 함수의 매핑이라고 했고, `SCRIPT FLUSH`나 인스턴스 재시작 외에는 자동으로 비워지지 않습니다. 이 특성이 두 가지 문제를 만듭니다.
+
+**캐시 무한 증가**가 첫 번째 문제입니다. 스크립트를 동적으로 만들어 EVAL하면 매번 다른 SHA1이 생기고 캐시가 끝없이 커집니다.
+
+```kotlin title="안티패턴: 동적 스크립트"
+fun fetchUsersOlderThan(days: Int): List<String> {
+    // 매 호출마다 다른 스크립트 본문 → 다른 SHA1 → 캐시에 새 항목
+    val script = """
+        local cutoff = ${System.currentTimeMillis() - days * 86400000L}
+        return redis.call("ZRANGEBYSCORE", KEYS[1], 0, cutoff)
+    """
+    return redisOps.evalScript(script, 1, "users:by-time")
+}
+```
+
+올바른 형태는 변하는 값을 ARGV로 빼서 스크립트 본문을 고정시키는 것입니다.
+
+```kotlin title="고정 스크립트 + ARGV"
+private val FETCH_OLDER_SCRIPT = """
+    local cutoff = tonumber(ARGV[1])
+    return redis.call("ZRANGEBYSCORE", KEYS[1], 0, cutoff)
+""".trimIndent()
+
+fun fetchUsersOlderThan(days: Int): List<String> {
+    val cutoff = System.currentTimeMillis() - days * 86400000L
+    return redisOps.evalScript(FETCH_OLDER_SCRIPT, 1, "users:by-time", cutoff.toString())
+}
+```
+
+운영 시점에서는 `INFO memory`의 `used_memory_scripts`로 캐시 크기를 모니터링할 수 있습니다. 비정상적으로 커지면 위 안티패턴이 어디선가 일어나고 있다는 신호입니다.
+
+**글로벌 변수 사고**가 두 번째 문제입니다. Lua는 변수 선언에 `local`을 붙이지 않으면 글로벌 환경에 들어갑니다.
+
+```lua title="안티패턴: local 누락"
+counter = redis.call("INCR", KEYS[1])  -- counter가 글로벌!
+return counter
+```
+
+Redis 5.0 미만에서는 이 글로벌이 다음 EVAL에서도 살아남는 경우가 있어 의도치 않은 상태 공유가 일어났습니다. Redis 5.0+은 스크립트 실행 환경을 격리해 이 위험은 줄었지만, 글로벌 변수 자체를 만들면 에러를 내도록 강화됐습니다.
+
+```text title="Redis 5.0+에서 글로벌 변수 사용 시"
+(error) ERR Error running script: ... Script attempted to create global variable 'counter'
+```
+
+규칙은 단순합니다: 모든 변수에 `local`.
+
+```lua title="올바른 형태"
+local counter = redis.call("INCR", KEYS[1])
+return counter
+```
+
+### 디버깅 수단의 부재
+
+스크립트가 의도와 다르게 동작하면 디버깅이 까다롭습니다. 일반 애플리케이션처럼 `print`, breakpoint, stack trace를 다 쓸 수 없습니다.
+
+| 사용 가능한 수단 | 한계 |
+|---|---|
+| `redis.log(level, msg)` | Redis 서버 로그에 출력. 클라이언트는 못 봄. 운영 환경에서 로그 노이즈 위험 |
+| `return {key1, value1, ...}` 형태로 중간 상태 반환 | 스크립트 본문을 일시적으로 수정해야 함 |
+| 클라이언트 라이브러리의 EVAL 로깅 | 입력만 볼 수 있고 스크립트 내부는 못 봄 |
+| `ldb` (Lua Debugger, Redis 3.2+) | `--ldb` 모드의 redis-cli. 세션 동안 인스턴스가 잠기므로 로컬 개발 전용 |
+
+`redis.log`는 가장 흔히 쓰이지만 운영 환경에서는 함부로 못 켭니다. 호출량이 많은 스크립트라면 로그가 디스크를 채울 수 있고, 로그 레벨이 기본 `notice`인 운영에서는 `redis.LOG_DEBUG`로 찍어도 보이지 않거나, 보이게 하려면 서버 전체의 loglevel을 낮춰야 합니다.
+
+```lua title="redis.log 사용 예"
+local v = redis.call("GET", KEYS[1])
+redis.log(redis.LOG_NOTICE, "got value: " .. tostring(v))
+return v
+```
+
+실무에서는 결국 스크립트를 작게 유지하고 단위 테스트로 사전 검증하는 게 가장 안전합니다. Testcontainers로 진짜 Redis를 띄워 같은 입력으로 스크립트를 실행하고 결과를 확인하는 방식이 디버깅 부재를 보완합니다.
+
+```kotlin title="Testcontainers 단위 테스트"
+@Testcontainers
+class CompareAndDeleteTest {
+    @Container
+    val redis = GenericContainer("redis:7.4-alpine").withExposedPorts(6379)
+
+    @Test
+    fun `내 토큰일 때만 삭제된다`() {
+        val client = RedisClient.create("redis://${redis.host}:${redis.firstMappedPort}")
+        val sync = client.connect().sync()
+        sync.set("lock:1", "tokenA")
+
+        val script = """
+            if redis.call("GET", KEYS[1]) == ARGV[1] then
+              return redis.call("DEL", KEYS[1])
+            else
+              return 0
+            end
+        """.trimIndent()
+
+        val result: Long = sync.evalScript(
+            script,
+            ScriptOutputType.INTEGER,
+            arrayOf("lock:1"),
+            "tokenA",
+        )
+        assertThat(result).isEqualTo(1)
+        assertThat(sync.get("lock:1")).isNull()
+    }
+}
+```
+
+## 트레이드오프
+
+Lua 스크립트가 능사는 아닙니다. Redis는 멀티 명령 원자성을 위해 여러 다른 메커니즘을 제공하며, 각각이 적합한 상황이 다릅니다. 비교 표를 먼저 보고 각 항목을 풀이합니다.
+
+| 메커니즘 | 원자성 | 조건 분기 | 클라이언트 RTT | Cluster 호환 | 영속 | 적합한 상황 |
+|---|---|---|---|---|---|---|
+| Lua 스크립트 (EVAL) | 보장 | 가능 | 1회 (EVALSHA 캐시 hit) | 같은 슬롯 키만 | 임시 (캐시) | compare-and-set, rate limit, 분산 락 해제 |
+| MULTI/EXEC | 보장 | 불가 | $N+1$회 | 같은 슬롯 키만 | 없음 | 단순 명령 묶음 (조건 없음) |
+| WATCH + MULTI/EXEC | 재시도 기반 | 불가 (분기는 클라에서) | 최소 3회 + 재시도 | 같은 슬롯 키만 | 없음 | 충돌 드문 read-modify-write |
+| Redis Functions (7.0+) | 보장 | 가능 | 1회 | 같은 슬롯 키만 | 영속 (RDB/AOF) | 라이브러리 단위로 관리할 서버 측 로직 |
+| 클라이언트 + 분산 락 | 락 범위만 | 가능 (클라 코드) | 락 획득/해제로 추가 RTT | 별도 락 키 | 없음 | 다중 키, 다중 슬롯, 복잡한 워크플로 |
+
+### MULTI/EXEC와 비교
+
+`MULTI`/`EXEC`는 명령들을 큐에 모았다가 한 번에 실행합니다. 큐에 든 명령은 `EXEC` 시점에 다른 명령 사이에 끼어들지 않은 채 실행되므로 원자성이 있습니다. 하지만 **조건 분기가 불가능**합니다. 큐에 명령을 넣을 때 이전 명령의 결과를 알 수 없어, "GET 결과가 X면 DEL, 아니면 NOOP" 같은 로직을 짤 수 없습니다.
+
+```text title="MULTI/EXEC의 한계"
+MULTI                          # 큐 시작
+GET lock:order:42              # 결과는 EXEC 후에야 봄, 분기 불가
+DEL lock:order:42              # 무조건 실행됨
+EXEC                           # 모든 명령 한꺼번에 실행
+```
+
+조건 없이 여러 명령을 묶기만 하면 되는 경우 MULTI/EXEC가 더 단순합니다. 분기가 필요한 순간 Lua로 옮겨가는 게 자연스러운 진화입니다.
+
+### WATCH 기반 optimistic locking과 비교
+
+`WATCH` + `MULTI`/`EXEC`는 낙관적 동시성 제어입니다. WATCH한 키가 트랜잭션 시작과 EXEC 사이에 변경되면 EXEC가 `nil`을 반환하며 실패하고, 클라이언트가 재시도합니다.
+
+```kotlin title="WATCH 기반 read-modify-write"
+while (true) {
+    redis.watch("balance:42")
+    val cur = redis.get("balance:42")?.toLong() ?: 0
+    if (cur < amount) { redis.unwatch(); throw InsufficientFunds() }
+    val tx = redis.multi()
+    tx.decrBy("balance:42", amount)
+    val result = tx.commitTransaction()  // EXEC 호출
+    if (result != null) break  // 성공
+    // null이면 다른 클라이언트가 변경. 재시도
+}
+```
+
+이 방식은 **충돌이 드물 때** 효율적입니다. 락이 없으니 일반 경로의 latency가 짧고, 충돌 시에만 재시도 비용을 냅니다. 단점은 재시도 루프가 클라이언트 코드에 노출되고, 충돌이 빈번하면 재시도 폭주로 오히려 느려진다는 점입니다.
+
+Lua는 같은 일을 한 번의 EVAL로 해결합니다. RTT가 1회로 고정되고 재시도가 필요 없습니다. 충돌 빈도가 높거나 RTT 비용이 중요하면 Lua가 우세합니다. 충돌이 드물고 단일 인스턴스 RTT가 0.5ms 이하라면 WATCH도 충분합니다.
+
+### Redis Functions와 비교
+
+Redis Functions는 Lua 스크립트의 영속·라이브러리 버전입니다. 차이를 표로 정리하면 다음과 같습니다.
+
+| 항목 | EVAL (Lua) | Redis Functions |
+|---|---|---|
+| 등록 | 매 호출 시 EVAL (또는 `SCRIPT LOAD`) | `FUNCTION LOAD`로 명시적 등록 |
+| 영속 | 캐시에만 존재. 재시작·FLUSH 시 사라짐 | RDB/AOF에 기록. 재시작 시 자동 복원 |
+| 단위 | 단일 스크립트 | 라이브러리 (여러 함수 묶음) |
+| 호출 | `EVALSHA <sha1> ...` | `FCALL <함수명> ...` (이름으로) |
+| Cluster 동기화 | 노드별 캐시 (`SCRIPT LOAD`를 모든 노드에) | `FUNCTION LOAD`가 클러스터 전체에 복제 |
+| 버저닝 | 없음 (SHA1 = 본문 해시) | 라이브러리 단위로 교체 |
+
+운영 측면에서 Functions가 우세한 지점은 재시작 후에도 NOSCRIPT가 없다는 것과 이름으로 호출할 수 있다는 점입니다. 단, Redis 7.0 이상이 강제되고 학습·운영 도구 생태계가 EVAL보다 작습니다.
+
+선택 기준은 단순합니다.
+
+- 일회성·짧은 스크립트, 또는 클라이언트 라이브러리의 자동 폴백에 의존 → **EVAL/EVALSHA**
+- 여러 함수를 라이브러리로 관리, 재시작에도 살아남아야 함 → **Redis Functions** (Redis 7.0+ 필요)
+
+### 클라이언트 + 분산 락과 비교
+
+다중 키 또는 다중 슬롯에 걸친 복잡한 워크플로는 Lua 한 덩어리에 담기 어렵습니다. Cluster의 KEYS 슬롯 제약에 막히고, 스크립트 길이도 블로킹 함정에 부딪힙니다. 이 경우 Redis 분산 락(Redlock)으로 임계 영역을 보호하고 본 로직은 클라이언트에서 처리하는 게 자연스럽습니다.
+
+분산 락 자체에는 별도의 함정이 있습니다. 락 클럭 차이, 클라이언트 GC 일시 정지로 인한 락 만료 후 작업 지속, fencing token의 필요성 등은 이 글의 범위를 넘으니 별도 글로 다룰 주제입니다.
+
+### 도입의 대가 (요약)
+
+Lua를 도입하면 다음을 비용으로 받아들여야 합니다.
+
+- 단일 스레드 점유로 인한 latency tail (긴 스크립트가 모든 클라이언트의 응답을 지연)
+- 디버깅 수단의 부재 (`redis.log` 의존, 스크립트 단위 테스트 의무)
+- 거버넌스 비용 (누가 어떤 스크립트를 운영에 올렸는지 추적할 메커니즘이 EVAL에는 없음. Functions는 일부 해소)
+- 클라이언트 라이브러리 의존 (EVALSHA → NOSCRIPT 폴백을 라이브러리가 안 하면 직접 짜야 함)
+
+## 마무리
+
+Redis Lua 스크립트의 본질은 트랜잭션 매니저나 잠금 메커니즘이 아니라, **단일 스레드 이벤트 루프 위에서 한 덩어리로 실행된다**는 한 가지 구조입니다. 이 구조가 원자성을 무료로 주지만, 동시에 모든 다른 명령을 블로킹한다는 비용도 같이 줍니다. EVAL/EVALSHA의 캐시, KEYS/ARGV의 분리, redis.call의 에러 전파, effects replication까지 이 글에서 본 모든 디자인 결정이 같은 한 가지 구조에서 따라 나옵니다.
+
+Lua를 쓸지 말지의 판단은 결국 "조건 분기가 필요한가, RTT 절감이 중요한가, 스크립트가 충분히 짧은가" 세 가지 질문으로 좁혀집니다. 셋 중 하나라도 불확실하면 MULTI/EXEC, WATCH 기반 optimistic, Redis Functions, 분산 락 중 더 적합한 도구가 있을 가능성이 큽니다. 이 글이 그 판단을 위한 출발점이 되기를 바랍니다.
+
+## 참고 자료
+
+- [Redis EVAL / Scripting Introduction](https://redis.io/docs/latest/develop/programmability/eval-intro/)
+- [Redis Functions Documentation](https://redis.io/docs/latest/develop/programmability/functions-intro/)
+- [Redis Cluster Specification (Hash Slots & Hash Tags)](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)
+- [Redis Replication](https://redis.io/docs/latest/operate/oss_and_stack/management/replication/)
+- [Lettuce Reference Documentation](https://redis.github.io/lettuce/)
