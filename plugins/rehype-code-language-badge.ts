@@ -33,6 +33,10 @@ const LANG_MAP: Record<string, string> = {
   plaintext:  'txt',
   text:       'txt',
   csharp:     'cs',
+  groovy:     'gvy',
+  properties: 'props',
+  proto:      'pb',
+  nasm:       'asm',
 }
 
 interface HastElement {

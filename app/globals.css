@@ -157,6 +157,31 @@
   --code-bg:             #FAFAFA;
   --code-line-number:    #A1A1AA;
 
+  /* Code-block file-type icon — language brand colors mapped onto the
+     22x22 icon square. Token name follows --code-lang-{normalized}-{bg,fg}
+     where the normalized id matches plugins/rehype-code-language-badge.ts.
+     Most languages keep brand color identical across light/dark; the dim
+     ones (md, sql, c, lua) are lifted in [data-theme="dark"] below. */
+  --code-lang-default-bg: color-mix(in oklab, var(--foreground) 18%, var(--code-bg));
+  --code-lang-default-fg: var(--foreground);
+  --code-lang-ts-bg:     #3178C6; --code-lang-ts-fg:   #FFFFFF;
+  --code-lang-js-bg:     #F7DF1E; --code-lang-js-fg:   #1F2328;
+  --code-lang-py-bg:     #3776AB; --code-lang-py-fg:   #FFFFFF;
+  --code-lang-kt-bg:     #7F52FF; --code-lang-kt-fg:   #FFFFFF;
+  --code-lang-sh-bg:     #4EAA25; --code-lang-sh-fg:   #FFFFFF;
+  --code-lang-java-bg:   #ED8B00; --code-lang-java-fg: #FFFFFF;
+  --code-lang-sql-bg:    #336791; --code-lang-sql-fg:  #FFFFFF;
+  --code-lang-rs-bg:     #CE422B; --code-lang-rs-fg:   #FFFFFF;
+  --code-lang-md-bg:     #083FA1; --code-lang-md-fg:   #FFFFFF;
+  --code-lang-yml-bg:    #CB171E; --code-lang-yml-fg:  #FFFFFF;
+  --code-lang-json-bg:   #5B8DEF; --code-lang-json-fg: #FFFFFF;
+  --code-lang-html-bg:   #E34F26; --code-lang-html-fg: #FFFFFF;
+  --code-lang-css-bg:    #1572B6; --code-lang-css-fg:  #FFFFFF;
+  --code-lang-go-bg:     #00ADD8; --code-lang-go-fg:   #FFFFFF;
+  --code-lang-cs-bg:     #239120; --code-lang-cs-fg:   #FFFFFF;
+  --code-lang-c-bg:      #283593; --code-lang-c-fg:    #FFFFFF;
+  --code-lang-lua-bg:    #2C2D72; --code-lang-lua-fg:  #FFFFFF;
+
   /* Code chip (pill) — dark pill for inline code inside <Note>.
      Distinct from the teal .prose-kr code body style; the chip reads
      as a neutral reference-key chip inside the supplementary box. */
@@ -364,6 +389,15 @@
      per-preset tuning; those also lean toward neutral black now. */
   --code-bg:             #0E0E10;
   --code-line-number:    #52525B;
+
+  /* Code-block file-type icon — dark mode. Most brand colors keep their
+     light-mode value; only the deep navy/indigo languages are lifted so
+     the 22x22 chip stays legible against #0E0E10. */
+  --code-lang-default-bg: color-mix(in oklab, var(--foreground) 22%, var(--code-bg));
+  --code-lang-md-bg:    #2563EB;
+  --code-lang-sql-bg:   #4A8EC0;
+  --code-lang-c-bg:     #5C6BC0;
+  --code-lang-lua-bg:   #5E60CE;
 
   /* Code chip (pill) — dark mode. Desaturated grey so the pill reads
      distinctly from the teal inline code surface outside <Note>. */
@@ -646,7 +680,7 @@ body {
 }
 
 .prose-kr .note > .note-title {
-  margin: 0 0 0.6em 0;
+  margin: 0 0 0.6em;
   font-weight: var(--weight-semibold);
   color: var(--foreground);
 }
@@ -994,14 +1028,17 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #0E0E10; }
   width: 22px;
   height: 22px;
   border-radius: 5px;
-  background-color: color-mix(in oklab, var(--foreground) 18%, var(--code-bg));
-  color: var(--foreground);
+  background-color: var(--code-lang-default-bg);
+  color: var(--code-lang-default-fg);
   font-family: var(--font-mono);
   font-weight: 700;
   line-height: 1;
   font-size: 10px;
   letter-spacing: 0;
   user-select: none;
+}
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-len="1"] {
+  font-size: 13px;
 }
 .prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-len="3"] {
   font-size: 8px;
@@ -1011,6 +1048,31 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #0E0E10; }
   font-size: 6.5px;
   letter-spacing: -0.04em;
 }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-len="5"] {
+  font-size: 5.5px;
+  letter-spacing: -0.05em;
+}
+
+/* Per-language brand colors. Tokens defined in :root and overridden in
+   [data-theme="dark"] above. Languages without an explicit token here
+   fall through to the muted --code-lang-default-{bg,fg}. */
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="ts"]   { background-color: var(--code-lang-ts-bg);   color: var(--code-lang-ts-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="js"]   { background-color: var(--code-lang-js-bg);   color: var(--code-lang-js-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="py"]   { background-color: var(--code-lang-py-bg);   color: var(--code-lang-py-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="kt"]   { background-color: var(--code-lang-kt-bg);   color: var(--code-lang-kt-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="sh"]   { background-color: var(--code-lang-sh-bg);   color: var(--code-lang-sh-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="java"] { background-color: var(--code-lang-java-bg); color: var(--code-lang-java-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="sql"]  { background-color: var(--code-lang-sql-bg);  color: var(--code-lang-sql-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="rs"]   { background-color: var(--code-lang-rs-bg);   color: var(--code-lang-rs-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="md"]   { background-color: var(--code-lang-md-bg);   color: var(--code-lang-md-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="yml"]  { background-color: var(--code-lang-yml-bg);  color: var(--code-lang-yml-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="json"] { background-color: var(--code-lang-json-bg); color: var(--code-lang-json-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="html"] { background-color: var(--code-lang-html-bg); color: var(--code-lang-html-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="css"]  { background-color: var(--code-lang-css-bg);  color: var(--code-lang-css-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="go"]   { background-color: var(--code-lang-go-bg);   color: var(--code-lang-go-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="cs"]   { background-color: var(--code-lang-cs-bg);   color: var(--code-lang-cs-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="c"]    { background-color: var(--code-lang-c-bg);    color: var(--code-lang-c-fg); }
+.prose-kr figure[data-rehype-pretty-code-figure] .code-lang-icon[data-lang="lua"]  { background-color: var(--code-lang-lua-bg);  color: var(--code-lang-lua-fg); }
 
 .prose-kr figure[data-rehype-pretty-code-figure] pre {
   margin: 0;
@@ -1082,10 +1144,57 @@ html[data-theme="dark"][data-syntax-theme="vitesse"]   { --code-bg: #0E0E10; }
   transition: background-color 150ms ease, color 150ms ease;
   z-index: 1;
 }
+/* lucide icons render fill-less outline paths whose default
+   pointer-events="visiblePainted" only hit-tests stroke pixels. That
+   means clicks on the empty corners of the 28x28 chip skip the SVG
+   entirely and clicks on the center latch onto the SVG; both shapes
+   are inconsistent. Disabling pointer-events on the icon lets the
+   button itself receive every click within its bounding box. */
+.prose-kr figure[data-rehype-pretty-code-figure] .code-copy-button > svg {
+  pointer-events: none;
+}
 
 .prose-kr figure[data-rehype-pretty-code-figure] .code-copy-button:hover {
   background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
   color: var(--foreground);
+}
+
+/* Copy toast (components/blog/CopyToast.tsx) — bottom-center notification
+   triggered by every copy attempt. Pinned to the viewport via fixed
+   positioning, lives at z-toast (60) above FABs. Surface uses --popover
+   for cross-theme adaptability; success/error are signaled by the
+   leading icon color rather than a separate background, keeping the
+   chrome calm. */
+.copy-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background-color: var(--popover);
+  color: var(--foreground);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  box-shadow: var(--shadow-fab);
+  pointer-events: none;
+  animation: copy-toast-in 180ms ease-out;
+}
+.copy-toast--success .copy-toast__icon { color: var(--callout-success-icon); }
+.copy-toast--error   .copy-toast__icon { color: var(--callout-error-icon); }
+
+@keyframes copy-toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy-toast { animation: none; }
 }
 
 /* ---------- Theme: floating ----------
