@@ -8,6 +8,13 @@ plugins {
 ext {
     grpcVersion = '1.68.0'
     protobufVersion = '3.25.5'
+    springCloudVersion = '2025.0.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
 }
 
 group = 'com.deepblog'
@@ -44,6 +51,7 @@ dependencies {
     implementation 'net.devh:grpc-client-spring-boot-starter:3.1.0.RELEASE'
 
     implementation 'org.redisson:redisson-spring-boot-starter:3.41.0'
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'

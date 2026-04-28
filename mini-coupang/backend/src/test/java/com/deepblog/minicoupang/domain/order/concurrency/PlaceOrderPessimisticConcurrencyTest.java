@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
-import com.deepblog.minicoupang.domain.order.application.OrderService;
 import com.deepblog.minicoupang.domain.order.application.PlaceOrderCommand;
+import com.deepblog.minicoupang.domain.order.application.v1_deprecated.OrderServicePessimistic;
 import com.deepblog.minicoupang.domain.order.repository.OrderRepository;
 import com.deepblog.minicoupang.domain.order.support.OrderConcurrencyScenario;
 import com.deepblog.minicoupang.domain.order.support.OrderConcurrencyScenario.Prepared;
 import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
+import com.deepblog.minicoupang.domain.product.repository.ProductOptionRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
 import com.deepblog.minicoupang.global.exception.BusinessException;
@@ -24,36 +25,47 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
-// Unit 2 §C. OrderService(@Service)는 비관적 락(SELECT ... FOR UPDATE) 기반이므로
-// 빈을 그대로 주입받아 시나리오를 돌린다. §B(synchronized)와 동일한 200 thread/stock 100
-// 시나리오로 측정해 두 구현의 차이를 비교한다.
+// Unit 2 §3 (블로그 자산). OrderServicePessimistic 은 v1_deprecated 로 이동했고 @Service 등록을
+// 끊었으므로, 이 테스트에서만 @TestConfiguration 으로 빈을 등록해 @Transactional AOP 프록시를 받는다.
+// 새 §4(OrderService = Lua + Saga) 와 빈이 충돌하지 않도록 운영 등록은 하지 않는다.
 @SpringBootTest
 @ActiveProfiles("test")
-@DisplayName("주문 동시성 §C 비관적 락 (200 thread)")
+@Import(PlaceOrderPessimisticConcurrencyTest.PessimisticTestConfig.class)
+@DisplayName("주문 동시성 §3 비관적 락 (200 thread, asset)")
 class PlaceOrderPessimisticConcurrencyTest {
 
     private static final int THREADS = 200;
     private static final long INITIAL_STOCK = 100L;
 
-    @Autowired
-    private OrderService orderService;
-    @Autowired
-    private OrderRepository orderRepository;
-    @Autowired
-    private OptionStockRepository optionStockRepository;
-    @Autowired
-    private ProductRepository productRepository;
-    @Autowired
-    private SellerRepository sellerRepository;
-    @Autowired
-    private MemberRepository memberRepository;
-    @Autowired
-    private AccountRepository accountRepository;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    @TestConfiguration
+    static class PessimisticTestConfig {
+
+        @Bean
+        OrderServicePessimistic orderServicePessimistic(
+            MemberRepository memberRepository,
+            ProductOptionRepository productOptionRepository,
+            OptionStockRepository optionStockRepository,
+            OrderRepository orderRepository
+        ) {
+            return new OrderServicePessimistic(
+                memberRepository, productOptionRepository, optionStockRepository, orderRepository);
+        }
+    }
+
+    @Autowired private OrderServicePessimistic orderService;
+    @Autowired private OrderRepository orderRepository;
+    @Autowired private OptionStockRepository optionStockRepository;
+    @Autowired private ProductRepository productRepository;
+    @Autowired private SellerRepository sellerRepository;
+    @Autowired private MemberRepository memberRepository;
+    @Autowired private AccountRepository accountRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
 
     private OrderConcurrencyScenario scenario;
     private Prepared prepared;

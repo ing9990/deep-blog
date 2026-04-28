@@ -1,7 +1,9 @@
-package com.deepblog.minicoupang.domain.order.application;
+package com.deepblog.minicoupang.domain.order.application.v1_deprecated;
 
 import com.deepblog.minicoupang.domain.member.domain.Member;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
+import com.deepblog.minicoupang.domain.order.application.PlaceOrderCommand;
+import com.deepblog.minicoupang.domain.order.application.PlaceOrderResult;
 import com.deepblog.minicoupang.domain.order.domain.Order;
 import com.deepblog.minicoupang.domain.order.repository.OrderRepository;
 import com.deepblog.minicoupang.domain.product.domain.Product;
@@ -10,60 +12,24 @@ import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductOptionRepository;
 import com.deepblog.minicoupang.global.exception.BusinessException;
 import com.deepblog.minicoupang.global.exception.ErrorCode;
-import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.transaction.annotation.Transactional;
 
-// Unit 2 §D (asset): Redis 분산 락(Redisson RLock) + @Modifying 원자 UPDATE.
-// 잠금 책임을 두 층으로 나눈다.
-//   1) 분산 코디네이션: Redisson RLock 으로 같은 키(lock:option:{optionId}) 를 가리키는
-//      모든 JVM 인스턴스의 트랜잭션을 직렬화 후보로 만든다.
-//   2) 정합성: @Modifying UPDATE 가 잡는 DB 행 X 락이 트랜잭션 커밋까지 유지돼,
-//      Redis 락이 커밋보다 먼저 풀려도 동시 UPDATE 가 직렬화된다(lost update 차단).
-//
-// 그 결과 §B 의 트랜잭션 경계 함정(`@Transactional` 만 두면 락이 커밋 전 풀림) 을
-// TransactionTemplate 없이 풀 수 있다. 정합성 보증 주체는 사실상 DB 행 락이며,
-// Redis 락은 멀티 인스턴스 환경에서 DB 진입 자체를 줄이는 코디네이션 도구로 남는다.
-//
-// leaseTime 정책: tryLock(waitTime, unit) 시그니처로 watchdog 모드 활성화.
-//   - 락 보유 동안 약 10초 주기로 만료 자동 연장 (default lock watchdog timeout 30s).
-//   - 클라이언트 사망 시 default timeout 후 자동 해제 → deadlock 방지.
-//
-// §E(Lua atomic decrement) 비교용 자산으로 보존. 빈 등록은 의도적으로 비활성화.
-// @Service
+// Unit 2 §3 (블로그 자산): 비관적 락을 @Modifying UPDATE 한 줄로 압축한다.
+// quantity >= :qty 조건이 SET 절과 함께 들어가 조회·검사·차감이 한 SQL 안에서 원자화되고,
+// UPDATE 가 잡는 행 X 락이 트랜잭션 커밋까지 유지돼 동시 UPDATE 가 직렬화된다.
+// 별도 SELECT ... FOR UPDATE 가 필요 없고 JPA dirty checking 도 거치지 않는다.
 @Deprecated
 @RequiredArgsConstructor
-public class OrderServiceDistributedLock {
-
-    private static final String LOCK_KEY_PREFIX = "lock:option:";
-    private static final long WAIT_TIME_SECONDS = 3L;
+public class OrderServicePessimistic {
 
     private final MemberRepository memberRepository;
     private final ProductOptionRepository productOptionRepository;
     private final OptionStockRepository optionStockRepository;
     private final OrderRepository orderRepository;
-    private final RedissonClient redissonClient;
 
     @Transactional
     public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
-        RLock lock = redissonClient.getLock(LOCK_KEY_PREFIX + command.optionId());
-        try {
-            boolean acquired = lock.tryLock(WAIT_TIME_SECONDS, TimeUnit.SECONDS);
-            if (!acquired) {
-                throw new BusinessException(ErrorCode.LOCK_ACQUIRE_FAILED);
-            }
-            return doPlaceOrder(accountId, command);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.LOCK_INTERRUPTED, e);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    private PlaceOrderResult doPlaceOrder(Long accountId, PlaceOrderCommand command) {
         Member member = memberRepository.findByAccountId(accountId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_A_MEMBER));
 

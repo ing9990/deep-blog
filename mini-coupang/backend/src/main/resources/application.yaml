@@ -73,3 +73,15 @@ grpc:
 embed:
   grpc:
     deadline-ms: 5000
+
+clients:
+  payment-service:
+    url: http://localhost:8081
+
+# Feign 클라이언트의 read timeout 은 결제 sleep(10s) 보다 길게.
+feign:
+  client:
+    config:
+      payment-service:
+        connect-timeout: 2000
+        read-timeout: 15000

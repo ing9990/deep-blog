@@ -20,6 +20,7 @@ public enum ErrorCode {
     INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "재고가 부족합니다."),
     LOCK_ACQUIRE_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "주문 처리 중 락을 획득하지 못했습니다."),
     LOCK_INTERRUPTED(HttpStatus.SERVICE_UNAVAILABLE, "주문 처리 중 락 대기가 중단되었습니다."),
+    PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제에 실패했습니다."),
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "예상치 못한 오류가 발생했습니다.");
 

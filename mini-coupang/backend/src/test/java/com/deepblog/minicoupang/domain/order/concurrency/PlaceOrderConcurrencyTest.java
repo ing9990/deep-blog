@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
-import com.deepblog.minicoupang.domain.order.application.OrderServiceNoLock;
+import com.deepblog.minicoupang.domain.order.application.v1_deprecated.OrderServiceNoLock;
 import com.deepblog.minicoupang.domain.order.application.PlaceOrderCommand;
 import com.deepblog.minicoupang.domain.order.repository.OrderRepository;
 import com.deepblog.minicoupang.global.exception.BusinessException;
