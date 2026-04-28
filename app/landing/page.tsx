@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { ArrowRight, BookOpen, Mail, Sparkles } from 'lucide-react'
 
+import { BooksReadingPanel } from '@/components/landing/BooksReadingPanel'
+import { LandingPanels } from '@/components/landing/LandingPanels'
 import { SystemMap } from '@/components/landing/system-map/SystemMap'
 
 function GithubIcon({ className }: { className?: string }) {
@@ -65,19 +67,20 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="mx-auto max-w-4xl px-6 pt-16 pb-10 md:pt-24 md:pb-14">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-          <span>blog · sandbox · engineering</span>
-        </div>
         <h1 className="text-balance text-4xl font-bold leading-tight tracking-tight md:text-5xl md:leading-[1.15]">
           블로그로 이해하고,
           <br />
           <span className="text-primary">코드로 증명한다.</span>
         </h1>
         <p className="mt-6 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground md:text-lg">
-          DEEP은 깊은 CS 이론을 블로그로 정리하고, 같은 지식을 재료 삼아{' '}
+          DEEP은{' '}
+          <span className="font-semibold text-foreground">
+            깊은 CS 이론과 책을 블로그로 정리
+          </span>
+          하고 지식을 재료 삼아{' '}
+          <span className="font-semibold text-foreground">대용량 트래픽 분산 환경</span>을 가정한{' '}
           <span className="font-semibold text-red-500">미니 Coupang</span>을 만들고 있습니다.
-          각 글이 답하는 문제는 이 서비스 어딘가에서 실제로 돌아갑니다.
+          각 글이 답하는 문제와 책에서 배운 내용은 이 서비스 어딘가에서 실제로 돌아갑니다.
         </p>
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
           <Link
@@ -101,9 +104,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* System map — feature-level wiki */}
+      {/* Tabbed panels: 미니쿠팡 (SystemMap) | 책 (BooksReadingPanel).
+          Both server-render; the client tab toggles visibility. */}
       <div className="w-full pb-16 md:pb-24">
-        <SystemMap />
+        <LandingPanels projectPanel={<SystemMap />} booksPanel={<BooksReadingPanel />} />
       </div>
 
       {/* Footer */}
