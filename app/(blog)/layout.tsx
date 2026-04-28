@@ -6,6 +6,8 @@ import { MobilePostTocFab } from '@/components/blog/MobilePostTocFab'
 import { SettingsFab } from '@/components/layout/SettingsFab'
 import { getAllPosts } from '@/lib/posts'
 import { toClientPost } from '@/lib/client-post'
+import { getAllBooks } from '@/lib/books'
+import { toClientBook } from '@/lib/client-book'
 
 export default function BlogLayout({
   children,
@@ -13,9 +15,10 @@ export default function BlogLayout({
   children: React.ReactNode
 }) {
   const clientPosts = getAllPosts().map(toClientPost)
+  const clientBooks = getAllBooks().map(toClientBook)
 
   return (
-    <MobileUIProvider posts={clientPosts}>
+    <MobileUIProvider posts={clientPosts} books={clientBooks}>
       <div className="flex min-h-screen flex-col">
         <Header />
         <main className="flex-1">{children}</main>

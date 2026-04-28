@@ -10,9 +10,6 @@ export default function BooksIndexPage() {
         <h1 className="text-[length:var(--text-h2)] font-bold leading-[var(--leading-tight)] tracking-[var(--tracking-tight)] md:text-[length:var(--text-h1)]">
           읽고 정리한 책
         </h1>
-        <p className="mt-3 text-[length:var(--text-body)] leading-[var(--leading-relaxed)] text-muted-foreground">
-          표지를 누르면 그 책에서 정리한 글로 이어집니다.
-        </p>
       </header>
 
       {books.length === 0 ? (
