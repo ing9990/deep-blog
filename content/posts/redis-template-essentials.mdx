@@ -573,10 +573,10 @@ DB 조회 결과를 10분간 캐시했다가 만료 후 자동으로 다시 채�
 
 이 글은 어디서부터 시작하는가에 집중했으므로, 다음 단계는 별도 글로 이어집니다.
 
-- 분산 락: `setIfAbsent`(SETNX)만으로는 부족합니다. TTL과 락 해제의 원자성, 락 홀더 식별, 네트워크 파티션은 별도 주제(Redisson, Lua 스크립트, Redlock 논쟁)
+- 분산 락: `setIfAbsent`(SETNX)만으로는 부족합니다. TTL과 락 해제의 원자성, 락 홀더 식별, 네트워크 파티션은 별도 주제(Redisson, Luascript, Redlock 논쟁)
 - `@Cacheable` 와 RedisCacheManager: Spring Cache 추상의 Redis 백엔드, 어노테이션 기반 선언적 캐싱
 - Pub/Sub 와 Streams: 메시징 영역, `MessageListenerContainer` 셋업과 Streams 컨슈머 그룹
-- Lua 스크립트(`execute(RedisScript)`): 여러 명령을 원자적으로 묶는 패턴
+- Luascript(`execute(RedisScript)`): 여러 명령을 원자적으로 묶는 패턴
 
 ## 참고 자료
 
