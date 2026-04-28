@@ -1,11 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { ChevronDown } from 'lucide-react'
+import { ArrowUpRight, BookOpen, ChevronDown } from 'lucide-react'
 import type { ClientPost } from '@/lib/client-post'
 import { groupPostsByCategory } from '@/lib/categories'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+
+const BOOKS_URL = 'https://books.ing9990.com'
 
 interface CategoryNavProps {
   posts: ClientPost[]
@@ -20,6 +22,20 @@ export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProp
 
   return (
     <nav aria-label="카테고리" className="flex flex-col gap-1">
+      <Link
+        href={BOOKS_URL}
+        onClick={onLinkClick}
+        className="group mb-2 flex items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-[length:var(--text-nav-header)] font-semibold uppercase tracking-[var(--tracking-wide)] text-foreground transition-colors hover:border-border-strong hover:bg-accent"
+      >
+        <span className="inline-flex items-center gap-2">
+          <BookOpen className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+          <span>책</span>
+        </span>
+        <ArrowUpRight
+          className="h-3.5 w-3.5 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground"
+          aria-hidden="true"
+        />
+      </Link>
       {groups.map(({ category, posts: categoryPosts }) => {
         return (
           <details

@@ -49,6 +49,15 @@ const postFrontmatterShape = s.object({
   category: s.enum(CATEGORY_IDS),
   series: s.string().optional(),
   seriesOrder: s.number().int().positive().optional(),
+  // 이 글이 정리하고 있는 책의 slug (content/books/<slug>.mdx).
+  // 같은 book 값을 가진 포스트들은 책 상세 페이지에서 한 시리즈로 묶이고,
+  // 포스트 본문 상하단에 책 컨텍스트 pill / prev-next 가 자동 렌더된다.
+  book: s
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'book must be lowercase kebab-case (matches content/books/<slug>.mdx)')
+    .optional(),
+  // 같은 book 안에서의 명시적 정렬 순서. 미지정 시 publishedAt 오름차순.
+  bookOrder: s.number().int().positive().optional(),
   // project-backed 포스트가 참조하는 services/*  도메인 서비스 이름들.
   // Mode C 포스트가 서비스 샌드박스와 양방향 링크를 만들 때 사용.
   // 값: lowercase-kebab-case, 실제 /services/<name>-service/ 디렉토리 이름과 일치.
@@ -70,6 +79,47 @@ export const postFrontmatterSchema = postFrontmatterShape.refine(
   (data) => data.slug === data.slug.toLowerCase(),
   { message: 'slug must be lowercase', path: ['slug'] },
 )
+
+// Books collection — 사용자가 정리한 책 메타데이터.
+// 파일 경로: content/books/<slug>.mdx
+// 본문(MDX)은 책 전체에 대한 사용자 코멘트로, 책 상세 페이지 상단에 렌더된다.
+// 본문 없이 frontmatter만 있어도 유효하다.
+const bookFrontmatterShape = s.object({
+  title: s.object({
+    ko: s.string().min(1).max(120),
+    en: s.string().min(1).max(120),
+  }),
+  slug: s.string().min(2).max(120).regex(slugRegex, 'slug must be lowercase (a-z, 0-9, hyphens only)'),
+  author: s.string().min(1).max(120),
+  cover: s
+    .string()
+    .regex(/^\/books\/[a-z0-9-]+\.(jpg|jpeg|png|webp)$/, 'cover must be /books/<slug>.<jpg|png|webp>'),
+  readDate: s.isodate(),
+  summary: s.object({
+    ko: s.string().min(1).max(300),
+    en: s.string().min(1).max(300),
+  }),
+  isbn: s.string().optional(),
+  draft: s.boolean().default(false),
+})
+
+const books = defineCollection({
+  name: 'Book',
+  pattern: 'books/**/*.mdx',
+  schema: bookFrontmatterShape
+    .extend({
+      slug: s.slug('book'),
+      body: s.mdx(),
+    })
+    .refine(
+      (data) => data.slug === data.slug.toLowerCase(),
+      { message: 'slug must be lowercase', path: ['slug'] },
+    )
+    .transform((data) => ({
+      ...data,
+      url: `/books/${data.slug}`,
+    })),
+})
 
 // Full collection schema — extends frontmatter with Velite-only fields
 // (body compiled from MDX, toc extracted at build time) and a derived url.
@@ -107,7 +157,7 @@ export default defineConfig({
     base: '/static/',
     clean: true,
   },
-  collections: { posts },
+  collections: { posts, books },
   mdx: {
     remarkPlugins: [
       [remarkAutoLink, { keywordsByLength: KEYWORDS_BY_LENGTH, keywordToSlug }],
