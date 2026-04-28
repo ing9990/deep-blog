@@ -7,14 +7,14 @@ const GITHUB_MINI_COUPANG_URL =
 export const tracks: Track[] = [
   {
     id: 'order-concurrency',
-    topic: '주문 동시성과 락',
+    topic: '분산 환경에서 재고 서비스의 원자성 보장',
     trace:
-      'Redis + Luascript로 재고를 원자적으로 선점하고, 결제 실패 시 이벤트를 발행해 재고를 롤백한다.',
+      '락 없는 환경에서 시작해 모놀리스, MSA까지 단계적으로 옮겨가며 상품 주문 도메인의 재고 서비스가 원자성을 어떻게 보장하는지 정리한다.',
     status: 'in-progress',
     ctas: [
       {
         kind: 'blog',
-        label: '[미니쿠팡] 주문 동시성과 락',
+        label: '분산 환경에서 재고 서비스의 원자성 보장',
         href: `${BLOG_URL}/posts/mini-coupang-order-concurrency-locks`,
         postSlug: 'mini-coupang-order-concurrency-locks',
       },
