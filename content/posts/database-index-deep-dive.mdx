@@ -54,8 +54,8 @@ draft: false
   디스크 Random I/O가 Sequential I/O보다 수백 배 비싸다는 단 하나의 제약이 B+Tree의 구조를 결정했습니다. 이 제약을 이해하면 높은 fanout, 낮은 트리 높이, 리프 연결 리스트라는 모든 설계 선택이 자연스럽게 따라옵니다.
 </Callout>
 
-<Callout type="error" title="핵심 통찰: B+Tree 인덱스는 디스크 I/O 경제학의 산물이다">
-  B+Tree가 지금의 모습인 이유는 자료구조의 미학이 아닙니다. <E>디스크에서 한 블록을 읽는 비용은 거의 같고, 연속된 블록을 읽는 건 싸다</E>는 물리적 제약이 페이지 단위 I/O를 강제했고, 이것이 높은 fanout과 낮은 트리 높이로 수렴한 결과입니다.
+<Callout type="error" title="핵심 통찰: B+Tree 인덱스의 형태는 디스크 I/O 비용이 결정한다">
+  B+Tree가 지금의 모습이 된 것은 자료구조 자체의 우아함 때문이 아닙니다. <E>디스크에서 한 블록을 읽는 비용은 거의 같고, 연속된 블록을 읽는 건 싸다</E>는 물리적 제약이 페이지 단위 I/O를 강제했고, 이것이 높은 fanout과 낮은 트리 높이로 수렴한 결과입니다.
 </Callout>
 
 <RelatedPost slug="b-tree-structure" type="prerequisite" />
