@@ -1,6 +1,6 @@
 export type TrackStatus = 'done' | 'in-progress' | 'planned'
 
-export type TrackCtaKind = 'blog' | 'concept' | 'github'
+export type TrackCtaKind = 'blog' | 'concept'
 
 export interface TrackCta {
   kind: TrackCtaKind

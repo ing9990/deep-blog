@@ -1,8 +1,6 @@
 import type { Track } from '../types'
 
 const BLOG_URL = 'https://deep.ing9990.com'
-const GITHUB_MINI_COUPANG_URL =
-  'https://github.com/ing9990/deep-blog/tree/main/mini-coupang'
 
 export const tracks: Track[] = [
   {
@@ -18,11 +16,6 @@ export const tracks: Track[] = [
         href: `${BLOG_URL}/posts/mini-coupang-order-concurrency-locks`,
         postSlug: 'mini-coupang-order-concurrency-locks',
       },
-      {
-        kind: 'github',
-        label: 'GitHub 코드',
-        href: GITHUB_MINI_COUPANG_URL,
-      },
     ],
   },
   {
@@ -37,11 +30,6 @@ export const tracks: Track[] = [
         label: '개념 글: Lexical vs Semantic',
         href: `${BLOG_URL}/posts/lexical-vs-semantic-search`,
         postSlug: 'lexical-vs-semantic-search',
-      },
-      {
-        kind: 'github',
-        label: 'GitHub 코드',
-        href: GITHUB_MINI_COUPANG_URL,
       },
     ],
   },
