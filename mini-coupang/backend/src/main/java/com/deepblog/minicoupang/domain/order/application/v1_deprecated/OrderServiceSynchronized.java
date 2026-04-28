@@ -16,10 +16,18 @@ import com.deepblog.minicoupang.global.exception.ErrorCode;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-// Unit 2 §2 (블로그 자산): synchronized + TransactionTemplate.
-// 잠금이 트랜잭션 커밋까지 임계 영역에 포함되도록 잠금 안쪽에서 TransactionTemplate 으로
-// 트랜잭션을 직접 열고 닫는다. 단일 인스턴스에서 lost update 0 건이지만,
-// 분산 환경(JVM 2개 이상)에서는 각 인스턴스가 자기 모니터만 가지므로 무력화된다.
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
+
+// Unit 2 §2 (블로그 자산): 옵션 SKU 단위 ReentrantLock + TransactionTemplate.
+// 락 풀을 ConcurrentHashMap<optionId, ReentrantLock> 으로 두어 서로 다른 옵션은
+// 병렬로 처리되고 같은 옵션의 동시 주문만 직렬화한다. 락 획득은 lock(),
+// 해제는 자기 자신이 잡은 락만 finally 에서 unlock() 으로 풀어
+// IllegalMonitorStateException 미스매치를 차단한다. 트랜잭션 커밋까지
+// 임계 영역에 포함되도록 잠금 안쪽에서 TransactionTemplate 으로 트랜잭션을
+// 직접 열고 닫는다. 단일 인스턴스에서 lost update 0 건이지만, 분산 환경
+// (JVM 2개 이상)에서는 각 인스턴스가 자기 락 풀만 가지므로 무력화된다.
 @Deprecated
 public class OrderServiceSynchronized {
 
@@ -28,7 +36,7 @@ public class OrderServiceSynchronized {
     private final OptionStockRepository optionStockRepository;
     private final OrderRepository orderRepository;
     private final TransactionTemplate transactionTemplate;
-    private final Object lock = new Object();
+    private final ConcurrentMap<Long, ReentrantLock> locks = new ConcurrentHashMap<>();
 
     public OrderServiceSynchronized(
         MemberRepository memberRepository,
@@ -45,8 +53,13 @@ public class OrderServiceSynchronized {
     }
 
     public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
-        synchronized (lock) {
+        ReentrantLock lock = locks.computeIfAbsent(
+            command.optionId(), key -> new ReentrantLock());
+        lock.lock();
+        try {
             return transactionTemplate.execute(status -> doPlaceOrder(accountId, command));
+        } finally {
+            lock.unlock();
         }
     }
 
