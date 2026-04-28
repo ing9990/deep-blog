@@ -235,14 +235,18 @@ public interface OptionStockRepository extends JpaRepository<OptionStock, Long> 
     Optional<OptionStock> findByOptionId(Long optionId);
 
     @Modifying                                                                       // [!code highlight]
-    @Query("update OptionStock s set s.quantity = s.quantity - :qty " +              // [!code highlight]
-        "where s.optionId = :optionId and s.quantity >= :qty")                       // [!code highlight]
-    int decreaseQuantityIfEnough(@Param("optionId") Long optionId,                   // [!code highlight]
-                                 @Param("qty") long qty);                            // [!code highlight]
+    @Query("""
+        UPDATE OptionStock optionStock
+        SET optionStock.quantity = optionStock.quantity - :qty
+        WHERE optionStock.optionId = :optionId
+                and optionStock.quantity >= :qty
+        """
+    )
+    int decreaseQuantityIfEnough(@Param("optionId") Long optionId, @Param("qty") long qty); // [!code highlight]
 }
 ```
 
-WHERE 절의 `quantity >= :qty` 가 재고 부족 검사를 SET 절과 한 번에 수행합니다. 반환값 affected 가 1이면 차감 성공, 0이면 재고 부족입니다.
+WHERE 절의 `optionStock.quantity >= :qty` 가 재고 부족 검사를 SET 절과 한 번에 수행합니다. 반환값 affected 가 1이면 차감 성공, 0이면 재고 부족입니다.
 
 ```java title="OrderService.java"
 @Service
