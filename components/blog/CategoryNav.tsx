@@ -1,25 +1,64 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import type { ClientPost } from '@/lib/client-post'
+import type { ClientBook } from '@/lib/client-book'
 import { groupPostsByCategory } from '@/lib/categories'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { BOOKS_URL } from '@/lib/cross-host-url'
 
 interface CategoryNavProps {
   posts: ClientPost[]
+  books?: ClientBook[]
   currentSlug?: string | null
   onLinkClick?: () => void
 }
 
-export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProps) {
+export function CategoryNav({ posts, books, currentSlug, onLinkClick }: CategoryNavProps) {
   const { lang } = useTranslation()
   if (!Array.isArray(posts) || posts.length === 0) return null
   const groups = groupPostsByCategory(posts, lang)
 
+  const shelfBooks = books ?? []
+
   return (
     <nav aria-label="카테고리" className="flex flex-col gap-1">
+      {shelfBooks.length > 0 && (
+        <section aria-label="읽고 정리한 책" className="mb-4">
+          <ul className="flex gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {shelfBooks.map((book, i) => (
+              <li
+                key={book.slug}
+                className={cn(
+                  'shrink-0',
+                  i === 0 && 'ml-auto',
+                  i === shelfBooks.length - 1 && 'mr-auto',
+                )}
+              >
+                <Link
+                  href={`${BOOKS_URL}/${book.slug}`}
+                  onClick={onLinkClick}
+                  aria-label={`${book.title[lang]} 표지`}
+                  className="group block"
+                >
+                  <div className="relative aspect-[2/3] w-[68px] overflow-hidden rounded-[var(--radius-chip)] border border-border bg-muted shadow-[var(--shadow-card)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[var(--shadow-card-hover)]">
+                    <Image
+                      src={book.cover}
+                      alt=""
+                      fill
+                      sizes="68px"
+                      className="object-cover"
+                    />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {groups.map(({ category, posts: categoryPosts }) => {
         return (
           <details

@@ -1368,3 +1368,37 @@ html[data-code-theme="floating"]
 [data-theme="dark"] [data-cat-tinted] {
   --cat-tint: var(--cat-dark-tint);
 }
+
+
+/* Clean scrollbar — sidebar overflow containers (DocShell aside columns).
+   Hidden by default to match the TOC look; surfaces a subtle thumb on
+   hover so the affordance stays discoverable when content overflows. */
+.scrollbar-clean {
+  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 200ms;
+}
+.scrollbar-clean:hover,
+.scrollbar-clean:focus-within {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 30%, transparent) transparent;
+}
+.scrollbar-clean::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-clean::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-clean::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 200ms;
+}
+.scrollbar-clean:hover::-webkit-scrollbar-thumb,
+.scrollbar-clean:focus-within::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
+}
+.scrollbar-clean::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+}

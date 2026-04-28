@@ -11,6 +11,7 @@ import static org.mockito.Mockito.mock;
 
 import com.deepblog.minicoupang.domain.member.domain.Member;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
+import com.deepblog.minicoupang.domain.order.application.v1_deprecated.OrderServiceSynchronized;
 import com.deepblog.minicoupang.domain.order.domain.Order;
 import com.deepblog.minicoupang.domain.order.repository.OrderRepository;
 import com.deepblog.minicoupang.global.exception.BusinessException;

@@ -4,6 +4,8 @@ import { CategoryNav } from '@/components/blog/CategoryNav'
 import { DocShellRegister } from './DocShellRegister'
 import { getAllPosts } from '@/lib/posts'
 import { toClientPost } from '@/lib/client-post'
+import { getAllBooks } from '@/lib/books'
+import { toClientBook } from '@/lib/client-book'
 import type { FlatTocItem } from '@/lib/toc'
 
 interface DocShellProps {
@@ -24,6 +26,7 @@ export function DocShell({
   const hasToc = !!toc && toc.length > 0
 
   const posts = getAllPosts().map(toClientPost)
+  const books = getAllBooks().map(toClientBook)
 
   return (
     <>
@@ -35,14 +38,14 @@ export function DocShell({
         <div className="grid grid-cols-1 lg:grid-cols-[var(--layout-nav-width)_minmax(0,1fr)_var(--layout-toc-width)] lg:gap-12">
           {leftSlot ? (
             <div className="hidden lg:block">
-              <div className="sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
+              <div className="scrollbar-clean sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
                 {leftSlot}
               </div>
             </div>
           ) : showCategoryNav ? (
             <div className="hidden lg:block">
-              <div className="sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
-                <CategoryNav posts={posts} currentSlug={currentSlug} />
+              <div className="scrollbar-clean sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
+                <CategoryNav posts={posts} books={books} currentSlug={currentSlug} />
               </div>
             </div>
           ) : (
@@ -53,7 +56,7 @@ export function DocShell({
 
           {hasToc ? (
             <aside className="hidden lg:block" aria-label="목차 사이드바">
-              <div className="sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
+              <div className="scrollbar-clean sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
                 <TableOfContents items={toc!} />
               </div>
             </aside>

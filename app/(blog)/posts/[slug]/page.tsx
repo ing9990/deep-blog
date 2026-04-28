@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getAllSlugs, getPostBySlug } from '@/lib/posts'
+import { getBookPosition } from '@/lib/books'
 import { MDXContent } from '@/components/mdx/MDXContent'
 import { PostMeta } from '@/components/blog/PostMeta'
 import { RecentPostsSection } from '@/components/blog/RecentPostsSection'
@@ -9,6 +10,8 @@ import { flattenToc, type VeliteTocEntry } from '@/lib/toc'
 import { getRecentPosts } from '@/lib/related-posts'
 import { DocShell } from '@/components/layout/DocShell'
 import { PostTitle } from '@/components/blog/PostTitle'
+import { BookContextPill } from '@/components/blog/BookContextPill'
+import { BookSiblingNav } from '@/components/blog/BookSiblingNav'
 
 export function generateStaticParams() {
   return getAllSlugs().map((slug) => ({ slug }))
@@ -58,6 +61,7 @@ export default async function PostPage({
 
   const recentPosts = getRecentPosts(slug, 4)
   const tocItems = flattenToc(post.toc as unknown as VeliteTocEntry[])
+  const bookPosition = getBookPosition(slug)
 
   return (
     <DocShell toc={tocItems} currentSlug={slug}>
@@ -71,10 +75,12 @@ export default async function PostPage({
       <article className="min-w-0">
         <PostMeta tags={post.tags} date={post.date} readingTime={post.readingTime} />
         <PostTitle title={post.title} />
+        {bookPosition && <BookContextPill position={bookPosition} />}
         <hr className="my-8 border-border" />
         <div className="prose-kr min-w-0">
           <MDXContent code={post.body} />
         </div>
+        {bookPosition && <BookSiblingNav position={bookPosition} />}
       </article>
 
       <RecentPostsSection posts={recentPosts} />
