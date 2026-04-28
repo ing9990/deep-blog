@@ -3,6 +3,7 @@ import { Header } from '@/components/blog/Header'
 import { Footer } from '@/components/blog/Footer'
 import { MobileOverlays } from '@/components/blog/MobileOverlays'
 import { MobilePostTocFab } from '@/components/blog/MobilePostTocFab'
+import { CopyToast } from '@/components/blog/CopyToast'
 import { SettingsFab } from '@/components/layout/SettingsFab'
 import { getAllPosts } from '@/lib/posts'
 import { toClientPost } from '@/lib/client-post'
@@ -24,6 +25,7 @@ export default function BlogLayout({
       <MobileOverlays />
       <MobilePostTocFab />
       <SettingsFab />
+      <CopyToast />
     </MobileUIProvider>
   )
 }
