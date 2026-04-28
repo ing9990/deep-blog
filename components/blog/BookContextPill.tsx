@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { BookOpen } from 'lucide-react'
 import type { BookPosition } from '@/lib/books'
-
-const BOOKS_URL = 'https://books.ing9990.com'
+import { BOOKS_URL } from '@/lib/cross-host-url'
 
 interface BookContextPillProps {
   position: BookPosition

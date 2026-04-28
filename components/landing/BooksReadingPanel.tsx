@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { BookCover } from '@/components/books/BookCover'
 import { getAllBooks } from '@/lib/books'
+import { BOOKS_URL } from '@/lib/cross-host-url'
 
-const BOOKS_URL = 'https://books.ing9990.com'
 const PREVIEW_COUNT = 6
 
 export function BooksReadingPanel() {

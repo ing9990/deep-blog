@@ -4,8 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { MDXContent } from '@/components/mdx/MDXContent'
 import { getAllBookSlugs, getBookBySlug, getPostsByBook } from '@/lib/books'
-
-const BLOG_URL = 'https://deep.ing9990.com'
+import { BLOG_URL } from '@/lib/cross-host-url'
 
 export function generateStaticParams() {
   return getAllBookSlugs().map((slug) => ({ slug }))

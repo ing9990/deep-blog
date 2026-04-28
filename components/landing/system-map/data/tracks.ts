@@ -1,6 +1,5 @@
 import type { Track } from '../types'
-
-const BLOG_URL = 'https://deep.ing9990.com'
+import { BLOG_URL } from '@/lib/cross-host-url'
 
 export const tracks: Track[] = [
   {

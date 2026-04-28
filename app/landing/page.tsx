@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, Mail, Sparkles } from 'lucide-react'
 import { BooksReadingPanel } from '@/components/landing/BooksReadingPanel'
 import { LandingPanels } from '@/components/landing/LandingPanels'
 import { SystemMap } from '@/components/landing/system-map/SystemMap'
+import { BLOG_URL } from '@/lib/cross-host-url'
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -31,7 +32,6 @@ function LinkedinIcon({ className }: { className?: string }) {
   )
 }
 
-const BLOG_URL = 'https://deep.ing9990.com'
 const GITHUB_URL = 'https://github.com/ing9990/deep-blog'
 const LINKEDIN_URL = 'https://www.linkedin.com/in/ing9990'
 const EMAIL = 'gimgau0218@naver.com'

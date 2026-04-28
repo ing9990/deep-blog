@@ -1,9 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { BookOpen, Sparkles } from 'lucide-react'
-
-const BLOG_URL = 'https://deep.ing9990.com'
-const APEX_URL = 'https://ing9990.com'
+import { APEX_URL, BLOG_URL } from '@/lib/cross-host-url'
 
 export const metadata: Metadata = {
   title: 'DEEP · 책',

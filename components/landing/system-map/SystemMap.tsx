@@ -2,12 +2,12 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 import { getAllSlugs } from '@/lib/posts'
+import { BLOG_URL } from '@/lib/cross-host-url'
 
 import { tracks } from './data/tracks'
 import { TrackCard } from './TrackCard'
 
-const BLOG_CATEGORY_URL =
-  'https://deep.ing9990.com/?cat=mini-coupang-backend'
+const BLOG_CATEGORY_URL = `${BLOG_URL}/?cat=mini-coupang-backend`
 
 export function SystemMap() {
   const existingSlugs = new Set(getAllSlugs())
