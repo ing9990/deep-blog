@@ -6,9 +6,8 @@
 | 인증 | 없음 |
 | 입력 | 쿼리 파라미터 (q 필수, 나머지 선택) |
 | 출력 | `{ items: [{ id, name, basePrice, sellerId, score, ... }, ...] }` |
-| 상태 | 🔄 backend (+ml/) → product-server (+ml/) (Phase 3) |
 
-## 흐름 (목표 MSA)
+## 흐름
 
 ```
 [Client] -> [product-server :8082]

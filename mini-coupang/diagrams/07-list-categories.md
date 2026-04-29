@@ -6,9 +6,8 @@
 | 인증 | 없음 |
 | 입력 | 없음 |
 | 출력 | `{ categories: [{ id, name, slug }, ...] }` |
-| 상태 | 🔄 backend → product-server (Phase 3) |
 
-## 흐름 (목표 MSA)
+## 흐름
 
 ```
 [Client] -> [product-server :8082]

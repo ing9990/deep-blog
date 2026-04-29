@@ -6,9 +6,8 @@
 | 인증 | 세션 |
 | 입력 | 없음 |
 | 출력 | 204 No Content |
-| 상태 | 🔄 backend → member-server (Phase 4) |
 
-## 흐름 (목표 MSA)
+## 흐름
 
 ```
 [Client] -> [member-server :8081]

@@ -6,9 +6,8 @@
 | 인증 | 세션 (판매자) |
 | 입력 | `{ categoryId, name, description, basePrice, options: [{ optionName, sku, additionalPrice, initialStock }, ...], images: [{ url, primary }, ...] }` |
 | 출력 | `{ productId, ... }` |
-| 상태 | 🔄 backend → product-server (Phase 3) |
 
-## 흐름 (목표 MSA)
+## 흐름
 
 ```
 [Client (Cookie)] -> [product-server :8082]

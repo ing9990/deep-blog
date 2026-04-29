@@ -1,5 +1,19 @@
 # mini-coupang
 
+# Usecase
+
+[Usecase.md](Usecase.md) — 시스템이 제공하는 사용자 동작 목록과 흐름 다이어그램.
+
+# Kafka-Topics
+
+[Kafka-Topics.md](Kafka-Topics.md) — Kafka 토픽 목록, 네이밍 컨벤션, 메시지 봉투, 페이로드.
+
+# Redis-Keys
+
+[Redis-Keys.md](Redis-Keys.md) — Redis 키 패턴, 타입, TTL, 사용 명령.
+
+---
+
 Agent 친화 오버뷰. 각 섹션은 포인터 위주로 짧게 적혀 있으며, 세부 구현은 해당 파일/디렉터리를 직접 읽으면 된다.
 
 ## 1. 프로젝트 개요

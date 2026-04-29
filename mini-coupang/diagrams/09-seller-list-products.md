@@ -6,9 +6,8 @@
 | 인증 | 세션 (판매자) |
 | 입력 | 페이징 파라미터 |
 | 출력 | `{ items: [{ id, name, basePrice, status, optionsCount, imagesCount, createdAt }, ...], page, size, totalElements }` |
-| 상태 | 🔄 backend → product-server (Phase 3) |
 
-## 흐름 (목표 MSA)
+## 흐름
 
 ```
 [Client (Cookie: SESSION)] -> [product-server :8082]
@@ -31,6 +30,6 @@
 
 ## 참고
 
-- 인증 검증을 매 요청 member-server Feign 호출로 한다 (Gateway 미도입). Phase 6 도입 후 헤더 신뢰로 대체.
+- 인증 검증은 매 요청 member-server Feign 호출로 한다.
 - read-only TX. 판매자 본인 데이터만 조회 (sellerId 일치 여부 체크).
 - 페이징 기본 `page=0, size=20`, `createdAt DESC`.

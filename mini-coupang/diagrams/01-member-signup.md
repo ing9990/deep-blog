@@ -6,9 +6,8 @@
 | 인증 | 없음 |
 | 입력 | `{ email, password, name }` |
 | 출력 | `{ accountId, memberId }` |
-| 상태 | 🔄 backend → member-server (Phase 4) |
 
-## 흐름 (목표 MSA)
+## 흐름
 
 ```
 [Client] -> [member-server :8081]
