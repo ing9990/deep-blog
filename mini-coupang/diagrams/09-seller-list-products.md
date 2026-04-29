@@ -9,6 +9,10 @@
 
 ## 흐름
 
+![09-seller-list-products flow](./img/09-seller-list-products.svg)
+
+<details><summary>다이어그램 소스 (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
     C["Client<br/>Cookie: SESSION"] --> PS["product-server :8082"]
@@ -20,6 +24,8 @@ flowchart TD
     DB --> Resp["{ items, page, size, totalElements }"]
     Resp --> C
 ```
+
+</details>
 
 ## 사용 컴포넌트
 

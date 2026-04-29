@@ -1,0 +1,9 @@
+flowchart TD
+    C["Client<br/>Cookie: SESSION"] --> PS["product-server :8082"]
+    PS -- "Feign GET /internal/auth/verify" --> MS["member-server"]
+    MS -- "{ accountId, sellerId }" --> PS
+    PS --> SC["Seller 조회<br/>MySQL: product.sellers"]
+    SC --> Q["productRepository<br/>.findBySellerIdOrderByCreatedAtDesc(sellerId, pageable)"]
+    Q --> DB[("MySQL: product.products")]
+    DB --> Resp["{ items, page, size, totalElements }"]
+    Resp --> C

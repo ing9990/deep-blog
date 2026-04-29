@@ -9,6 +9,10 @@
 
 ## 흐름
 
+![02-seller-signup flow](./img/02-seller-signup.svg)
+
+<details><summary>다이어그램 소스 (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
     C["Client"] --> MS["member-server :8081"]
@@ -21,6 +25,8 @@ flowchart TD
     NS --> NL["notification_log INSERT"]
     NL --> ND["환영 알림 발송 (콘솔)"]
 ```
+
+</details>
 
 ## 사용 컴포넌트
 

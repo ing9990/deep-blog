@@ -9,6 +9,10 @@
 
 ## 흐름
 
+![10-register-product flow](./img/10-register-product.svg)
+
+<details><summary>다이어그램 소스 (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
     C["Client (Cookie)"] --> PS["product-server :8082"]
@@ -34,6 +38,8 @@ flowchart TD
     PS --> Resp["{ productId }"]
     Resp --> C
 ```
+
+</details>
 
 ## 사용 컴포넌트
 

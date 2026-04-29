@@ -1,0 +1,23 @@
+flowchart TD
+    C["Client (Cookie)"] --> PS["product-server :8082"]
+    PS -- "Feign GET /internal/auth/verify" --> MS["member-server"]
+    MS -- "{ accountId, sellerId }" --> PS
+
+    subgraph TX ["SellerProductService (write TX)"]
+        P["Product INSERT<br/>product.products"]
+        OP["ProductOption INSERT × N<br/>product.product_options"]
+        IM["ProductImage INSERT × N<br/>product.product_images"]
+        ST["OptionStock INSERT × N<br/>product.option_stock"]
+        EV["publishEvent(ProductRegistered)"]
+        P --> OP --> IM --> ST --> EV
+    end
+    PS --> TX
+
+    TX -. "AFTER_COMMIT" .-> L["ProductRegisteredListener"]
+    L --> R[("Redis<br/>SET stock:option:{optionId} = initialStock × N")]
+    L -- "gRPC EmbedAndIndex(productId, name+description)" --> ML["ml :50051"]
+    ML --> EM["bge-m3 임베딩"]
+    EM --> QD[("Qdrant upsert<br/>sparse + dense + payload")]
+
+    PS --> Resp["{ productId }"]
+    Resp --> C

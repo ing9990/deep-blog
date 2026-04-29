@@ -9,6 +9,10 @@
 
 ## 흐름
 
+![07-list-categories flow](./img/07-list-categories.svg)
+
+<details><summary>다이어그램 소스 (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
     C["Client"] --> PS["product-server :8082"]
@@ -16,6 +20,8 @@ flowchart LR
     DB --> Resp["{ categories: [...] }"]
     Resp --> C
 ```
+
+</details>
 
 ## 사용 컴포넌트
 

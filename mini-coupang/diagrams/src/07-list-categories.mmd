@@ -1,0 +1,5 @@
+flowchart LR
+    C["Client"] --> PS["product-server :8082"]
+    PS --> DB[("MySQL<br/>product.categories<br/>전체 조회")]
+    DB --> Resp["{ categories: [...] }"]
+    Resp --> C

@@ -1,0 +1,6 @@
+flowchart TD
+    C["Client"] --> MS["member-server :8081"]
+    MS --> Inv["HttpSession.invalidate()"]
+    Inv --> R[("Redis<br/>DEL session:account:{accountId}")]
+    R --> Resp["204 No Content<br/>Set-Cookie: SESSION=; Max-Age=0"]
+    Resp --> C

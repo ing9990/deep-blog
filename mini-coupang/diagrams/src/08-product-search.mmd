@@ -1,0 +1,15 @@
+flowchart TD
+    C["Client"] --> PS["product-server :8082"]
+    PS -- "gRPC SearchByQuery(q, filters, limit)" --> ML["ml :50051"]
+    ML --> EM["bge-m3 임베딩 인코딩<br/>(dense vector)"]
+    EM --> Q[("Qdrant :6333<br/>Query API<br/>Prefetch + FusionQuery RRF")]
+    Q --> SP["sparse 채널 (BM25-like)"]
+    Q --> DN["dense 채널 (코사인 유사도)"]
+    SP --> RRF["RRF 융합 hit 목록"]
+    DN --> RRF
+    RRF --> ML
+    ML -- "{ hits: [{ productId, score }] }" --> PS
+    PS --> DB[("MySQL: product 스키마<br/>productRepository.findAllById(ids)")]
+    DB --> H["hit 순서 보존<br/>가격/카테고리 필터 합성"]
+    H --> Resp["{ items: [...] }"]
+    Resp --> C

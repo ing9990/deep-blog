@@ -1,0 +1,9 @@
+flowchart TD
+    C["Client"] --> MS["member-server :8081"]
+    MS --> A["Account 조회<br/>MySQL: member.accounts"]
+    A --> B["BCrypt.matches(input, hashed)"]
+    B --> M["Member 권한 확인"]
+    M --> S["HttpSession 에 accountId 저장"]
+    S --> R[("Redis<br/>session:account:{accountId}<br/>(Spring Session Redis)")]
+    R --> Resp["응답: Set-Cookie SESSION=..."]
+    Resp --> C

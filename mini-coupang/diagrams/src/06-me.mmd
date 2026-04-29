@@ -1,0 +1,6 @@
+flowchart TD
+    C["Client<br/>Cookie: SESSION"] --> MS["member-server :8081"]
+    MS --> R[("Redis<br/>session:account:{accountId}")]
+    R --> DB[("MySQL: member 스키마<br/>Account + Member/Seller 조회")]
+    DB --> Resp["{ accountId, email, memberId, sellerId }"]
+    Resp --> C

@@ -9,6 +9,10 @@
 
 ## 흐름
 
+![05-logout flow](./img/05-logout.svg)
+
+<details><summary>다이어그램 소스 (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
     C["Client"] --> MS["member-server :8081"]
@@ -17,6 +21,8 @@ flowchart TD
     R --> Resp["204 No Content<br/>Set-Cookie: SESSION=; Max-Age=0"]
     Resp --> C
 ```
+
+</details>
 
 ## 사용 컴포넌트
 

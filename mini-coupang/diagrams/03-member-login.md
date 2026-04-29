@@ -9,6 +9,10 @@
 
 ## 흐름
 
+![03-member-login flow](./img/03-member-login.svg)
+
+<details><summary>다이어그램 소스 (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
     C["Client"] --> MS["member-server :8081"]
@@ -20,6 +24,8 @@ flowchart TD
     R --> Resp["응답: Set-Cookie SESSION=..."]
     Resp --> C
 ```
+
+</details>
 
 ## 사용 컴포넌트
 

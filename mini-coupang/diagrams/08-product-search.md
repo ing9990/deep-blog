@@ -9,6 +9,10 @@
 
 ## 흐름
 
+![08-product-search flow](./img/08-product-search.svg)
+
+<details><summary>다이어그램 소스 (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
     C["Client"] --> PS["product-server :8082"]
@@ -26,6 +30,8 @@ flowchart TD
     H --> Resp["{ items: [...] }"]
     Resp --> C
 ```
+
+</details>
 
 ## 사용 컴포넌트
 
