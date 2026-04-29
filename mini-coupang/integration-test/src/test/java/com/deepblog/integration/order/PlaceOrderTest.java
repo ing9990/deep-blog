@@ -31,7 +31,7 @@ class PlaceOrderTest extends IntegrationTest {
 
         assertThat(scenario.redisStock(prepared.optionId())).as("Redis 재고").isEqualTo(50L);
         awaitMysqlOptionStock(prepared.optionId(), 50L);
-        assertThat(scenario.ordersCount()).as("주문 행 수").isEqualTo(50L);
+        assertThat(scenario.ordersCountByStatus("PAID")).as("PAID 주문 행 수").isEqualTo(50L);
     }
 
     @Test
@@ -54,7 +54,7 @@ class PlaceOrderTest extends IntegrationTest {
 
         assertThat(scenario.redisStock(prepared.optionId())).as("Redis 재고").isEqualTo(0L);
         awaitMysqlOptionStock(prepared.optionId(), 0L);
-        assertThat(scenario.ordersCount()).as("주문 행 수").isEqualTo(100L);
+        assertThat(scenario.ordersCountByStatus("PAID")).as("PAID 주문 행 수").isEqualTo(100L);
     }
 
     @Nested
@@ -81,7 +81,7 @@ class PlaceOrderTest extends IntegrationTest {
 
             assertThat(scenario.redisStock(prepared.optionId())).as("Redis 재고").isEqualTo(0L);
             awaitMysqlOptionStock(prepared.optionId(), 0L);
-            assertThat(scenario.ordersCount()).as("주문 행 수").isEqualTo(100L);
+            assertThat(scenario.ordersCountByStatus("PAID")).as("PAID 주문 행 수").isEqualTo(100L);
         }
     }
 }

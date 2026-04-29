@@ -104,6 +104,13 @@ public final class OrderScenario {
         return count == null ? 0L : count;
     }
 
+    public long ordersCountByStatus(String status) {
+        JdbcTemplate ordersJdbc = JdbcSupport.jdbc("orders");
+        Long count = ordersJdbc.queryForObject(
+            "SELECT COUNT(*) FROM orders WHERE status = ?", Long.class, status);
+        return count == null ? 0L : count;
+    }
+
     public record Prepared(Long productId, Long optionId, List<String> sessionCookies) {
     }
 }

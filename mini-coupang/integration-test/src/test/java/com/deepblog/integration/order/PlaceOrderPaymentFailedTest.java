@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class PlaceOrderPaymentFailedTest extends IntegrationTest {
 
     @Test
-    @DisplayName("재고 100, 1명이 결제 실패 → 보상 이벤트로 재고 100 환원, 주문 행 0")
+    @DisplayName("재고 100, 1명이 결제 실패 → 보상 이벤트로 재고 100 환원, 주문은 CANCELED 1건")
     void paymentFailed_stockRestored() {
         // given
         OrderScenario.Prepared prepared = scenario.prepare(1);
@@ -26,8 +26,9 @@ class PlaceOrderPaymentFailedTest extends IntegrationTest {
         assertThat(errorCode(res.body())).as("오류 코드 PAYMENT_FAILED").isEqualTo("PAYMENT_FAILED");
 
         awaitRedisStock(prepared.optionId(), 100L);
-        assertThat(scenario.ordersCount()).as("주문 행 수").isZero();
+        assertThat(scenario.ordersCountByStatus("PAID")).as("PAID 주문 행 수").isZero();
+        assertThat(scenario.ordersCountByStatus("CANCELED")).as("CANCELED 주문 행 수").isEqualTo(1L);
         assertThat(scenario.mysqlOptionStock(prepared.optionId()))
-            .as("MySQL 재고 (성공 시에만 차감)").isEqualTo(100L);
+            .as("MySQL 재고 (PAID 시에만 차감)").isEqualTo(100L);
     }
 }

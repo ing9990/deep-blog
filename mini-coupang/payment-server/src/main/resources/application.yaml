@@ -26,9 +26,12 @@ spring:
 server:
   port: 8083
 
-# 결제에 인위적으로 추가하는 지연 (ms). 분산 환경 시뮬레이션 + Saga 보상 시나리오 측정용.
+# 토스 PG 호출 stub 의 모의 지연 (ms). 사용자 결제 인증은 브라우저 SDK 가 별도 처리하고
+# 백엔드 confirm 호출은 카드망 왕복 (수백 ms) 만 부담한다는 가정.
 payment:
-  simulated-latency-ms: 10000
+  pg:
+    min-latency-ms: 150
+    max-latency-ms: 400
 
 management:
   endpoints:

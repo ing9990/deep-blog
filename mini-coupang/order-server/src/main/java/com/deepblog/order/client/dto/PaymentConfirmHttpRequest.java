@@ -1,6 +1,7 @@
 package com.deepblog.order.client.dto;
 
-public record PaymentChargeHttpRequest(
+public record PaymentConfirmHttpRequest(
+    String paymentKey,
     String orderRef,
     long amount,
     boolean simulateFailure

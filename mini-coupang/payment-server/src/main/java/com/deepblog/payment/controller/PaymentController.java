@@ -1,11 +1,11 @@
 package com.deepblog.payment.controller;
 
 import com.deepblog.common.response.CommonResponse;
-import com.deepblog.payment.application.PaymentChargeService;
-import com.deepblog.payment.application.command.PaymentChargeCommand;
-import com.deepblog.payment.application.result.PaymentChargeResult;
-import com.deepblog.payment.controller.dto.PaymentChargeRequest;
-import com.deepblog.payment.controller.dto.PaymentChargeResponse;
+import com.deepblog.payment.application.PaymentConfirmService;
+import com.deepblog.payment.application.command.PaymentConfirmCommand;
+import com.deepblog.payment.application.result.PaymentConfirmResult;
+import com.deepblog.payment.controller.dto.PaymentConfirmRequest;
+import com.deepblog.payment.controller.dto.PaymentConfirmResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,15 +19,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PaymentController {
 
-    private final PaymentChargeService paymentChargeService;
+    private final PaymentConfirmService paymentConfirmService;
 
-    @PostMapping("/charge")
-    public ResponseEntity<CommonResponse<PaymentChargeResponse>> charge(
-        @Valid @RequestBody PaymentChargeRequest request
+    @PostMapping("/confirm")
+    public ResponseEntity<CommonResponse<PaymentConfirmResponse>> confirm(
+        @Valid @RequestBody PaymentConfirmRequest request
     ) {
-        PaymentChargeCommand command = PaymentChargeCommand.of(
-            request.orderRef(), request.amount(), request.simulateFailure());
-        PaymentChargeResult result = paymentChargeService.charge(command);
-        return ResponseEntity.ok(CommonResponse.success(PaymentChargeResponse.from(result)));
+        PaymentConfirmCommand command = PaymentConfirmCommand.of(
+            request.paymentKey(),
+            request.orderRef(),
+            request.amount(),
+            request.simulateFailure()
+        );
+        PaymentConfirmResult result = paymentConfirmService.confirm(command);
+        return ResponseEntity.ok(CommonResponse.success(PaymentConfirmResponse.from(result)));
     }
 }

@@ -23,6 +23,9 @@ public enum ErrorCode {
     LOCK_ACQUIRE_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "주문 처리 중 락을 획득하지 못했습니다."),
     LOCK_INTERRUPTED(HttpStatus.SERVICE_UNAVAILABLE, "주문 처리 중 락 대기가 중단되었습니다."),
     PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제에 실패했습니다."),
+    PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "결제 금액이 주문 금액과 일치하지 않습니다."),
+    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
+    ORDER_NOT_PENDING(HttpStatus.CONFLICT, "결제 대기 상태가 아닌 주문입니다."),
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "예상치 못한 오류가 발생했습니다.");
 

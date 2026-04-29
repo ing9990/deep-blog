@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.deepblog.integration.MsaCompose;
 import com.deepblog.integration.MsaEndpoints;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -30,19 +32,44 @@ public abstract class IntegrationTest {
         scenario = new OrderScenario();
     }
 
+    /**
+     * 토스 결제 모델에 맞춘 두 단계 호출:
+     * <ol>
+     *   <li>POST /api/orders/prepare → orderId, amount</li>
+     *   <li>POST /api/orders/{orderId}/confirm → 최종 결과</li>
+     * </ol>
+     *
+     * <p>prepare 단계가 실패하면 그 응답을 그대로 반환한다 (INSUFFICIENT_AMOUNT 등).
+     * 성공 시 가짜 paymentKey 를 만들어 confirm 호출까지 진행한다.
+     */
     protected HttpSupport.Result placeOrder(
         String sessionCookie,
         long optionId,
         long quantity,
         boolean simulateFailure
     ) {
-        String body = json(
-            "optionId", optionId,
-            "quantity", quantity,
+        String prepareBody = json("optionId", optionId, "quantity", quantity);
+        HttpSupport.Result prepareRes = HttpSupport.postJson(
+            MsaEndpoints.orderServer() + "/api/orders/prepare", prepareBody, sessionCookie);
+        if (prepareRes.status() != 200) {
+            return prepareRes;
+        }
+
+        JsonNode data = HttpSupport.parse(prepareRes.body()).path("data");
+        long orderId = data.path("orderId").asLong();
+        long amount = data.path("amount").asLong();
+        String paymentKey = "TOSS_TEST_" + UUID.randomUUID();
+
+        String confirmBody = json(
+            "paymentKey", paymentKey,
+            "amount", amount,
             "simulateFailure", simulateFailure
         );
         return HttpSupport.postJson(
-            MsaEndpoints.orderServer() + "/api/orders", body, sessionCookie);
+            MsaEndpoints.orderServer() + "/api/orders/" + orderId + "/confirm",
+            confirmBody,
+            sessionCookie
+        );
     }
 
     protected OrderResult fireConcurrent(OrderScenario.Prepared prepared, int threads)

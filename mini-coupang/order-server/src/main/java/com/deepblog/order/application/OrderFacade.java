@@ -2,32 +2,38 @@ package com.deepblog.order.application;
 
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
-import com.deepblog.order.application.command.PlaceOrderCommand;
+import com.deepblog.order.application.command.ConfirmOrderCommand;
+import com.deepblog.order.application.command.PrepareOrderCommand;
 import com.deepblog.order.application.event.OrderPaymentFailedEvent;
 import com.deepblog.order.application.event.OrderPaymentFailedPublisher;
-import com.deepblog.order.application.port.out.PaymentChargePort;
+import com.deepblog.order.application.port.out.PaymentConfirmPort;
 import com.deepblog.order.application.port.out.ProductOptionPort;
 import com.deepblog.order.application.port.out.StockReservePort;
 import com.deepblog.order.application.port.out.dto.OptionSnapshot;
-import com.deepblog.order.application.port.out.dto.PaymentChargeOutcome;
-import com.deepblog.order.application.port.out.dto.PaymentChargeRequest;
+import com.deepblog.order.application.port.out.dto.PaymentConfirmOutcome;
+import com.deepblog.order.application.port.out.dto.PaymentConfirmRequest;
 import com.deepblog.order.application.port.out.dto.StockReserveOutcome;
 import com.deepblog.order.application.port.out.dto.StockReserveRequest;
-import com.deepblog.order.application.result.PlaceOrderResult;
-import java.util.UUID;
+import com.deepblog.order.application.result.ConfirmOrderResult;
+import com.deepblog.order.application.result.PendingOrderSnapshot;
+import com.deepblog.order.application.result.PrepareOrderResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 단건 주문 오케스트레이션 (옵션 조회 → 재고 선점 → 결제 → 영속화).
+ * 토스 결제 모델에 맞춘 prepare → confirm 두 단계 오케스트레이션.
  *
- * <p>결제는 ~10초 가량 걸리므로 DB 트랜잭션 밖에서 호출한다. 영속화는 결제 성공 시점에만
- * {@link OrderService#persistOrder} 의 단일 write TX 안에서 일어나고, AFTER_COMMIT 시점에
- * {@code order.confirmed} 가 Kafka 로 나간다.
+ * <ul>
+ *   <li>{@link #prepare} - 옵션 조회 → Redis 재고 예약 → Order(PENDING) 영속화. 응답으로 orderId/amount 반환.
+ *       클라이언트는 이 값으로 토스 SDK 의 결제 인증을 시작한다.</li>
+ *   <li>{@link #confirm} - successUrl 로 받은 paymentKey/amount 검증 → payment-server 의 PG 승인 호출 →
+ *       성공 시 Order PAID 전이 + {@code order.confirmed} 발행. 실패 시 Order CANCELED 전이 +
+ *       {@code order.payment-failed} 발행 (product-server 가 Redis 재고 복구).</li>
+ * </ul>
  *
- * <p>결제 실패 시에는 주문을 영속화하지 않고 보상 이벤트를 즉시 발행한다. product-server
- * consumer 가 Redis 재고를 되돌린다.
+ * <p>Facade 자체는 트랜잭션을 갖지 않는다. Order 영속화/상태 전이는 {@link OrderService}
+ * 의 단일 트랜잭션에서, 외부 호출 (Feign) 은 트랜잭션 밖에서 일어난다.
  */
 @Slf4j
 @Service
@@ -36,11 +42,11 @@ public class OrderFacade {
 
     private final ProductOptionPort productOptionPort;
     private final StockReservePort stockReservePort;
-    private final PaymentChargePort paymentChargePort;
+    private final PaymentConfirmPort paymentConfirmPort;
     private final OrderService orderService;
     private final OrderPaymentFailedPublisher orderPaymentFailedPublisher;
 
-    public PlaceOrderResult placeOrder(PlaceOrderCommand command) {
+    public PrepareOrderResult prepare(PrepareOrderCommand command) {
         OptionSnapshot snapshot = productOptionPort.findOption(command.optionId());
         ensurePurchasable(snapshot);
 
@@ -51,31 +57,44 @@ public class OrderFacade {
             throw mapReserveFailure(reserved.reason());
         }
 
-        long totalAmount = snapshot.unitPrice() * command.quantity();
-        String orderRef = UUID.randomUUID().toString();
+        return orderService.createPendingOrder(command.memberId(), snapshot, command.quantity());
+    }
 
-        PaymentChargeOutcome outcome = paymentChargePort.charge(
-            new PaymentChargeRequest(orderRef, totalAmount, command.simulateFailure())
+    public ConfirmOrderResult confirm(ConfirmOrderCommand command) {
+        PendingOrderSnapshot pending = orderService.findPendingOwned(command.orderId(), command.memberId());
+
+        if (!pending.totalAmount().equals(command.amount())) {
+            cancelAndCompensate(pending, "AMOUNT_MISMATCH");
+            throw new BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
+        }
+
+        PaymentConfirmOutcome outcome = paymentConfirmPort.confirm(
+            new PaymentConfirmRequest(
+                command.paymentKey(),
+                String.valueOf(command.orderId()),
+                command.amount(),
+                command.simulateFailure()
+            )
         );
 
         if (!outcome.paid()) {
-            orderPaymentFailedPublisher.publish(new OrderPaymentFailedEvent(
-                command.memberId(),
-                command.optionId(),
-                command.quantity(),
-                outcome.reason()
-            ));
-            log.info("payment failed; compensation event published. orderRef={}, optionId={}, reason={}",
-                orderRef, command.optionId(), outcome.reason());
+            cancelAndCompensate(pending, outcome.reason());
             throw new BusinessException(ErrorCode.PAYMENT_FAILED);
         }
 
-        return orderService.persistOrder(
-            command.memberId(),
-            snapshot,
-            command.quantity(),
-            outcome.paymentId()
-        );
+        return orderService.confirmOrder(command.orderId(), command.memberId(), outcome.paymentId());
+    }
+
+    private void cancelAndCompensate(PendingOrderSnapshot pending, String reason) {
+        orderService.cancelOrder(pending.orderId(), pending.memberId());
+        orderPaymentFailedPublisher.publish(new OrderPaymentFailedEvent(
+            pending.memberId(),
+            pending.optionId(),
+            pending.quantity(),
+            reason
+        ));
+        log.info("payment failed; compensation event published. orderId={}, optionId={}, reason={}",
+            pending.orderId(), pending.optionId(), reason);
     }
 
     private void ensurePurchasable(OptionSnapshot snapshot) {
