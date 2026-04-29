@@ -52,11 +52,8 @@ export default async function BookDetailPage({
           <p className="mt-2 text-[length:var(--text-body)] text-muted-foreground">
             {book.author}
           </p>
-          <p className="mt-4 text-[length:var(--text-meta)] tabular-nums text-muted-foreground">
-            읽은 시점 · {book.readDate}
-          </p>
           {book.summary.ko && (
-            <p className="mt-5 max-w-2xl text-[length:var(--text-body)] leading-[var(--leading-relaxed)]">
+            <p className="mt-4 max-w-2xl text-[length:var(--text-body)] leading-[var(--leading-relaxed)]">
               {book.summary.ko}
             </p>
           )}
