@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: product-server
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.deepblog.product: INFO
