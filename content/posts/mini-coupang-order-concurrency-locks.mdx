@@ -1,7 +1,7 @@
 ---
 title:
-  ko: "분산 환경에서 재고 서비스의 원자성 보장"
-  en: "Inventory Service Atomicity in Distributed Environments"
+  ko: "모놀리스 서버에서 적용할 수 있는 락의 형태"
+  en: "Lock Patterns You Can Apply on a Monolith Server"
 slug: "mini-coupang-order-concurrency-locks"
 date: 2026-04-27
 tags:
@@ -9,25 +9,20 @@ tags:
   - concurrency
   - database
   - spring-boot
-  - redis
 keywords:
   - 비관적 락
   - Pessimistic Lock
   - SELECT FOR UPDATE
   - Lost Update
-  - Lua reserveStock
-  - Saga Pattern
+  - synchronized
 summary:
-  ko: "단일 SKU에 200 스레드가 동시 주문할 때 lost update가 어떻게 일어나는지, synchronized·비관적 락·Luascript + Saga Pattern이 정합성 전략을 어떻게 바꾸는지를 측정 결과와 코드로 비교합니다. 잠금 위치를 도메인 메서드에서 JVM 모니터, DB 행 락으로 이동시킨 뒤, 결제 같은 외부 호출이 끼어드는 순간 잠금 모델 자체를 원자 선점 + 보상 트랜잭션으로 바꾸는 과정을 추적합니다."
-  en: "How 200 concurrent orders on a single SKU produce lost update, then how synchronized, pessimistic lock, and Lua-based reservation with Saga compensation evolve the consistency strategy. Tracks how the model shifts from lock placement (JVM monitor → DB row) to atomic reserve + compensation when slow external payment calls enter the picture, with measurements."
-relatedServices:
-  - order
-  - product
-category: mini-coupang-backend
+  ko: "단일 SKU에 200 스레드가 동시 주문할 때 lost update가 어떻게 일어나는지, synchronized와 비관적 락이 정합성 전략을 어떻게 바꾸는지를 측정 결과와 코드로 비교합니다. 잠금 위치를 도메인 메서드에서 JVM 모니터, DB 행 락으로 이동시키며 모놀리스 서버에서 적용할 수 있는 락의 범위와 한계를 정리합니다."
+  en: "How 200 concurrent orders on a single SKU produce lost update, then how synchronized and pessimistic locks evolve the consistency strategy. Tracks how the lock placement shifts from domain method to JVM monitor to DB row, and where each option breaks down on a single monolith server."
+category: language-backend
 draft: false
 ---
 
-이 글에서는 동시 주문이 몰리는 <E>분산 환경에서 재고를 안전하게 차감하는 방법</E>을 단계별로 비교합니다. 한정된 재고 100개를 동시 주문자 200명(Thread)가 동시에 주문하는 테스트 코드를 기반으로, 모놀리식 서버에서 락을 활용한 방법부터 MSA 환경에서 <E>Row 락을 최소로 잡으면서도 안전한 재고 차감</E>을 위해 <E>Redis Luascript로 원자적 재고 선점과 Saga 패턴으로 보상 트랜잭션 실행</E>으로 결제 실패·주문 취소 시 재고를 안전하게 release 하는 방안까지 따라갑니다.
+이 글에서는 동시 주문이 몰릴 때 <E>모놀리스 서버에서 재고를 안전하게 차감하는 방법</E>을 단계별로 비교합니다. 한정된 재고 100개를 동시 주문자 200명(Thread)가 동시에 주문하는 테스트 코드를 기반으로, 도메인 메서드만 두는 출발점부터 JVM 안에서 옵션 SKU 단위로 직렬화하는 `synchronized`, DB 행 락으로 직렬화 범위를 확장하는 비관적 락까지 따라갑니다.
 
 - 상품의 재고는 초기 100개라고 가정합니다.
 - 200명의 사용자가 같은 옵션에 동시에 주문하는 시나리오 테스트입니다.
@@ -164,12 +159,11 @@ void place_200concurrent_sameSku_stock100_only100succeed() throws Exception {
 
 1단계에서 lost update가 일어난 이유는 조회와 차감 사이에 다른 스레드가 같은 행의 오래된 값을 잡았기 때문입니다. JVM 안에서 가장 단순한 해법은 옵션 SKU 단위로 락을 잡고, 그 안에서 조회·검사·차감·커밋까지 한 큐에 처리하는 것입니다. `ConcurrentHashMap<Long, ReentrantLock>`에 옵션 ID를 키로 락을 보관해 서로 다른 옵션은 병렬로 처리되고, 같은 옵션의 동시 주문만 하나씩 직렬화됩니다. 락 해제는 자기 자신이 잡은 락만 `finally`에서 푸는 try-finally 패턴으로 묶어 `IllegalMonitorStateException` 미스매치를 차단합니다.
 
-<Diagram caption="2단계 아키텍처: 옵션 SKU 별로 ReentrantLock 풀을 두어 같은 옵션만 직렬화. 트랜잭션은 락 안쪽 TransactionTemplate으로 열고 닫아 커밋까지 임계 영역에 포함">{`flowchart LR
+<Diagram caption="2단계 아키텍처: 옵션 SKU 별로 ReentrantLock 풀을 두어 같은 옵션만 직렬화. 같은 옵션의 동시 주문은 락 큐에서 차례대로 처리된다">{`flowchart LR
     Client["주문 요청<br/>(200 동시)"]
     subgraph WAS["WAS (단일 JVM)"]
         Map["ConcurrentHashMap&lt;Long, ReentrantLock&gt;<br/>(옵션 ID → 락)"]
         L["옵션 SKU 단위 락<br/>computeIfAbsent로 획득"]
-        TX["TransactionTemplate.execute<br/>(락 안에서 begin → commit)"]
         OS["doPlaceOrder()<br/>SELECT → 검사 → UPDATE"]
     end
     DB[("MySQL: option_stocks 행")]
@@ -177,31 +171,30 @@ void place_200concurrent_sameSku_stock100_only100succeed() throws Exception {
 
     Client --> Map
     Map -->|"옵션별 큐"| L
-    L --> TX
-    TX --> OS
+    L --> OS
     OS --> DB
     DB --> Out
 
     classDef serial stroke:#16a34a,stroke-width:2px;
-    class L,TX,OS,Out serial
+    class L,OS,Out serial
 `}</Diagram>
 
 ### 구현
 
 ```java title="OrderServiceSynchronized.java"
+@Service
 public class OrderServiceSynchronized {
 
     private final ConcurrentMap<Long, ReentrantLock> locks = new ConcurrentHashMap<>(); // [!code highlight]
-    private final TransactionTemplate transactionTemplate;
     // 4 repositories
 
+    @Transactional
     public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
         ReentrantLock lock = locks.computeIfAbsent(                                     // [!code highlight]
             command.optionId(), key -> new ReentrantLock());                            // [!code highlight]
         lock.lock();                                                                    // [!code highlight]
         try {
-            return transactionTemplate.execute(                                         // [!code highlight]
-                status -> doPlaceOrder(accountId, command));
+            return doPlaceOrder(accountId, command);
         } finally {
             lock.unlock();                                                              // [!code highlight]
         }
@@ -211,7 +204,7 @@ public class OrderServiceSynchronized {
 }
 ```
 
-옵션 ID를 키로 락이 분기되므로 1단계의 글로벌 직렬화와 달리 인기 옵션 1개에 트래픽이 집중돼도 다른 옵션의 처리량은 영향받지 않습니다. 트랜잭션 경계는 `@Transactional` 대신 `TransactionTemplate`으로 락 안쪽에서 직접 열고 닫습니다. `@Transactional`은 프록시 경계가 메서드 진입과 종료에 묶여 있어 메서드 안에서 `unlock()` 후 빠져나오는 사이 다른 스레드가 미커밋 상태의 행을 조회할 수 있기 때문입니다.
+옵션 ID를 키로 락이 분기되므로 1단계의 글로벌 직렬화와 달리 인기 옵션 1개에 트래픽이 집중돼도 다른 옵션의 처리량은 영향받지 않습니다. 단일 인스턴스에서 같은 옵션의 동시 주문은 모두 같은 `ReentrantLock` 큐를 통과하므로, 옵션 행에 대한 경합 자체가 사라져 `@Transactional` 한 줄로 정합성이 유지됩니다.
 
 ### 테스트 코드 및 결과
 
@@ -362,223 +355,41 @@ public class OrderService {
 | DB 커넥션 점유 | 락 보유 동안 커넥션 함께 점유 | HikariCP 풀(기본 10)과 충돌, 빠른 커넥션 고갈 |
 | 핫 row 직렬화 | 인기 옵션 1개에 트래픽 집중 | 처리량이 1행 × 1 커넥션 × 결제 응답 시간으로 묶임 |
 
-이 문제는 재고 선점을 트랜잭션 밖으로 빼는 Redis Luascript로 원자적 재고 선점과 Saga 패턴으로 보상 트랜잭션 실행으로 해결할 수 있습니다.
-
-## 4. Luascript + Saga Pattern 적용
-
-### 개요
-
-비관적 락은 정합성을 지키지만 락 보유 시간이 트랜잭션 길이와 같습니다. 결제 같은 외부 호출이 한 트랜잭션 안에 들어오면 그 응답 시간만큼 행 X 락과 DB 커넥션을 함께 점유하므로, 처리량이 결제 응답 시간 단위로 묶입니다. 이 글의 시뮬레이션은 결제 호출을 ~10초로 가정하므로 그 결합이 두드러집니다.
-
-4단계는 정합성 책임을 락 하나가 아니라 세 갈래로 분리합니다.
-
-- 재고 선점은 Redis Luascript가 GET, 검사, DECRBY를 한 번에 원자적으로 실행해 트랜잭션 밖에서 끝냅니다.
-- 결제는 트랜잭션 없이 외부 payment-service에 호출합니다.
-- 결제가 성공하면 주문확정 이벤트가 발행되고, 컨슈머가 MySQL `option_stocks`를 영구 차감합니다. 결제가 실패하면 Saga 보상으로 Redis 재고를 원복(release)합니다.
-
-이 모양에서는 Redis 원자 차감이 동시 정합성을, MySQL UPDATE의 WHERE 조건이 마지막 안전망을, Saga 보상이 결제 실패 복구를 맡습니다.
-
-<Diagram caption="4단계 흐름: read TX → Redis 선점 → 결제(트랜잭션 밖, ~10초) → write TX(주문 INSERT + 이벤트 → MySQL 차감), 결제 실패 시 Redis release">{`flowchart LR
-    Client["주문 요청"]
-    R1["read TX<br/>회원/옵션 조회"]
-    Lua["Redis Lua<br/>reserveStock"]
-    Pay["payment-service<br/>charge (~10s, TX 밖)"]
-    W1["write TX<br/>Order INSERT<br/>+ OrderConfirmed"]
-    Cons["@EventListener<br/>→ ProductService"]
-    DB[("MySQL<br/>option_stocks")]
-    Rel["Redis<br/>releaseStock"]
-
-    Client --> R1 --> Lua
-    Lua -->|선점 성공| Pay
-    Pay -->|결제 성공| W1
-    W1 --> Cons --> DB
-    Pay -.->|결제 실패| Rel
-
-    classDef ok stroke:#16a34a,stroke-width:2px;
-    classDef compensate stroke:#dc2626,stroke-width:2px;
-    class Lua,W1 ok
-    class Rel compensate
-`}</Diagram>
-
-### Redis Luascript
-
-`ProductStockRedisRepository`가 Lua를 두 개 보관합니다. GET, 검사, DECRBY가 같은 스크립트 안에서 실행되므로 다른 클라이언트가 그 사이에 끼어들 수 없습니다.
-
-```java title="ProductStockRedisRepository.java"
-private static final String RESERVE_SCRIPT = """                                     // [!code highlight]
-    local current = redis.call('GET', KEYS[1])
-    if not current then return -1 end
-    local qty = tonumber(ARGV[1])
-    if tonumber(current) < qty then return -2 end
-    return redis.call('DECRBY', KEYS[1], qty)
-    """;
-
-private static final String RELEASE_SCRIPT = """                                     // [!code highlight]
-    return redis.call('INCRBY', KEYS[1], ARGV[1])
-    """;
-```
-
-두 스크립트는 Redisson `RScript`에 `READ_WRITE` 모드로 발행됩니다. `reserveStock`은 -1(키 부재), -2(재고 부족), 0 이상(차감 후 남은 수량) 세 값 중 하나를 돌려주고, `OrderService`가 이를 `STOCK_NOT_FOUND` / `INSUFFICIENT_AMOUNT` / 정상 진행으로 매핑합니다. `releaseStock`은 결제 실패 시 보상용 INCRBY만 수행합니다.
-
-### 결제 서비스 분리
-
-분산 환경을 흉내내기 위해 결제는 별도 Spring Boot 애플리케이션(payment-service, 8081 포트)으로 분리하고 backend는 OpenFeign으로 호출합니다. 도메인이 외부 시스템에 직접 의존하지 않도록 hexagonal port/adapter 구조를 둡니다.
-
-- `PaymentPort` (도메인 인터페이스): `charge(PaymentChargeCommand) → PaymentChargeOutcome`
-- `PaymentFeignAdapter` (인프라 어댑터): `PaymentFeignClient`를 호출하고 응답을 도메인 DTO로 변환
-
-payment-service는 결제 시뮬레이션을 위해 ~10초 `Thread.sleep` 후 응답하고, `simulateFailure=true` 요청은 즉시 실패로 응답합니다.
-
-### OrderService 4-phase
-
-read TX와 write TX를 분리하고, 그 사이에 Redis 선점과 결제 호출을 트랜잭션 밖에 둡니다. JPA LAZY 프록시는 트랜잭션 안에서만 안전하므로 read TX 결과는 primitive와 String만 담은 record로 운반합니다.
-
-```java title="OrderService.java"
-public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
-    // Phase 1: read TX (회원/옵션/상품 조회 + 가격 추출)
-    OrderInputs inputs = transactionTemplate.execute(status -> {                     // [!code highlight]
-        Member member = memberRepository.findByAccountId(accountId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_A_MEMBER));
-        ProductOption option = productOptionRepository.findByIdWithProduct(command.optionId())
-            .orElseThrow(() -> new BusinessException(ErrorCode.OPTION_NOT_FOUND));
-        Product product = option.getProduct();
-        return new OrderInputs(member.getId(), option.getId(), option.getSku(),
-            option.getOptionName(), option.getAdditionalPrice(),
-            product.getId(), product.getName(), product.getBasePrice());
-    });
-    long unitPrice = inputs.basePrice() + inputs.additionalPrice();
-    long totalAmount = unitPrice * command.quantity();
-
-    // Phase 2: Redis Luascript 원자적 재고 선점
-    long reserved = stockRedisRepository.reserveStock(command.optionId(), command.quantity()); // [!code highlight]
-    if (reserved == -1) throw new BusinessException(ErrorCode.STOCK_NOT_FOUND);
-    if (reserved == -2) throw new BusinessException(ErrorCode.INSUFFICIENT_AMOUNT);
-
-    // Phase 3: 결제 (외부 호출, 트랜잭션 밖)
-    PaymentChargeOutcome outcome = paymentPort.charge(
-        new PaymentChargeCommand(UUID.randomUUID().toString(), totalAmount, command.simulateFailure()));
-    if (!outcome.paid()) {
-        stockRedisRepository.releaseStock(command.optionId(), command.quantity());   // [!code highlight]
-        throw new BusinessException(ErrorCode.PAYMENT_FAILED);
-    }
-
-    // Phase 4: write TX (Order INSERT + OrderConfirmed 발행 → MySQL 차감)
-    return transactionTemplate.execute(status -> persistOrder(inputs, unitPrice, command));
-}
-```
-
-read TX가 끝나면 Hibernate session 밖의 LAZY 프록시는 더 이상 안전하지 않으므로, Phase 2~4로 가져갈 값은 엔티티가 아닌 `OrderInputs` record(primitive와 String) 형태여야 합니다. write TX 안에서 `Member`를 다시 `findById`로 로드해 영속 상태에서 Order를 조립합니다.
-
-### 주문확정 이벤트
-
-write TX 안에서 `OrderConfirmed` 이벤트가 발행되고, 동기 `@EventListener`가 받아 `ProductService.decreaseStockOnOrderConfirmed`를 호출합니다. 이 메서드는 `@Transactional(propagation = MANDATORY)`로 외부 write TX에 합류해, 주문 INSERT와 재고 영구 차감이 한 커밋으로 끝납니다.
-
-```java title="ProductService.java"
-@Transactional(propagation = Propagation.MANDATORY)
-public void decreaseStockOnOrderConfirmed(OrderConfirmed event) {
-    int updated = optionStockRepository.decreaseQuantityIfEnough(                    // [!code highlight]
-        event.optionId(), event.quantity());
-    if (updated == 0) {
-        log.error("Redis-MySQL drift: orderId={}, optionId={}, quantity={}",
-            event.orderId(), event.optionId(), event.quantity());
-    }
-}
-```
-
-`decreaseQuantityIfEnough`의 WHERE `quantity >= :qty`가 마지막 안전망입니다. Redis 재고 유실 등으로 두 저장소가 어긋나 affected=0이 되는 경우는 로그로 노출하고, 환불·재고 복구 같은 사후 보상 흐름은 별도 글에서 다룹니다.
-
-리스너를 `@TransactionalEventListener(AFTER_COMMIT)`이 아니라 평범한 `@EventListener`로 둔 이유는 두 가지입니다. 첫째, 주문 INSERT가 커밋된 뒤에 재고 차감만 실패해 두 결과가 어긋나는 상황을 만들지 않기 위해서입니다. 둘째, Spring 6.2의 `RestrictedTransactionalEventListenerFactory`가 같은 메서드의 `@TransactionalEventListener`와 `@Transactional` 결합을 거부하므로, 동기 합류가 가장 단순합니다. 진짜 비동기 분리(Outbox + Kafka + 멱등 컨슈머)는 다음 글에서 다루며, 4단계는 이벤트 기반 책임 분리의 형태만 보여줍니다.
-
-### 테스트 코드 및 결과
-
-200 스레드 중 10건에 `simulateFailure=true`를 주입해 5% 결제 실패 시나리오를 만듭니다. Redis는 Testcontainers로 띄우고, `PaymentPort`는 `@TestConfiguration`이 등록한 stub이 받습니다(요청에 simulateFailure=true가 없으면 항상 성공).
-
-```java title="PlaceOrderLuaSagaConcurrencyTest.java"
-@TestConfiguration
-static class LuaSagaTestConfig {
-    @Bean(destroyMethod = "shutdown")
-    RedissonClient redissonClient() { /* Testcontainers Redis 연결 */ }
-
-    @Bean @Primary
-    PaymentPort paymentPort() {
-        return cmd -> cmd.simulateFailure()
-            ? PaymentChargeOutcome.failure("simulated")
-            : PaymentChargeOutcome.success(cmd.orderRef());
-    }
-}
-
-// 200 스레드, 10건은 simulateFailure=true 로 제출
-for (int i = 0; i < THREADS; i++) {
-    boolean shouldFail = i < FAILURE_INJECTED_THREADS; // 10
-    executor.submit(() -> {
-        try {
-            barrier.await();
-            orderService.placeOrder(memberId,
-                new PlaceOrderCommand(optionId, 1L, shouldFail));
-            success.incrementAndGet();
-        } catch (BusinessException e) {
-            switch (e.errorCode()) {
-                case INSUFFICIENT_AMOUNT -> insufficient.incrementAndGet();
-                case PAYMENT_FAILED      -> paymentFailed.incrementAndGet();
-                default                  -> other.incrementAndGet();
-            }
-        } finally { done.countDown(); }
-    });
-}
-```
-
-| 항목 | 기대 | 실측 |
-|---|---|---|
-| 주문 성공 | 정합성 깨지지 않음 | **100** |
-| 재고 부족 거절 | 결제 성공분과 보상분에 따라 가변 | **90** |
-| 결제 실패 보상 | ≤ 10 | **10** |
-| 다른 예외 | 0 | **0** |
-| 최종 Redis 재고 | 0 | **0** |
-| 최종 MySQL 재고 | 0 | **0** |
-| 저장된 주문 | 100 | 100 |
-
-확인되는 것은 세 가지입니다.
-
-- 200건 모두 성공/재고 부족/결제 실패 중 한 갈래로 분류되어 누락 없이 처리됐습니다(100 + 90 + 10 = 200).
-- 결제 실패 10건이 Redis 재고를 원복했고, 이 슬롯이 동시에 도착한 다른 reserve 호출로 회수되어 최종 Redis 재고가 0으로 수렴했습니다.
-- 주문 INSERT가 커밋된 뒤 컨슈머가 MySQL `option_stocks`를 영구 차감해, Awaitility polling으로 검증한 최종 MySQL 재고가 0이 됩니다.
+이 문제는 모놀리스 서버 안에서는 더 이상 줄이기 어렵습니다. 재고 선점을 트랜잭션 밖으로 빼고 결제 실패에 보상 트랜잭션을 붙이는 분산 잠금 전략은 별도 글에서 다룹니다.
 
 ## 결론
 
 ### 정합성 결과
 
-| 단계 | 잠금 주체 | 주문 성공 | 재고 부족 거절 | 결제 실패 보상 | 남은 재고 |
-|---|---|---|---|---|---|
-| 1단계 락 없음 | 없음 | 200 | 0 | n/a | 56 |
-| 2단계 synchronized | JVM 모니터 | 100 | 100 | n/a | 0 |
-| 3단계 비관적 락 | DB 행 락 | 100 | 100 | n/a | 0 |
-| 4단계 Luascript + Saga Pattern | Redis 원자 + DB 행 | 100 | 90 | 10 | 0 |
-
-1~3단계는 결제 외부 호출 모델이 없으므로 "결제 실패 보상" 칸을 n/a로 두었습니다. 4단계는 결제 실패 10건을 Saga 보상으로 복구해 정합성을 유지합니다.
-
-### 분산 환경 적합성
-
-| 단계 | 단일 JVM | 단일 DB 인스턴스 | 결제 외부 호출과의 격리 | 실서버 적용 |
+| 단계 | 잠금 주체 | 주문 성공 | 재고 부족 거절 | 남은 재고 |
 |---|---|---|---|---|
-| 1단계 락 없음 | 깨짐 | 깨짐 | 트랜잭션 안 | 불가 |
-| 2단계 synchronized | OK | 깨짐 | 트랜잭션 안 | 단일 인스턴스만 |
-| 3단계 비관적 락 | OK | OK | 트랜잭션 안 | 결제 시간만큼 행 락 점유 |
-| 4단계 Luascript + Saga Pattern | OK | OK | 트랜잭션 밖 | 핫 row × 결제 시간 결합이 풀림 |
+| 1단계 락 없음 | 없음 | 200 | 0 | 56 |
+| 2단계 synchronized | JVM 모니터 | 100 | 100 | 0 |
+| 3단계 비관적 락 | DB 행 락 | 100 | 100 | 0 |
 
-<Callout type="error" title="잠금 위치 이동에서 원자 선점 + 보상으로">
-1~3단계는 정합성을 잠금 위치(JVM 모니터 → DB 행)로 표현했습니다. 4단계는 잠금 자체를 다른 모양으로 바꿉니다. Redis가 짧은 critical section의 원자성을, MySQL UPDATE WHERE 조건이 마지막 안전망을, Saga 보상이 결제 실패 복구를 맡습니다. 결제 같은 느린 외부 호출이 트랜잭션 안에 들어오는 순간 잠금 모델은 처리량을 결제 응답 시간으로 묶기 시작하므로, 그 지점에서 정합성을 락이 아니라 "원자 선점 + 보상"으로 표현하는 선택지가 의미 있어집니다.
+1단계는 lost update로 56건이 사라졌고, 2~3단계는 같은 옵션 행에 대한 동시 차감을 하나씩 직렬화해 정합성을 회복했습니다.
+
+### 모놀리스 환경 적합성
+
+| 단계 | 단일 JVM | 단일 DB 인스턴스 | 다중 인스턴스 |
+|---|---|---|---|
+| 1단계 락 없음 | 깨짐 | 깨짐 | 깨짐 |
+| 2단계 synchronized | OK | OK | 깨짐 (락 풀이 JVM 안에 갇힘) |
+| 3단계 비관적 락 | OK | OK | OK (DB 레벨 직렬화) |
+
+<Callout type="info" title="잠금 위치는 정합성 범위와 같이 움직인다">
+1단계는 도메인 메서드 안의 메모리 검사만, 2단계는 JVM 모니터, 3단계는 DB 행 락으로 잠금 위치를 한 칸씩 끌어올렸습니다. 잠금 위치가 위로 올라갈수록 같은 행에 동시에 닿을 수 있는 경로가 그만큼 줄어들고, 정합성이 깨지지 않는 범위도 그만큼 넓어집니다. 모놀리스 서버에서 적용할 수 있는 락의 형태는 여기까지이고, 그다음 단계는 트랜잭션 길이와 잠금 보유 시간을 분리하는 분산 잠금 전략에서 다룹니다.
 </Callout>
 
 ### 남은 한계
 
 | 한계 | 무엇이 부족한가 | 다음 단계 |
 |---|---|---|
-| in-process `@EventListener` | 주문 INSERT와 MySQL 차감이 한 커밋이라 결합도 높음 | Outbox + Kafka + 멱등 컨슈머로 비동기 분리 |
-| Saga 보상 = release만 | 결제 부분 성공, 환불, 재고 복구 흐름 미구현 | Saga 오케스트레이터 + 환불 어댑터 |
-| Redis 단일 노드 | 단일 실패 지점, 클럭 스큐, fence token 부재 | Redis 클러스터 또는 합의 기반 잠금 |
-| 측정 환경 | 단일 H2 + 단일 Redis + 단일 backend | 멀티 인스턴스 시뮬레이션, 부하 곡선 비교 |
+| 결제 같은 외부 호출이 트랜잭션 안에 들어옴 | 락 보유 시간 = 트랜잭션 길이 = 외부 호출 응답 시간 | 재고 선점을 트랜잭션 밖으로 분리 |
+| 인기 옵션 1개에 트래픽 집중 | 핫 row 직렬화 = 처리량 상한 | 원자 선점 + 보상 트랜잭션으로 잠금 모델 자체를 변경 |
+| 다중 인스턴스 환경 | 2단계 무력화, 3단계는 결제 응답 시간만큼 행 락 점유 | 분산 잠금 또는 Redis 원자 차감 |
 
-이 네 가지는 별도 글에서 다룹니다. 비동기 이벤트 분리(Outbox + Kafka)와 Saga 오케스트레이션을 각각 풀어낼 예정입니다.
+세 가지 모두 모놀리스 안의 락만으로는 풀리지 않습니다. 분산 환경에서 락 보유 시간을 줄이고 외부 호출 실패에 보상 트랜잭션을 붙이는 전략은 별도 글에서 다룹니다.
 
 ## 참고 자료
 

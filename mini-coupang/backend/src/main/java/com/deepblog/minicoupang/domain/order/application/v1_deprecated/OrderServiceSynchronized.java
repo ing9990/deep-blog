@@ -1,5 +1,7 @@
 package com.deepblog.minicoupang.domain.order.application.v1_deprecated;
 
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import com.deepblog.minicoupang.domain.member.domain.Member;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
 import com.deepblog.minicoupang.domain.order.application.PlaceOrderCommand;
@@ -11,23 +13,20 @@ import com.deepblog.minicoupang.domain.product.domain.Product;
 import com.deepblog.minicoupang.domain.product.domain.ProductOption;
 import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductOptionRepository;
-import com.deepblog.common.exception.BusinessException;
-import com.deepblog.common.exception.ErrorCode;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 
-// Unit 2 §2 (블로그 자산): 옵션 SKU 단위 ReentrantLock + TransactionTemplate.
+// Unit 2 §2 (블로그 자산): 옵션 SKU 단위 ReentrantLock + @Transactional.
 // 락 풀을 ConcurrentHashMap<optionId, ReentrantLock> 으로 두어 서로 다른 옵션은
-// 병렬로 처리되고 같은 옵션의 동시 주문만 직렬화한다. 락 획득은 lock(),
-// 해제는 자기 자신이 잡은 락만 finally 에서 unlock() 으로 풀어
-// IllegalMonitorStateException 미스매치를 차단한다. 트랜잭션 커밋까지
-// 임계 영역에 포함되도록 잠금 안쪽에서 TransactionTemplate 으로 트랜잭션을
-// 직접 열고 닫는다. 단일 인스턴스에서 lost update 0 건이지만, 분산 환경
-// (JVM 2개 이상)에서는 각 인스턴스가 자기 락 풀만 가지므로 무력화된다.
+// 병렬로 처리되고 같은 옵션의 동시 주문만 직렬화한다. 단일 인스턴스에서는
+// 옵션 ID 별로 락이 분기되므로 같은 옵션 행에 대한 경합이 사라지고
+// lost update 가 0 건이 된다. 분산 환경 (JVM 2개 이상) 에서는 각 인스턴스가
+// 자기 락 풀만 가지므로 무력화된다.
+@Service
 @Deprecated
 public class OrderServiceSynchronized {
 
@@ -35,29 +34,27 @@ public class OrderServiceSynchronized {
     private final ProductOptionRepository productOptionRepository;
     private final OptionStockRepository optionStockRepository;
     private final OrderRepository orderRepository;
-    private final TransactionTemplate transactionTemplate;
     private final ConcurrentMap<Long, ReentrantLock> locks = new ConcurrentHashMap<>();
 
     public OrderServiceSynchronized(
         MemberRepository memberRepository,
         ProductOptionRepository productOptionRepository,
         OptionStockRepository optionStockRepository,
-        OrderRepository orderRepository,
-        PlatformTransactionManager transactionManager
+        OrderRepository orderRepository
     ) {
         this.memberRepository = memberRepository;
         this.productOptionRepository = productOptionRepository;
         this.optionStockRepository = optionStockRepository;
         this.orderRepository = orderRepository;
-        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
+    @Transactional
     public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
         ReentrantLock lock = locks.computeIfAbsent(
             command.optionId(), key -> new ReentrantLock());
         lock.lock();
         try {
-            return transactionTemplate.execute(status -> doPlaceOrder(accountId, command));
+            return doPlaceOrder(accountId, command);
         } finally {
             lock.unlock();
         }
