@@ -3,56 +3,42 @@ package com.deepblog.integration.support;
 import static com.deepblog.integration.support.HttpSupport.json;
 
 import com.deepblog.integration.MsaEndpoints;
-import com.fasterxml.jackson.databind.JsonNode;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.api.StatefulRedisConnection;
 import java.util.ArrayList;
 import java.util.List;
+import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 @Slf4j
 public final class OrderScenario {
 
-    private final JdbcTemplate productJdbc = JdbcSupport.jdbc("product");
-    private final JdbcTemplate ordersJdbc = JdbcSupport.jdbc("orders");
-    private final JdbcTemplate memberJdbc = JdbcSupport.jdbc("member");
+    public static final long PRODUCT_ID = 1L;
+    public static final long OPTION_ID = 1L;
+    public static final long INITIAL_STOCK = 100L;
 
-    public Prepared prepare(int memberCount, long initialStock) {
-        truncate();
-        resetRedis();
+    private static final String SEED_SCRIPT = "test-seed.sql";
 
-        Long categoryId = insertCategory("통합테스트카테고리-" + System.currentTimeMillis());
-        Long productId = insertProduct(categoryId);
-        Long optionId = insertOption(productId);
-        insertOptionStock(optionId, initialStock);
-        setRedisStock(optionId, initialStock);
+    private final DataSource productDs = JdbcSupport.dataSource("product");
+    private final JdbcTemplate productJdbc = new JdbcTemplate(productDs);
 
+    public Prepared prepare(int memberCount) {
+        applySeed();
+        resetRedisAndSetStock();
         List<String> sessionCookies = signupAndLogin(memberCount);
-        return new Prepared(categoryId, productId, optionId, sessionCookies);
+        return new Prepared(PRODUCT_ID, OPTION_ID, sessionCookies);
     }
 
-    private void truncate() {
-        productJdbc.execute("SET FOREIGN_KEY_CHECKS = 0");
-        productJdbc.update("TRUNCATE TABLE option_stocks");
-        productJdbc.update("TRUNCATE TABLE product_options");
-        productJdbc.update("TRUNCATE TABLE products");
-        productJdbc.update("TRUNCATE TABLE categories");
-        productJdbc.execute("SET FOREIGN_KEY_CHECKS = 1");
-
-        ordersJdbc.execute("SET FOREIGN_KEY_CHECKS = 0");
-        try { ordersJdbc.update("TRUNCATE TABLE order_items"); } catch (Exception ignore) {}
-        try { ordersJdbc.update("TRUNCATE TABLE orders"); } catch (Exception ignore) {}
-        ordersJdbc.execute("SET FOREIGN_KEY_CHECKS = 1");
-
-        memberJdbc.execute("SET FOREIGN_KEY_CHECKS = 0");
-        try { memberJdbc.update("TRUNCATE TABLE members"); } catch (Exception ignore) {}
-        try { memberJdbc.update("TRUNCATE TABLE sellers"); } catch (Exception ignore) {}
-        try { memberJdbc.update("TRUNCATE TABLE accounts"); } catch (Exception ignore) {}
-        memberJdbc.execute("SET FOREIGN_KEY_CHECKS = 1");
+    private void applySeed() {
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
+            new ClassPathResource(SEED_SCRIPT));
+        populator.execute(productDs);
     }
 
-    private void resetRedis() {
+    private void resetRedisAndSetStock() {
         try (RedisClient client = RedisSupport.client();
              StatefulRedisConnection<String, String> conn = RedisSupport.connect(client)) {
             for (String key : conn.sync().keys("stock:option:*")) {
@@ -61,55 +47,16 @@ public final class OrderScenario {
             for (String key : conn.sync().keys("spring:session:*")) {
                 conn.sync().del(key);
             }
-        }
-    }
-
-    private Long insertCategory(String name) {
-        productJdbc.update(
-            "INSERT INTO categories (name, parent_id, created_at, updated_at) VALUES (?, NULL, NOW(6), NOW(6))",
-            name);
-        return productJdbc.queryForObject(
-            "SELECT category_id FROM categories WHERE name = ?", Long.class, name);
-    }
-
-    private Long insertProduct(Long categoryId) {
-        productJdbc.update(
-            "INSERT INTO products "
-                + "(seller_id, category_id, name, description, base_price, status, created_at, updated_at) "
-                + "VALUES (?, ?, ?, ?, ?, 'ACTIVE', NOW(6), NOW(6))",
-            1L, categoryId, "통합테스트상품", "concurrency target", 10000L);
-        return productJdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
-    }
-
-    private Long insertOption(Long productId) {
-        String sku = "IT-SKU-" + System.currentTimeMillis();
-        productJdbc.update(
-            "INSERT INTO product_options "
-                + "(product_id, option_name, sku, additional_price, created_at, updated_at) "
-                + "VALUES (?, ?, ?, 0, NOW(6), NOW(6))",
-            productId, "기본", sku);
-        return productJdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
-    }
-
-    private void insertOptionStock(Long optionId, long initialStock) {
-        productJdbc.update(
-            "INSERT INTO option_stocks (option_id, quantity, created_at, updated_at) "
-                + "VALUES (?, ?, NOW(6), NOW(6))",
-            optionId, initialStock);
-    }
-
-    private void setRedisStock(Long optionId, long stock) {
-        try (RedisClient client = RedisSupport.client();
-             StatefulRedisConnection<String, String> conn = RedisSupport.connect(client)) {
-            RedisSupport.setStock(conn.sync(), optionId, stock);
+            RedisSupport.setStock(conn.sync(), OPTION_ID, INITIAL_STOCK);
         }
     }
 
     private List<String> signupAndLogin(int memberCount) {
         String memberServer = MsaEndpoints.memberServer();
         List<String> sessionCookies = new ArrayList<>(memberCount);
+        long suffix = System.currentTimeMillis();
         for (int i = 0; i < memberCount; i++) {
-            String email = "it-" + System.currentTimeMillis() + "-" + i + "@test.local";
+            String email = "it-" + suffix + "-" + i + "@test.local";
             String password = "passw0rd!";
             String phone = String.format("010%07d", i);
 
@@ -152,14 +99,11 @@ public final class OrderScenario {
     }
 
     public long ordersCount() {
+        JdbcTemplate ordersJdbc = JdbcSupport.jdbc("orders");
         Long count = ordersJdbc.queryForObject("SELECT COUNT(*) FROM orders", Long.class);
         return count == null ? 0L : count;
     }
 
-    public JsonNode parseBody(String body) {
-        return HttpSupport.parse(body);
-    }
-
-    public record Prepared(Long categoryId, Long productId, Long optionId, List<String> sessionCookies) {
+    public record Prepared(Long productId, Long optionId, List<String> sessionCookies) {
     }
 }

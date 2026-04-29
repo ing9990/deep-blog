@@ -10,6 +10,7 @@ dependencyManagement {
 
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.platform:junit-platform-suite'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     testImplementation 'org.springframework:spring-jdbc'
@@ -37,7 +38,9 @@ tasks.named('test') {
 tasks.register('it', Test) {
     description = 'MSA integration tests (compose-backed)'
     group = 'verification'
-    useJUnitPlatform()
+    useJUnitPlatform {
+        includeEngines 'junit-platform-suite'
+    }
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     testLogging {

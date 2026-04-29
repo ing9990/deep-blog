@@ -12,7 +12,8 @@ public final class HttpSupport {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient CLIENT = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(5))
+        .connectTimeout(Duration.ofSeconds(30))
+        .version(HttpClient.Version.HTTP_1_1)
         .build();
 
     private HttpSupport() {
@@ -20,7 +21,7 @@ public final class HttpSupport {
 
     public static Result postJson(String url, String body, String sessionCookie) {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url))
-            .timeout(Duration.ofSeconds(60))
+            .timeout(Duration.ofSeconds(90))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body));
         if (sessionCookie != null) {
