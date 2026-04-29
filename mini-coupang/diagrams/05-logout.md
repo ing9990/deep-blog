@@ -9,7 +9,7 @@
 
 ## 흐름
 
-![05-logout flow](./img/05-logout.svg)
+![05-logout flow](./img/05-logout.png)
 
 <details><summary>다이어그램 소스 (Mermaid)</summary>
 

@@ -9,7 +9,7 @@
 
 ## 흐름
 
-![07-list-categories flow](./img/07-list-categories.svg)
+![07-list-categories flow](./img/07-list-categories.png)
 
 <details><summary>다이어그램 소스 (Mermaid)</summary>
 

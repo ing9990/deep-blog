@@ -9,7 +9,7 @@
 
 ## 흐름
 
-![03-member-login flow](./img/03-member-login.svg)
+![03-member-login flow](./img/03-member-login.png)
 
 <details><summary>다이어그램 소스 (Mermaid)</summary>
 

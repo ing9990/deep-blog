@@ -11,7 +11,7 @@
 
 이 usecase 가 시스템에서 가장 많은 컴포넌트를 거친다. 동기 (Feign) 와 비동기 (Kafka) 가 모두 등장하고 결제 실패 시 Saga 보상이 작동한다.
 
-![11-place-order flow](./img/11-place-order.svg)
+![11-place-order flow](./img/11-place-order.png)
 
 <details><summary>다이어그램 소스 (Mermaid)</summary>
 

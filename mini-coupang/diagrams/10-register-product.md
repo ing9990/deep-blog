@@ -9,7 +9,7 @@
 
 ## 흐름
 
-![10-register-product flow](./img/10-register-product.svg)
+![10-register-product flow](./img/10-register-product.png)
 
 <details><summary>다이어그램 소스 (Mermaid)</summary>
 
