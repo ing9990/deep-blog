@@ -1,9 +1,9 @@
 spring:
   application:
-    name: payment-service
+    name: payment-server
 
 server:
-  port: 8081
+  port: 8083
 
 # 결제에 인위적으로 추가하는 지연 (ms). 분산 환경 시뮬레이션 + Saga 보상 시나리오 측정용.
 payment:

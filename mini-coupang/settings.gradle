@@ -2,3 +2,4 @@ rootProject.name = 'mini-coupang'
 
 include 'common-modules'
 include 'backend'
+include 'payment-server'
