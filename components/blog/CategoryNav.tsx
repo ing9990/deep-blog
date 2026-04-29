@@ -1,55 +1,30 @@
 'use client'
 
 import Link from 'next/link'
-import { ChevronDown, Library } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import type { ClientPost } from '@/lib/client-post'
-import type { ClientBook } from '@/lib/client-book'
 import { groupPostsByCategory } from '@/lib/categories'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { useCrossHostUrls } from '@/lib/cross-host-context'
 
 interface CategoryNavProps {
   posts: ClientPost[]
-  books?: ClientBook[]
   currentSlug?: string | null
   onLinkClick?: () => void
 }
 
-export function CategoryNav({ posts, books, currentSlug, onLinkClick }: CategoryNavProps) {
+export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProps) {
   const { lang } = useTranslation()
-  const { books: booksUrl } = useCrossHostUrls()
   if (!Array.isArray(posts) || posts.length === 0) return null
   const groups = groupPostsByCategory(posts, lang)
-
-  const bookCount = books?.length ?? 0
 
   const activeCategoryId = currentSlug
     ? (posts.find((p) => p.slug === currentSlug)?.category ?? null)
     : null
 
-  const orderedGroups = [
-    ...groups.filter((g) => g.category.id === 'mini-coupang-backend'),
-    ...groups.filter((g) => g.category.id !== 'mini-coupang-backend'),
-  ]
-
   return (
     <nav aria-label="카테고리" className="flex flex-col gap-1">
-      {bookCount > 0 && (
-        <Link
-          href={booksUrl}
-          onClick={onLinkClick}
-          className="mb-1 flex items-center gap-3 rounded-md px-3 py-2 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-        >
-          <Library className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          <span className="flex-1 text-left">책</span>
-          <span className="tabular-nums text-[length:var(--text-meta)] opacity-60">
-            {bookCount}
-          </span>
-        </Link>
-      )}
-
-      {orderedGroups.map(({ category, posts: categoryPosts }) => {
+      {groups.map(({ category, posts: categoryPosts }) => {
         return (
           <details
             key={category.id}

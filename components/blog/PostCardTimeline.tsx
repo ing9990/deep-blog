@@ -4,7 +4,6 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { categoryStyle } from '@/lib/category-colors'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { EN_MONTHS } from '@/lib/utils'
 
@@ -24,7 +23,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
   const month = EN_MONTHS[d.getUTCMonth()]
 
   return (
-    <div className="group flex gap-0" style={categoryStyle(post.category)} data-cat-tinted="">
+    <div className="group flex gap-0">
       {/* Timeline column: node center is always at 42px from top */}
       <div className="relative flex w-[72px] shrink-0 flex-col items-center pt-[22px]">
         {/* Line from previous card → node */}
@@ -57,13 +56,10 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
       >
         {/* Category */}
         <div className="mb-2 flex items-center gap-2">
-          <span
-            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-chip)]"
-            style={{ backgroundColor: 'var(--cat-tint)' }}
-          >
-            <Icon className="h-[14px] w-[14px]" style={{ color: 'var(--cat-accent)' }} strokeWidth={2.2} aria-hidden />
+          <span className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-chip)] bg-muted">
+            <Icon className="h-[14px] w-[14px] text-muted-foreground" strokeWidth={2.2} aria-hidden />
           </span>
-          <span className="text-[length:var(--text-caption)] font-semibold" style={{ color: 'var(--cat-accent)' }}>
+          <span className="text-[length:var(--text-caption)] font-semibold text-muted-foreground">
             {meta.label[lang]}
           </span>
         </div>

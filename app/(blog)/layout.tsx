@@ -7,8 +7,6 @@ import { CopyToast } from '@/components/blog/CopyToast'
 import { SettingsFab } from '@/components/layout/SettingsFab'
 import { getAllPosts } from '@/lib/posts'
 import { toClientPost } from '@/lib/client-post'
-import { getAllBooks } from '@/lib/books'
-import { toClientBook } from '@/lib/client-book'
 import { getCrossHostUrls } from '@/lib/cross-host-url'
 import { CrossHostProvider } from '@/lib/cross-host-context'
 
@@ -18,12 +16,11 @@ export default async function BlogLayout({
   children: React.ReactNode
 }) {
   const clientPosts = getAllPosts().map(toClientPost)
-  const clientBooks = getAllBooks().map(toClientBook)
   const crossHostUrls = await getCrossHostUrls()
 
   return (
     <CrossHostProvider value={crossHostUrls}>
-      <MobileUIProvider posts={clientPosts} books={clientBooks}>
+      <MobileUIProvider posts={clientPosts}>
         <div className="flex min-h-screen flex-col">
           <Header />
           <main className="flex-1">{children}</main>

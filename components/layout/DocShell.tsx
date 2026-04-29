@@ -4,8 +4,6 @@ import { CategoryNav } from '@/components/blog/CategoryNav'
 import { DocShellRegister } from './DocShellRegister'
 import { getAllPosts } from '@/lib/posts'
 import { toClientPost } from '@/lib/client-post'
-import { getAllBooks } from '@/lib/books'
-import { toClientBook } from '@/lib/client-book'
 import type { FlatTocItem } from '@/lib/toc'
 
 interface DocShellProps {
@@ -26,7 +24,6 @@ export function DocShell({
   const hasToc = !!toc && toc.length > 0
 
   const posts = getAllPosts().map(toClientPost)
-  const books = getAllBooks().map(toClientBook)
 
   return (
     <>
@@ -45,7 +42,7 @@ export function DocShell({
           ) : showCategoryNav ? (
             <div className="hidden lg:block">
               <div className="scrollbar-clean sticky top-[var(--layout-sticky-offset)] max-h-[calc(100vh-var(--layout-sticky-offset))] overflow-y-auto py-16 pr-2">
-                <CategoryNav posts={posts} books={books} currentSlug={currentSlug} />
+                <CategoryNav posts={posts} currentSlug={currentSlug} />
               </div>
             </div>
           ) : (
