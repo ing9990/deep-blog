@@ -1,6 +1,0 @@
-flowchart TD
-    C["클라이언트"] --> MS["회원 서비스 :8081"]
-    MS --> Inv["HttpSession.invalidate()"]
-    Inv --> R[("Redis<br/>DEL spring:session:sessions:{id}")]
-    R --> Resp["204 No Content<br/>Set-Cookie: SESSION=; Max-Age=0"]
-    Resp --> C

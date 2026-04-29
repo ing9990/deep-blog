@@ -1,8 +1,0 @@
-flowchart TD
-    C["클라이언트<br/>Cookie: SESSION"] --> PS["상품 서비스 :8082"]
-    PS -- "회원 인증 요청 (Feign)<br/>GET /internal/auth/verify" --> MS["회원 서비스 :8081"]
-    MS -- "{ accountId, sellerId }" --> PS
-    PS --> Q["내 상품 페이지 조회<br/>productRepository.findBySellerIdOrderByCreatedAtDesc(sellerId, pageable)"]
-    Q --> DB[("MySQL: product.products")]
-    DB --> Resp["{ items, page, size, totalElements }"]
-    Resp --> C

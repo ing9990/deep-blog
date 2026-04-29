@@ -1,0 +1,20 @@
+flowchart TD
+    C["클라이언트"] --> MS["회원 서비스 :8081"]
+    MS --> Branch{가입 종류}
+
+    Branch -- "POST /auth/signup/member" --> VM["이메일 중복 확인<br/>MySQL: member.accounts"]
+    VM --> HM["BCrypt 해시"]
+    HM --> IM["Account + Member 동시 INSERT<br/>(write TX)"]
+    IM --> PM["도메인 이벤트 발행<br/>publishEvent(MemberSignedUp)"]
+    PM -. "AFTER_COMMIT" .-> KM[("Kafka<br/>member.signed-up")]
+
+    Branch -- "POST /auth/signup/seller" --> VS["이메일 중복 확인<br/>MySQL: member.accounts"]
+    VS --> HS["BCrypt 해시"]
+    HS --> IS["Account + Seller 동시 INSERT<br/>(write TX)"]
+    IS --> PS["도메인 이벤트 발행<br/>publishEvent(SellerSignedUp)"]
+    PS -. "AFTER_COMMIT" .-> KS[("Kafka<br/>seller.signed-up")]
+
+    KM --> NS["알림 서비스 :8085"]
+    KS --> NS
+    NS --> NL["알림 이력 INSERT<br/>MySQL: notification_log"]
+    NL --> ND["환영 알림 발송 (콘솔 로그)"]

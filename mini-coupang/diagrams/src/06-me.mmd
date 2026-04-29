@@ -1,6 +1,0 @@
-flowchart TD
-    C["클라이언트<br/>Cookie: SESSION"] --> MS["회원 서비스 :8081"]
-    MS --> R[("Redis<br/>spring:session:sessions:{id}<br/>→ accountId 복원")]
-    R --> DB[("MySQL: member 스키마<br/>Account + Member/Seller 조회")]
-    DB --> Resp["{ accountId, email, memberId, sellerId }"]
-    Resp --> C
