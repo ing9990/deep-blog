@@ -98,12 +98,9 @@ export default async function BookDetailPage({
                     <p className="text-[length:var(--text-body)] font-medium leading-[var(--leading-snug)] text-foreground transition-colors group-hover:text-primary">
                       {post.title.ko}
                     </p>
-                    <p className="mt-1 line-clamp-2 text-[length:var(--text-body-sm)] leading-[var(--leading-normal)] text-muted-foreground">
-                      {post.summary.ko}
-                    </p>
                   </div>
                   <ArrowUpRight
-                    className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                    className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
                     aria-hidden="true"
                   />
                 </Link>
