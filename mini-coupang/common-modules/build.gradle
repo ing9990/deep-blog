@@ -16,6 +16,16 @@ dependencies {
     api 'org.springframework:spring-web'
     api 'jakarta.validation:jakarta.validation-api'
     api 'com.fasterxml.jackson.core:jackson-annotations'
+    api 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Kafka producer (consumer 측은 spring-kafka 본체가 필요해서 각 서비스에서 추가)
+    api 'org.springframework.kafka:spring-kafka'
+
+    // SLF4J facade (KafkaProducer @Slf4j)
+    api 'org.slf4j:slf4j-api'
+
+    // TSID (BaseEvent 의 eventId 생성)
+    api 'com.github.f4b6a3:tsid-creator:5.2.6'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
