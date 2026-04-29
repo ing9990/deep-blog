@@ -24,13 +24,36 @@ export function CategoryNav({ posts, books, currentSlug, onLinkClick }: Category
 
   const bookCount = books?.length ?? 0
 
+  const activeCategoryId = currentSlug
+    ? (posts.find((p) => p.slug === currentSlug)?.category ?? null)
+    : null
+
+  const orderedGroups = [
+    ...groups.filter((g) => g.category.id === 'mini-coupang-backend'),
+    ...groups.filter((g) => g.category.id !== 'mini-coupang-backend'),
+  ]
+
   return (
     <nav aria-label="카테고리" className="flex flex-col gap-1">
-      {groups.map(({ category, posts: categoryPosts }) => {
+      {bookCount > 0 && (
+        <Link
+          href={booksUrl}
+          onClick={onLinkClick}
+          className="mb-1 flex items-center gap-3 rounded-md px-3 py-2 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <Library className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+          <span className="flex-1 text-left">책</span>
+          <span className="tabular-nums text-[length:var(--text-meta)] opacity-60">
+            {bookCount}
+          </span>
+        </Link>
+      )}
+
+      {orderedGroups.map(({ category, posts: categoryPosts }) => {
         return (
           <details
             key={category.id}
-            open
+            open={category.id === activeCategoryId}
             className="group/cat border-b border-border/60 pb-1 last:border-b-0"
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-[length:var(--text-nav-header)] font-semibold uppercase tracking-[var(--tracking-wide)] text-foreground transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
@@ -65,20 +88,6 @@ export function CategoryNav({ posts, books, currentSlug, onLinkClick }: Category
           </details>
         )
       })}
-
-      {bookCount > 0 && (
-        <Link
-          href={booksUrl}
-          onClick={onLinkClick}
-          className="mt-1 flex items-center gap-3 rounded-md px-3 py-2 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-        >
-          <Library className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          <span className="flex-1 text-left">책</span>
-          <span className="tabular-nums text-[length:var(--text-meta)] opacity-60">
-            {bookCount}
-          </span>
-        </Link>
-      )}
     </nav>
   )
 }

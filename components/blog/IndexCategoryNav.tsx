@@ -27,6 +27,15 @@ export function IndexCategoryNav({ allPosts, bookCount }: IndexCategoryNavProps)
 
   const groups = useMemo(() => groupPostsByCategory(allPosts, lang), [allPosts, lang])
 
+  const orderedCategories = useMemo(() => {
+    const priority: CategoryId[] = ['mini-coupang-backend']
+    const head = priority
+      .map((id) => CATEGORIES.find((c) => c.id === id))
+      .filter((c): c is (typeof CATEGORIES)[number] => Boolean(c))
+    const rest = CATEGORIES.filter((c) => !priority.includes(c.id))
+    return [...head, ...rest]
+  }, [])
+
   return (
     <nav aria-label={t('index.category.filter')} className="flex flex-col gap-1">
       <button
@@ -46,7 +55,20 @@ export function IndexCategoryNav({ allPosts, bookCount }: IndexCategoryNavProps)
         </span>
       </button>
 
-      {CATEGORIES.map((meta) => {
+      {bookCount > 0 && (
+        <Link
+          href={booksUrl}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <Library className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+          <span className="flex-1 text-left">책</span>
+          <span className="tabular-nums text-[length:var(--text-meta)] opacity-60">
+            {bookCount}
+          </span>
+        </Link>
+      )}
+
+      {orderedCategories.map((meta) => {
         const group = groups.find((g) => g.category.id === meta.id)
         const count = group?.posts.length ?? 0
         if (count === 0) return null
@@ -75,19 +97,6 @@ export function IndexCategoryNav({ allPosts, bookCount }: IndexCategoryNavProps)
           </button>
         )
       })}
-
-      {bookCount > 0 && (
-        <Link
-          href={booksUrl}
-          className="flex items-center gap-3 rounded-md px-3 py-2 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-        >
-          <Library className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-          <span className="flex-1 text-left">책</span>
-          <span className="tabular-nums text-[length:var(--text-meta)] opacity-60">
-            {bookCount}
-          </span>
-        </Link>
-      )}
     </nav>
   )
 }
