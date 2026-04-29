@@ -9,16 +9,16 @@
 
 ## 흐름
 
-```
-[Client (Cookie: SESSION)] -> [product-server :8082]
-                                 |
-                                 |--> [member-server] Feign GET /internal/auth/verify
-                                 |        <-- { accountId, sellerId }       (인증 검증)
-                                 |
-                                 |--> Seller 조회 (MySQL: product.sellers OR product 스키마의 seller_id 캐시 행)
-                                 |--> productRepository.findBySellerIdOrderByCreatedAtDesc(sellerId, pageable)
-                                 |
-                                 <-- { items, page, size, totalElements }
+```mermaid
+flowchart TD
+    C["Client<br/>Cookie: SESSION"] --> PS["product-server :8082"]
+    PS -- "Feign GET /internal/auth/verify" --> MS["member-server"]
+    MS -- "{ accountId, sellerId }" --> PS
+    PS --> SC["Seller 조회<br/>MySQL: product.sellers"]
+    SC --> Q["productRepository<br/>.findBySellerIdOrderByCreatedAtDesc(sellerId, pageable)"]
+    Q --> DB[("MySQL: product.products")]
+    DB --> Resp["{ items, page, size, totalElements }"]
+    Resp --> C
 ```
 
 ## 사용 컴포넌트

@@ -9,11 +9,12 @@
 
 ## 흐름
 
-```
-[Client] -> [product-server :8082]
-              |--> Category 전체 조회 (MySQL: product.categories)
-              |
-              <-- { categories: [...] }
+```mermaid
+flowchart LR
+    C["Client"] --> PS["product-server :8082"]
+    PS --> DB[("MySQL<br/>product.categories<br/>전체 조회")]
+    DB --> Resp["{ categories: [...] }"]
+    Resp --> C
 ```
 
 ## 사용 컴포넌트

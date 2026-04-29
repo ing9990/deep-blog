@@ -9,18 +9,17 @@
 
 ## 흐름
 
-```
-[Client] -> [member-server :8081]
-              |--> Account 중복 확인 (MySQL: member.accounts)
-              |--> 비밀번호 해시 (BCrypt)
-              |--> Account + Member INSERT (write TX)
-              |--> ApplicationEventPublisher.publishEvent(MemberSignedUp)
-              |
-              |  (트랜잭션 commit 후, AFTER_COMMIT)
-              |--> [Kafka] member.signed-up
-                              |--> [notification-server :8085]
-                                      |--> notification_log INSERT
-                                      |--> 알림 발송 (콘솔 로그)
+```mermaid
+flowchart TD
+    C["Client"] --> MS["member-server :8081"]
+    MS --> V["Account 중복 확인<br/>MySQL: member.accounts"]
+    V --> H["BCrypt 해시"]
+    H --> I["Account + Member INSERT<br/>(write TX)"]
+    I --> P["publishEvent(MemberSignedUp)"]
+    P -. "AFTER_COMMIT" .-> K[("Kafka<br/>member.signed-up")]
+    K --> NS["notification-server :8085"]
+    NS --> NL["notification_log INSERT"]
+    NL --> ND["알림 발송 (콘솔 로그)"]
 ```
 
 ## 사용 컴포넌트

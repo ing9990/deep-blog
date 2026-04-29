@@ -11,63 +11,42 @@
 
 이 usecase 가 시스템에서 가장 많은 컴포넌트를 거친다. 동기 (Feign) 와 비동기 (Kafka) 가 모두 등장하고 결제 실패 시 Saga 보상이 작동한다.
 
-```
-[Client (Cookie)] -> [order-server :8084] OrderController -> OrderFacade
-                        |
-                        |--- (1) 인증 검증
-                        |--> [member-server] Feign GET /internal/auth/verify
-                        |        <-- { accountId, memberId }
-                        |
-                        |--- (2) 도메인 조회 (read TX, JPA 엔티티는 트랜잭션 안에서만)
-                        |--> [order-server: order 스키마] OrderQueryService.loadOrderInputs
-                        |       (member ID, option price, product info → primitive/String 으로 운반)
-                        |
-                        |--- (3) Redis 재고 선점 (atomic, 트랜잭션 밖)
-                        |--> [product-server :8082] Feign POST /internal/stocks/{optionId}/reserve
-                        |        |--> [Redis] EVAL Lua reserveStock (stock:option:{optionId})
-                        |        <-- 200 OK | 409 INSUFFICIENT_AMOUNT | 404 STOCK_NOT_FOUND
-                        |
-                        |--- (4) 결제 청구 (외부 호출, ~10s)
-                        |--> [payment-server :8083] Feign POST /internal/payments/charge
-                        |        |--> sleep(simulatedLatencyMs) -> 성공/실패 응답
-                        |        <-- { paid, paymentId | reason }
-                        |
-                        |   ┌─── 성공 분기 ───────────────────────────────────────┐
-                        |   |
-                        |   |--- (5a) 주문 영속화 (write TX)
-                        |   |--> [order-server: order 스키마] OrderService.persistOrder
-                        |   |       |--> Order + OrderItem INSERT
-                        |   |       |--> ApplicationEventPublisher.publishEvent(OrderConfirmed)
-                        |   |
-                        |   |  (commit 후 AFTER_COMMIT)
-                        |   |--> [Kafka] order.confirmed
-                        |   |        |
-                        |   |        |--> [product-server] consumer
-                        |   |        |        |--> processed_events INSERT (멱등 키)
-                        |   |        |        \--> [MySQL: product.option_stock] DECREMENT
-                        |   |        |
-                        |   |        \--> [notification-server] consumer
-                        |   |                 \--> notification_log INSERT + 주문 알림
-                        |   |
-                        |   <-- 201 Created { orderId, totalAmount, item: {...} }
-                        |
-                        |   ┌─── 실패 분기 (Saga 보상) ─────────────────────────────┐
-                        |   |
-                        |   |--- (5b) Kafka 보상 publish (트랜잭션 없음)
-                        |   |--> [Kafka] order.payment-failed
-                        |   |        |
-                        |   |        |--> [product-server] consumer
-                        |   |        |        \--> [Redis] EVAL Lua releaseStock (재고 원복)
-                        |   |        |
-                        |   |        \--> [notification-server] consumer
-                        |   |                 \--> 결제 실패 알림
-                        |   |
-                        |   <-- 402 PAYMENT_FAILED
-                        |   └─────────────────────────────────────────────────────┘
-                        |
-              [payment-server] (성공 시 별도로)
-                  --> [Kafka] payment.completed
-                          \--> [notification-server] 결제 완료 알림 (선택)
+```mermaid
+flowchart TD
+    C["Client (Cookie)"] --> OC["order-server :8084<br/>OrderController → OrderFacade"]
+
+    OC -- "(1) Feign /internal/auth/verify" --> M["member-server"]
+    M -- "{ accountId, memberId }" --> OC
+
+    OC -- "(2) read TX" --> OQ["OrderQueryService.loadOrderInputs<br/>(option price, product info)"]
+    OQ --> OC
+
+    OC -- "(3) Feign /internal/stocks/{optionId}/reserve" --> P["product-server :8082"]
+    P --> RL[("Redis<br/>EVAL Lua reserveStock<br/>stock:option:{optionId}")]
+    RL --> P
+    P -- "200 / 409 INSUFFICIENT / 404 NOT_FOUND" --> OC
+
+    OC -- "(4) Feign /internal/payments/charge" --> Pay["payment-server :8083"]
+    Pay --> Sleep["sleep(simulatedLatencyMs)"]
+    Sleep -- "{ paid, paymentId | reason }" --> OC
+
+    OC --> Branch{결제 성공?}
+
+    Branch -- "성공" --> Persist["(5a) OrderService.persistOrder (write TX)<br/>Order + OrderItem INSERT<br/>publishEvent(OrderConfirmed)"]
+    Persist -. "AFTER_COMMIT" .-> KOC[("Kafka<br/>order.confirmed")]
+    KOC --> PCons["product-server consumer<br/>processed_events INSERT<br/>option_stock DECREMENT"]
+    KOC --> NCons["notification-server consumer<br/>notification_log + 주문 알림"]
+    Persist --> R201["201 Created<br/>{ orderId, totalAmount, item }"]
+    R201 --> C
+
+    Branch -- "실패 (Saga 보상)" --> KOF[("Kafka<br/>order.payment-failed")]
+    KOF --> PRel["product-server consumer<br/>EVAL Lua releaseStock (재고 원복)"]
+    KOF --> NFail["notification-server consumer<br/>결제 실패 알림"]
+    KOF --> R402["402 PAYMENT_FAILED"]
+    R402 --> C
+
+    Pay -. "성공 시 별도" .-> KPC[("Kafka<br/>payment.completed")]
+    KPC --> NPay["notification-server<br/>결제 완료 알림 (선택)"]
 ```
 
 ## 사용 컴포넌트

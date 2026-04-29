@@ -9,17 +9,16 @@
 
 ## 흐름
 
-```
-[Client] -> [member-server :8081]
-              |--> Account 조회 (MySQL: member.accounts)
-              |--> BCrypt.matches
-              |--> Seller 권한 확인 (member.sellers 행 존재)
-              |--> HttpSession 에 accountId 저장
-                       |
-                       v
-              [Redis] session:account:{accountId}
-                       |
-              <-- 응답: Set-Cookie
+```mermaid
+flowchart TD
+    C["Client"] --> MS["member-server :8081"]
+    MS --> A["Account 조회<br/>MySQL: member.accounts"]
+    A --> B["BCrypt.matches"]
+    B --> SP["Seller 권한 확인<br/>(member.sellers 행 존재)"]
+    SP --> S["HttpSession 에 accountId 저장"]
+    S --> R[("Redis<br/>session:account:{accountId}")]
+    R --> Resp["응답: Set-Cookie"]
+    Resp --> C
 ```
 
 ## 사용 컴포넌트

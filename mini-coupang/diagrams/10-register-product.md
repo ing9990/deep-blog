@@ -9,27 +9,30 @@
 
 ## 흐름
 
-```
-[Client (Cookie)] -> [product-server :8082]
-                        |
-                        |--> [member-server] Feign GET /internal/auth/verify
-                        |        <-- { accountId, sellerId }
-                        |
-                        |--> SellerProductService (write TX)
-                        |       |--> Product INSERT (MySQL: product.products)
-                        |       |--> ProductOption INSERT × N (product.product_options)
-                        |       |--> ProductImage INSERT × N (product.product_images)
-                        |       |--> OptionStock INSERT × N (product.option_stock, MySQL 원장)
-                        |       |--> ApplicationEventPublisher.publishEvent(ProductRegistered)
-                        |
-                        |  (트랜잭션 commit 후, AFTER_COMMIT)
-                        |--> ProductRegisteredListener
-                        |       |--> [Redis] SET stock:option:{optionId} = initialStock × N
-                        |       |--> [ml :50051] (gRPC) EmbedAndIndex(productId, name+description)
-                        |               |--> bge-m3 임베딩
-                        |               \--> [Qdrant] upsert (sparse + dense + payload)
-                        |
-                        <-- { productId }
+```mermaid
+flowchart TD
+    C["Client (Cookie)"] --> PS["product-server :8082"]
+    PS -- "Feign GET /internal/auth/verify" --> MS["member-server"]
+    MS -- "{ accountId, sellerId }" --> PS
+
+    subgraph TX ["SellerProductService (write TX)"]
+        P["Product INSERT<br/>product.products"]
+        OP["ProductOption INSERT × N<br/>product.product_options"]
+        IM["ProductImage INSERT × N<br/>product.product_images"]
+        ST["OptionStock INSERT × N<br/>product.option_stock"]
+        EV["publishEvent(ProductRegistered)"]
+        P --> OP --> IM --> ST --> EV
+    end
+    PS --> TX
+
+    TX -. "AFTER_COMMIT" .-> L["ProductRegisteredListener"]
+    L --> R[("Redis<br/>SET stock:option:{optionId} = initialStock × N")]
+    L -- "gRPC EmbedAndIndex(productId, name+description)" --> ML["ml :50051"]
+    ML --> EM["bge-m3 임베딩"]
+    EM --> QD[("Qdrant upsert<br/>sparse + dense + payload")]
+
+    PS --> Resp["{ productId }"]
+    Resp --> C
 ```
 
 ## 사용 컴포넌트

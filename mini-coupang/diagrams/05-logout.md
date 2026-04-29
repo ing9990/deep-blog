@@ -9,15 +9,13 @@
 
 ## 흐름
 
-```
-[Client] -> [member-server :8081]
-              |--> HttpSession.invalidate()
-                       |
-                       v
-              [Redis] DEL session:account:{accountId}
-                       |
-              <-- 204 No Content
-              <-- Set-Cookie: SESSION=; Max-Age=0
+```mermaid
+flowchart TD
+    C["Client"] --> MS["member-server :8081"]
+    MS --> Inv["HttpSession.invalidate()"]
+    Inv --> R[("Redis<br/>DEL session:account:{accountId}")]
+    R --> Resp["204 No Content<br/>Set-Cookie: SESSION=; Max-Age=0"]
+    Resp --> C
 ```
 
 ## 사용 컴포넌트
