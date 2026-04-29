@@ -4,7 +4,7 @@ import { ArrowRight, BookOpen, Mail, Sparkles } from 'lucide-react'
 import { BooksReadingPanel } from '@/components/landing/BooksReadingPanel'
 import { LandingPanels } from '@/components/landing/LandingPanels'
 import { SystemMap } from '@/components/landing/system-map/SystemMap'
-import { BLOG_URL } from '@/lib/cross-host-url'
+import { getCrossHostUrls } from '@/lib/cross-host-url'
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -36,7 +36,8 @@ const GITHUB_URL = 'https://github.com/ing9990/deep-blog'
 const LINKEDIN_URL = 'https://www.linkedin.com/in/ing9990'
 const EMAIL = 'gimgau0218@naver.com'
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const { blog: blogUrl } = await getCrossHostUrls()
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
       {/* Top nav */}
@@ -56,7 +57,7 @@ export default function LandingPage() {
             <span>GitHub</span>
           </Link>
           <Link
-            href={BLOG_URL}
+            href={blogUrl}
             className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-primary-foreground transition-opacity hover:opacity-90"
           >
             <BookOpen className="h-4 w-4" aria-hidden="true" />
@@ -84,7 +85,7 @@ export default function LandingPage() {
         </p>
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
           <Link
-            href={BLOG_URL}
+            href={blogUrl}
             className="group inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
           >
             <BookOpen className="h-4 w-4" aria-hidden="true" />

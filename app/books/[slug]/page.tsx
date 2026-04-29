@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { MDXContent } from '@/components/mdx/MDXContent'
 import { getAllBookSlugs, getBookBySlug, getPostsByBook } from '@/lib/books'
-import { BLOG_URL } from '@/lib/cross-host-url'
+import { getCrossHostUrls } from '@/lib/cross-host-url'
 
 export function generateStaticParams() {
   return getAllBookSlugs().map((slug) => ({ slug }))
@@ -21,6 +21,7 @@ export default async function BookDetailPage({
 
   const posts = getPostsByBook(slug)
   const hasBody = book.body && book.body.trim().length > 0
+  const { blog: blogUrl } = await getCrossHostUrls()
 
   return (
     <article className="py-8 md:py-12">
@@ -87,7 +88,7 @@ export default async function BookDetailPage({
             {posts.map((post, idx) => (
               <li key={post.slug}>
                 <Link
-                  href={`${BLOG_URL}/posts/${post.slug}`}
+                  href={`${blogUrl}/posts/${post.slug}`}
                   className="group flex items-start gap-4 rounded-xl border border-border bg-card px-5 py-4 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
                 >
                   <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[length:var(--text-meta)] font-semibold tabular-nums text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
