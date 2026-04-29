@@ -1,6 +1,6 @@
 package com.deepblog.product.event.consumer;
 
-import com.deepblog.common.event.EventEnvelope;
+import com.deepblog.common.event.EventMessage;
 import com.deepblog.common.event.EventTopic;
 import com.deepblog.common.util.JsonConverter;
 import com.deepblog.product.application.OrderEventProcessor;
@@ -43,16 +43,16 @@ public class OrderEventConsumer {
                         @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         long eventId = 0L;
         try {
-            EventEnvelope envelope = jsonConverter.fromJson(message, EventEnvelope.class);
-            eventId = envelope.eventId();
+            EventMessage eventMessage = jsonConverter.fromJson(message, EventMessage.class);
+            eventId = eventMessage.eventId();
 
             if (EventTopic.ORDER_CONFIRMED.getName().equals(topic)) {
                 OrderConfirmedPayload p = jsonConverter.treeToValue(
-                    envelope.payload(), OrderConfirmedPayload.class);
+                    eventMessage.payload(), OrderConfirmedPayload.class);
                 processor.processOrderConfirmed(eventId, p);
             } else if (EventTopic.ORDER_PAYMENT_FAILED.getName().equals(topic)) {
                 OrderPaymentFailedPayload p = jsonConverter.treeToValue(
-                    envelope.payload(), OrderPaymentFailedPayload.class);
+                    eventMessage.payload(), OrderPaymentFailedPayload.class);
                 processor.processPaymentFailed(eventId, p);
             } else {
                 log.warn("Unknown topic: {}", topic);

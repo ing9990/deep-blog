@@ -1,6 +1,6 @@
 package com.deepblog.notification.event.consumer;
 
-import com.deepblog.common.event.EventEnvelope;
+import com.deepblog.common.event.EventMessage;
 import com.deepblog.common.event.EventTopic;
 import com.deepblog.common.util.JsonConverter;
 import com.deepblog.notification.event.payload.MemberSignedUpPayload;
@@ -51,23 +51,23 @@ public class NotificationEventConsumer {
                         @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         long eventId = 0L;
         try {
-            EventEnvelope envelope = jsonConverter.fromJson(message, EventEnvelope.class);
-            eventId = envelope.eventId();
+            EventMessage eventMessage = jsonConverter.fromJson(message, EventMessage.class);
+            eventId = eventMessage.eventId();
 
             if (EventTopic.MEMBER_SIGNED_UP.getName().equals(topic)) {
-                MemberSignedUpPayload p = jsonConverter.treeToValue(envelope.payload(), MemberSignedUpPayload.class);
+                MemberSignedUpPayload p = jsonConverter.treeToValue(eventMessage.payload(), MemberSignedUpPayload.class);
                 processor.notifyMemberSignedUp(eventId, p);
             } else if (EventTopic.SELLER_SIGNED_UP.getName().equals(topic)) {
-                SellerSignedUpPayload p = jsonConverter.treeToValue(envelope.payload(), SellerSignedUpPayload.class);
+                SellerSignedUpPayload p = jsonConverter.treeToValue(eventMessage.payload(), SellerSignedUpPayload.class);
                 processor.notifySellerSignedUp(eventId, p);
             } else if (EventTopic.ORDER_CONFIRMED.getName().equals(topic)) {
-                OrderConfirmedPayload p = jsonConverter.treeToValue(envelope.payload(), OrderConfirmedPayload.class);
+                OrderConfirmedPayload p = jsonConverter.treeToValue(eventMessage.payload(), OrderConfirmedPayload.class);
                 processor.notifyOrderConfirmed(eventId, p);
             } else if (EventTopic.ORDER_PAYMENT_FAILED.getName().equals(topic)) {
-                OrderPaymentFailedPayload p = jsonConverter.treeToValue(envelope.payload(), OrderPaymentFailedPayload.class);
+                OrderPaymentFailedPayload p = jsonConverter.treeToValue(eventMessage.payload(), OrderPaymentFailedPayload.class);
                 processor.notifyOrderPaymentFailed(eventId, p);
             } else if (EventTopic.PAYMENT_COMPLETED.getName().equals(topic)) {
-                PaymentCompletedPayload p = jsonConverter.treeToValue(envelope.payload(), PaymentCompletedPayload.class);
+                PaymentCompletedPayload p = jsonConverter.treeToValue(eventMessage.payload(), PaymentCompletedPayload.class);
                 processor.notifyPaymentCompleted(eventId, p);
             } else {
                 log.warn("Unknown topic: {}", topic);

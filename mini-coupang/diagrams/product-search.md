@@ -16,14 +16,11 @@
 <details><summary>다이어그램 소스 (Mermaid)</summary>
 
 ```mermaid
-flowchart TD
-    C["클라이언트"] --> PS["상품 서비스 :8082"]
-    PS --> SS["키워드 검색<br/>productRepository.searchIdsByKeyword(q)"]
-    SS --> DB[("MySQL: product.products<br/>name/description LIKE '%q%'")]
-    DB --> H["productId 목록"]
-    H --> F["가격/카테고리 필터 합성<br/>페이지네이션 적용"]
-    F --> Resp["{ items: [...], totalElements }"]
-    Resp --> C
+flowchart LR
+    C["클라이언트"] -- "GET /api/products/search?q=&minPrice=&categoryId=&page=" --> PS["상품 서비스 :8082"]
+    PS -- "name/description LIKE '%q%' + 가격/카테고리 필터 + 페이지네이션" --> DB[("MySQL: product.products")]
+    DB --> PS
+    PS -- "{ items, totalElements }" --> C
 ```
 
 </details>

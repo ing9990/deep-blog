@@ -38,6 +38,8 @@ mini-coupang 이 제공하는 사용자 동작 목록. 굵직한 3개 (회원가
 
 키워드로 상품을 찾는다. MySQL `LIKE` 단일 채널로 productId 목록을 뽑은 뒤 가격/카테고리 필터와 페이지네이션을 합성한다. 자세한 흐름은 [product-search](diagrams/product-search.md).
 
+> **확장 예정**: Elasticsearch / OpenSearch 검색 채널 + Python ML 기반 추천 시스템 도입.
+
 ### UC-04 회원 로그인
 
 | 항목 | 내용 |
@@ -80,7 +82,7 @@ mini-coupang 이 제공하는 사용자 동작 목록. 굵직한 3개 (회원가
 | 입력 | (없음, 쿠키만) |
 | 출력 | `{ accountId, email, memberId, sellerId }` |
 
-세션 쿠키 → Redis 에서 `accountId` 복원 → `member` 스키마에서 Account + Member/Seller 정보를 반환. 회원/판매자 권한은 둘 다 `null` 일 수 있다 (계정만 있는 상태).
+세션 쿠키 → Session Store (Redis) 에서 `accountId` 복원 → `member` 스키마에서 Account + Member/Seller 를 같이 조회해 묶어서 반환한다. 같은 Account 가 회원·판매자 양쪽으로 가입된 경우엔 `memberId` 와 `sellerId` 둘 다 채워지고, 한쪽으로만 가입한 경우 가입하지 않은 쪽이 `null` 이 된다.
 
 ### UC-08 카테고리 목록
 

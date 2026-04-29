@@ -10,7 +10,7 @@
 
 ## 흐름
 
-회원과 판매자 가입은 같은 모양이다 (이메일/비밀번호 + 도메인 프로필). 가입이 성공하면 도메인 이벤트가 발행되고, AFTER_COMMIT 시점에 Kafka 토픽으로 흘러 알림 서비스가 받는다.
+가입 자체는 단일 write TX 안에서 끝난다. 핵심은 commit 직후의 이벤트 발행과 알림 서비스 컨슈머가 같은 토픽으로 받아 처리한다는 점.
 
 ![회원가입 flow](./img/signup.png)
 
@@ -21,22 +21,14 @@ flowchart TD
     C["클라이언트"] --> MS["회원 서비스 :8081"]
     MS --> Branch{가입 종류}
 
-    Branch -- "POST /auth/signup/member" --> VM["이메일 중복 확인<br/>MySQL: member.accounts"]
-    VM --> HM["BCrypt 해시"]
-    HM --> IM["Account + Member 동시 INSERT<br/>(write TX)"]
-    IM --> PM["도메인 이벤트 발행<br/>publishEvent(MemberSignedUp)"]
-    PM -. "AFTER_COMMIT" .-> KM[("Kafka<br/>member.signed-up")]
+    Branch -- "POST /auth/signup/member" --> SM["회원 가입 (write TX)<br/>publishEvent(MemberSignedUp)"]
+    SM -. "AFTER_COMMIT" .-> KM[("Kafka<br/>member.signed-up")]
 
-    Branch -- "POST /auth/signup/seller" --> VS["이메일 중복 확인<br/>MySQL: member.accounts"]
-    VS --> HS["BCrypt 해시"]
-    HS --> IS["Account + Seller 동시 INSERT<br/>(write TX)"]
-    IS --> PS["도메인 이벤트 발행<br/>publishEvent(SellerSignedUp)"]
-    PS -. "AFTER_COMMIT" .-> KS[("Kafka<br/>seller.signed-up")]
+    Branch -- "POST /auth/signup/seller" --> SS["판매자 가입 (write TX)<br/>publishEvent(SellerSignedUp)"]
+    SS -. "AFTER_COMMIT" .-> KS[("Kafka<br/>seller.signed-up")]
 
-    KM --> NS["알림 서비스 :8085"]
-    KS --> NS
-    NS --> NL["알림 이력 INSERT<br/>MySQL: notification_log"]
-    NL --> ND["환영 알림 발송 (콘솔 로그)"]
+    KM --> NC["알림 서비스 컨슈머 :8085<br/>알림 이력 INSERT + 환영 알림 발송"]
+    KS --> NC
 ```
 
 </details>
