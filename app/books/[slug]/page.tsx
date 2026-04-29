@@ -21,12 +21,12 @@ export default async function BookDetailPage({
 
   const posts = getPostsByBook(slug)
   const hasBody = book.body && book.body.trim().length > 0
-  const { blog: blogUrl } = await getCrossHostUrls()
+  const { blog: blogUrl, books: booksUrl } = await getCrossHostUrls()
 
   return (
     <article className="py-8 md:py-12">
       <Link
-        href="/"
+        href={booksUrl}
         className="mb-8 inline-flex items-center gap-1.5 text-[length:var(--text-meta)] text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -52,11 +52,8 @@ export default async function BookDetailPage({
           <p className="mt-2 text-[length:var(--text-body)] text-muted-foreground">
             {book.author}
           </p>
-          <p className="mt-4 text-[length:var(--text-meta)] tabular-nums text-muted-foreground">
-            읽은 시점 · {book.readDate}
-          </p>
           {book.summary.ko && (
-            <p className="mt-5 max-w-2xl text-[length:var(--text-body)] leading-[var(--leading-relaxed)]">
+            <p className="mt-4 max-w-2xl text-[length:var(--text-body)] leading-[var(--leading-relaxed)]">
               {book.summary.ko}
             </p>
           )}
@@ -89,21 +86,18 @@ export default async function BookDetailPage({
               <li key={post.slug}>
                 <Link
                   href={`${blogUrl}/posts/${post.slug}`}
-                  className="group flex items-start gap-4 rounded-xl border border-border bg-card px-5 py-4 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
+                  className="group flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
                 >
-                  <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[length:var(--text-meta)] font-semibold tabular-nums text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[length:var(--text-meta)] font-semibold tabular-nums text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                     {idx + 1}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[length:var(--text-body)] font-medium leading-[var(--leading-snug)] text-foreground transition-colors group-hover:text-primary">
                       {post.title.ko}
                     </p>
-                    <p className="mt-1 line-clamp-2 text-[length:var(--text-body-sm)] leading-[var(--leading-normal)] text-muted-foreground">
-                      {post.summary.ko}
-                    </p>
                   </div>
                   <ArrowUpRight
-                    className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
+                    className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary"
                     aria-hidden="true"
                   />
                 </Link>

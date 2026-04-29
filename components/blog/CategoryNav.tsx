@@ -1,8 +1,7 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Library } from 'lucide-react'
 import type { ClientPost } from '@/lib/client-post'
 import type { ClientBook } from '@/lib/client-book'
 import { groupPostsByCategory } from '@/lib/categories'
@@ -23,48 +22,38 @@ export function CategoryNav({ posts, books, currentSlug, onLinkClick }: Category
   if (!Array.isArray(posts) || posts.length === 0) return null
   const groups = groupPostsByCategory(posts, lang)
 
-  const shelfBooks = books ?? []
+  const bookCount = books?.length ?? 0
+
+  const activeCategoryId = currentSlug
+    ? (posts.find((p) => p.slug === currentSlug)?.category ?? null)
+    : null
+
+  const orderedGroups = [
+    ...groups.filter((g) => g.category.id === 'mini-coupang-backend'),
+    ...groups.filter((g) => g.category.id !== 'mini-coupang-backend'),
+  ]
 
   return (
     <nav aria-label="카테고리" className="flex flex-col gap-1">
-      {shelfBooks.length > 0 && (
-        <section aria-label="읽고 정리한 책" className="mb-4">
-          <ul className="flex gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {shelfBooks.map((book, i) => (
-              <li
-                key={book.slug}
-                className={cn(
-                  'shrink-0',
-                  i === 0 && 'ml-auto',
-                  i === shelfBooks.length - 1 && 'mr-auto',
-                )}
-              >
-                <Link
-                  href={`${booksUrl}/${book.slug}`}
-                  onClick={onLinkClick}
-                  aria-label={`${book.title[lang]} 표지`}
-                  className="group block"
-                >
-                  <div className="relative aspect-[2/3] w-[68px] overflow-hidden rounded-[var(--radius-chip)] border border-border bg-muted shadow-[var(--shadow-card)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[var(--shadow-card-hover)]">
-                    <Image
-                      src={book.cover}
-                      alt=""
-                      fill
-                      sizes="68px"
-                      className="object-cover"
-                    />
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {bookCount > 0 && (
+        <Link
+          href={booksUrl}
+          onClick={onLinkClick}
+          className="mb-1 flex items-center gap-3 rounded-md px-3 py-2 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <Library className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+          <span className="flex-1 text-left">책</span>
+          <span className="tabular-nums text-[length:var(--text-meta)] opacity-60">
+            {bookCount}
+          </span>
+        </Link>
       )}
-      {groups.map(({ category, posts: categoryPosts }) => {
+
+      {orderedGroups.map(({ category, posts: categoryPosts }) => {
         return (
           <details
             key={category.id}
-            open
+            open={category.id === activeCategoryId}
             className="group/cat border-b border-border/60 pb-1 last:border-b-0"
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-[length:var(--text-nav-header)] font-semibold uppercase tracking-[var(--tracking-wide)] text-foreground transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
