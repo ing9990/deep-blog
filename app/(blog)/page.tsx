@@ -1,5 +1,4 @@
 import { getAllPosts } from '@/lib/posts'
-import { getAllBooks } from '@/lib/books'
 import type { SortKey } from '@/lib/filters'
 import { CATEGORY_IDS, type CategoryId } from '@/lib/categories'
 import { BlogHomeClient } from '@/components/blog/BlogHomeClient'
@@ -14,7 +13,6 @@ export default async function IndexPage({
 }) {
   const { tag, cat, sort } = await searchParams
   const allPosts = getAllPosts()
-  const bookCount = getAllBooks().length
 
   const validSort: SortKey =
     sort === 'oldest' || sort === 'title' ? sort : 'latest'
@@ -30,7 +28,7 @@ export default async function IndexPage({
       initialTag={tag}
       initialSort={validSort}
     >
-      <DocShell leftSlot={<IndexCategoryNav allPosts={allPosts} bookCount={bookCount} />}>
+      <DocShell leftSlot={<IndexCategoryNav allPosts={allPosts} />}>
         <BlogHomeClient allPosts={allPosts} />
       </DocShell>
     </IndexFilterProvider>

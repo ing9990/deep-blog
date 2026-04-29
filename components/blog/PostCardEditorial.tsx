@@ -4,7 +4,6 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { categoryStyle } from '@/lib/category-colors'
 import { formatDate } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
@@ -17,22 +16,16 @@ export function PostCardEditorial({ post }: { post: Post }) {
     <Link
       href={`/posts/${post.slug}`}
       className="group relative block overflow-hidden rounded-xl border border-border bg-background px-6 py-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
-      style={categoryStyle(post.category)}
-      data-cat-tinted=""
     >
       {/* Left accent bar */}
       <span
-        className="absolute inset-y-0 left-0 w-[3.5px] rounded-l-xl opacity-50 transition-opacity group-hover:opacity-100"
-        style={{ backgroundColor: 'var(--cat-accent)' }}
+        className="absolute inset-y-0 left-0 w-[3.5px] rounded-l-xl bg-border opacity-60 transition-colors group-hover:bg-border-strong group-hover:opacity-100"
         aria-hidden
       />
 
       {/* Top row: category pill + date */}
       <div className="mb-2.5 flex items-center justify-between">
-        <span
-          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-[3px] text-[length:var(--text-caption)] font-semibold tracking-wide"
-          style={{ color: 'var(--cat-accent)', backgroundColor: 'var(--cat-tint)' }}
-        >
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-[3px] text-[length:var(--text-caption)] font-semibold tracking-wide text-muted-foreground">
           <Icon className="h-[13px] w-[13px]" strokeWidth={2.2} aria-hidden />
           {meta.label[lang]}
         </span>

@@ -4,7 +4,6 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { categoryStyle } from '@/lib/category-colors'
 import { formatDate } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
@@ -17,27 +16,20 @@ export function PostCardFloating({ post }: { post: Post }) {
     <Link
       href={`/posts/${post.slug}`}
       className="group grid grid-cols-[44px_1fr] items-start gap-4 rounded-[var(--radius-panel)] border border-border bg-background p-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
-      style={categoryStyle(post.category)}
-      data-cat-tinted=""
     >
       {/* Icon area */}
       <span
-        className="flex h-11 w-11 items-center justify-center rounded-xl transition-transform group-hover:scale-105"
-        style={{
-          backgroundColor: 'var(--cat-tint)',
-          border: '1px solid color-mix(in oklch, var(--cat-accent) 15%, transparent)',
-          boxShadow: 'none',
-        }}
+        className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-muted transition-transform group-hover:scale-105"
         aria-hidden
       >
-        <Icon className="h-5 w-5" style={{ color: 'var(--cat-accent)' }} strokeWidth={1.8} />
+        <Icon className="h-5 w-5 text-muted-foreground" strokeWidth={1.8} />
       </span>
 
       {/* Content */}
       <div className="min-w-0">
         {/* Top row */}
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-[length:var(--text-caption)] font-semibold" style={{ color: 'var(--cat-accent)' }}>
+          <span className="text-[length:var(--text-caption)] font-semibold text-muted-foreground">
             {meta.label[lang]}
           </span>
           <time className="text-[length:var(--text-meta)] tabular-nums text-muted-foreground" dateTime={post.date}>

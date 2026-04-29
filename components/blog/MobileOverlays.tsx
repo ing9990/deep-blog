@@ -44,7 +44,7 @@ function useDialogEffect(open: boolean, onClose: () => void) {
 }
 
 function NavDrawer() {
-  const { navOpen, closeNav, posts, books, currentSlug } = useMobileUI()
+  const { navOpen, closeNav, posts, currentSlug } = useMobileUI()
   const ref = useDialogEffect(navOpen, closeNav)
 
   return (
@@ -57,7 +57,7 @@ function NavDrawer() {
       className="fixed inset-y-0 left-0 m-0 h-[100dvh] w-[85%] max-w-80 border-0 bg-background p-0 text-foreground open:flex backdrop:bg-black/40 backdrop:backdrop-blur-sm"
     >
       <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto px-4 pb-6 pt-20 pl-[max(env(safe-area-inset-left),1rem)]">
-        <CategoryNav posts={posts} books={books} currentSlug={currentSlug} onLinkClick={closeNav} />
+        <CategoryNav posts={posts} currentSlug={currentSlug} onLinkClick={closeNav} />
       </div>
     </dialog>
   )

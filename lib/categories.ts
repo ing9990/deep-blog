@@ -1,13 +1,15 @@
 import type { Language } from '@/components/providers/SettingsProvider'
 
 export const CATEGORY_IDS = [
-  'computer-science',
-  'language-backend',
+  'books',
+  'mini-coupang',
+  'spring-boot',
   'database',
+  'redis',
+  'kafka',
   'infrastructure',
   'knowledge',
-  'mini-coupang-backend',
-  'etc',
+  'computer-science',
 ] as const
 
 export type CategoryId = (typeof CATEGORY_IDS)[number]
@@ -20,39 +22,49 @@ export interface CategoryMeta {
 
 export const CATEGORIES: readonly CategoryMeta[] = [
   {
-    id: 'computer-science',
-    label:       { en: 'Computer Science', ko: '컴퓨터 과학' },
-    description: { en: 'OS, algorithms, data structures', ko: 'OS, 알고리즘, 자료구조' },
+    id: 'books',
+    label:       { en: 'Books', ko: '책' },
+    description: { en: 'Notes from books at books.ing9990.com', ko: 'books.ing9990.com 책 정리' },
   },
   {
-    id: 'language-backend',
-    label:       { en: 'Language & Backend', ko: '언어 & 백엔드' },
-    description: { en: 'Languages, runtimes, backend frameworks and libraries (JVM, Kotlin, Spring Boot, JPA, QueryDSL, WebFlux)', ko: '언어, 런타임, 백엔드 프레임워크·라이브러리 (JVM, Kotlin, Spring Boot, JPA, QueryDSL, WebFlux)' },
+    id: 'mini-coupang',
+    label:       { en: 'Mini Coupang', ko: '미니 쿠팡' },
+    description: { en: 'Articles from the mini-coupang sandbox project', ko: '미니 쿠팡 샌드박스 프로젝트 아티클' },
+  },
+  {
+    id: 'spring-boot',
+    label:       { en: 'Spring Boot', ko: '스프링 부트' },
+    description: { en: 'Spring, Spring Boot, JPA and surrounding ecosystem', ko: 'Spring, Spring Boot, JPA 및 주변 생태계' },
   },
   {
     id: 'database',
-    label:       { en: 'Database', ko: '데이터베이스' },
-    description: { en: 'MySQL, PostgreSQL, indexes', ko: 'MySQL, PostgreSQL, 인덱스' },
+    label:       { en: 'Database', ko: '데이터 베이스' },
+    description: { en: 'InnoDB, indexes, full scan and DB internals', ko: 'InnoDB, 인덱스, 풀스캔 등 데이터베이스 전반' },
+  },
+  {
+    id: 'redis',
+    label:       { en: 'Redis', ko: 'Redis' },
+    description: { en: 'Redis fundamentals, clients, patterns', ko: 'Redis 기초, 클라이언트, 패턴' },
+  },
+  {
+    id: 'kafka',
+    label:       { en: 'Kafka', ko: 'Kafka' },
+    description: { en: 'Kafka fundamentals and operations', ko: 'Kafka 기초와 운영' },
   },
   {
     id: 'infrastructure',
     label:       { en: 'Infrastructure', ko: '인프라' },
-    description: { en: 'Middleware and infra products (Redis, Kafka, RabbitMQ)', ko: '미들웨어·인프라 제품 (Redis, Kafka, RabbitMQ)' },
+    description: { en: 'Middleware and infra products', ko: '미들웨어·인프라 제품' },
   },
   {
     id: 'knowledge',
     label:       { en: 'Knowledge', ko: '지식' },
-    description: { en: 'Terms, concepts, fundamentals', ko: '용어, 개념, 기초 지식' },
+    description: { en: 'Terms, concepts, fundamentals (Two Generals etc.)', ko: 'Two Generals 문제 등 용어·개념·기초 지식' },
   },
   {
-    id: 'mini-coupang-backend',
-    label:       { en: 'Mini Coupang Backend', ko: '미니쿠팡 백엔드' },
-    description: { en: 'Implementation-origin posts from the mini-coupang sandbox (design decisions with measurements)', ko: '미니쿠팡 샌드박스 구현에서 나온 설계 결정과 측정 기반 기록' },
-  },
-  {
-    id: 'etc',
-    label:       { en: 'ETC', ko: '그 외' },
-    description: { en: 'Other topics', ko: '그 외 주제' },
+    id: 'computer-science',
+    label:       { en: 'Computer Science', ko: '컴퓨터 과학' },
+    description: { en: 'OS, algorithms, data structures', ko: 'OS, 알고리즘, 자료구조' },
   },
 ]
 

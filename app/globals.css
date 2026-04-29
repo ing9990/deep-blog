@@ -1361,12 +1361,6 @@ html[data-code-theme="floating"]
   }
 }
 
-/* Category card tint — dark mode uses --cat-dark-tint */
-[data-theme="dark"] [data-cat-tinted] {
-  --cat-tint: var(--cat-dark-tint);
-}
-
-
 /* Clean scrollbar — sidebar overflow containers (DocShell aside columns).
    Hidden by default to match the TOC look; surfaces a subtle thumb on
    hover so the affordance stays discoverable when content overflows. */
