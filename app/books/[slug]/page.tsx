@@ -21,12 +21,12 @@ export default async function BookDetailPage({
 
   const posts = getPostsByBook(slug)
   const hasBody = book.body && book.body.trim().length > 0
-  const { blog: blogUrl } = await getCrossHostUrls()
+  const { blog: blogUrl, books: booksUrl } = await getCrossHostUrls()
 
   return (
     <article className="py-8 md:py-12">
       <Link
-        href="/"
+        href={booksUrl}
         className="mb-8 inline-flex items-center gap-1.5 text-[length:var(--text-meta)] text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -86,9 +86,9 @@ export default async function BookDetailPage({
               <li key={post.slug}>
                 <Link
                   href={`${blogUrl}/posts/${post.slug}`}
-                  className="group flex items-start gap-4 rounded-xl border border-border bg-card px-5 py-4 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
+                  className="group flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
                 >
-                  <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[length:var(--text-meta)] font-semibold tabular-nums text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[length:var(--text-meta)] font-semibold tabular-nums text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                     {idx + 1}
                   </span>
                   <div className="min-w-0 flex-1">

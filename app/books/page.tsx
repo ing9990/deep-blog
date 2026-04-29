@@ -1,8 +1,10 @@
 import { BookCover } from '@/components/books/BookCover'
 import { getAllBooks } from '@/lib/books'
+import { getCrossHostUrls } from '@/lib/cross-host-url'
 
-export default function BooksIndexPage() {
+export default async function BooksIndexPage() {
   const books = getAllBooks()
+  const { books: booksUrl } = await getCrossHostUrls()
 
   return (
     <section className="py-8 md:py-12">
@@ -26,7 +28,7 @@ export default function BooksIndexPage() {
         <ul className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {books.map((book) => (
             <li key={book.slug}>
-              <BookCover book={book} href={`/${book.slug}`} />
+              <BookCover book={book} href={`${booksUrl}/${book.slug}`} />
             </li>
           ))}
         </ul>
