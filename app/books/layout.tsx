@@ -2,6 +2,8 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { BookOpen, Sparkles } from 'lucide-react'
 import { getCrossHostUrls } from '@/lib/cross-host-url'
+import { ThemeToggle } from '@/components/blog/ThemeToggle'
+import { SettingsFab } from '@/components/layout/SettingsFab'
 
 export const metadata: Metadata = {
   title: 'DEEP · 책',
@@ -29,7 +31,7 @@ export default async function BooksLayout({ children }: { children: React.ReactN
           <span className="text-lg">DEEP</span>
           <span className="text-sm font-medium text-muted-foreground">/ 책</span>
         </Link>
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link
             href={apexUrl}
             className="rounded-md px-3 py-1.5 transition-colors hover:bg-accent hover:text-foreground"
@@ -43,9 +45,12 @@ export default async function BooksLayout({ children }: { children: React.ReactN
             <BookOpen className="h-4 w-4" aria-hidden="true" />
             <span>블로그</span>
           </Link>
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
+          <ThemeToggle />
         </div>
       </nav>
       <main className="mx-auto max-w-5xl px-6 pb-16">{children}</main>
+      <SettingsFab />
     </div>
   )
 }

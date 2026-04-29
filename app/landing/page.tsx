@@ -5,6 +5,7 @@ import { BooksReadingPanel } from '@/components/landing/BooksReadingPanel'
 import { LandingPanels } from '@/components/landing/LandingPanels'
 import { SystemMap } from '@/components/landing/system-map/SystemMap'
 import { getCrossHostUrls } from '@/lib/cross-host-url'
+import { ThemeToggle } from '@/components/blog/ThemeToggle'
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -46,7 +47,7 @@ export default async function LandingPage() {
           <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
           <span className="text-lg">DEEP</span>
         </Link>
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link
             href={GITHUB_URL}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors hover:bg-accent hover:text-foreground"
@@ -63,6 +64,8 @@ export default async function LandingPage() {
             <BookOpen className="h-4 w-4" aria-hidden="true" />
             <span>블로그</span>
           </Link>
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
+          <ThemeToggle />
         </div>
       </nav>
 

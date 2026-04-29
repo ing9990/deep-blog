@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { SettingsFab } from '@/components/layout/SettingsFab'
 
 export const metadata: Metadata = {
   title: 'DEEP · 이론과 실전 사이의 백엔드',
@@ -21,5 +22,10 @@ export default function LandingLayout({
 }: {
   children: React.ReactNode
 }) {
-  return children
+  return (
+    <>
+      {children}
+      <SettingsFab />
+    </>
+  )
 }
