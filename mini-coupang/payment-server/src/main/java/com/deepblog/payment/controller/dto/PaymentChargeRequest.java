@@ -1,4 +1,4 @@
-package com.deepblog.payment.charge;
+package com.deepblog.payment.controller.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
