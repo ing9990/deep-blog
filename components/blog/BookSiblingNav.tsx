@@ -1,14 +1,15 @@
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight, BookOpen } from 'lucide-react'
 import type { BookPosition } from '@/lib/books'
-import { BOOKS_URL } from '@/lib/cross-host-url'
+import { getCrossHostUrls } from '@/lib/cross-host-url'
 
 interface BookSiblingNavProps {
   position: BookPosition
 }
 
-export function BookSiblingNav({ position }: BookSiblingNavProps) {
+export async function BookSiblingNav({ position }: BookSiblingNavProps) {
   const { book, prev, next } = position
+  const { books: booksUrl } = await getCrossHostUrls()
 
   if (!prev && !next) return null
 
@@ -18,7 +19,7 @@ export function BookSiblingNav({ position }: BookSiblingNavProps) {
       className="mt-16 border-t border-border pt-8"
     >
       <Link
-        href={`${BOOKS_URL}/${book.slug}`}
+        href={`${booksUrl}/${book.slug}`}
         className="mb-5 inline-flex items-center gap-1.5 text-[length:var(--text-meta)] text-muted-foreground transition-colors hover:text-foreground"
       >
         <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />

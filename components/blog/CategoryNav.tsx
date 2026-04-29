@@ -8,7 +8,7 @@ import type { ClientBook } from '@/lib/client-book'
 import { groupPostsByCategory } from '@/lib/categories'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { BOOKS_URL } from '@/lib/cross-host-url'
+import { useCrossHostUrls } from '@/lib/cross-host-context'
 
 interface CategoryNavProps {
   posts: ClientPost[]
@@ -19,6 +19,7 @@ interface CategoryNavProps {
 
 export function CategoryNav({ posts, books, currentSlug, onLinkClick }: CategoryNavProps) {
   const { lang } = useTranslation()
+  const { books: booksUrl } = useCrossHostUrls()
   if (!Array.isArray(posts) || posts.length === 0) return null
   const groups = groupPostsByCategory(posts, lang)
 
@@ -39,7 +40,7 @@ export function CategoryNav({ posts, books, currentSlug, onLinkClick }: Category
                 )}
               >
                 <Link
-                  href={`${BOOKS_URL}/${book.slug}`}
+                  href={`${booksUrl}/${book.slug}`}
                   onClick={onLinkClick}
                   aria-label={`${book.title[lang]} 표지`}
                   className="group block"

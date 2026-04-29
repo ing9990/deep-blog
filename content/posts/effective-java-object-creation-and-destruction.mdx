@@ -1,0 +1,478 @@
+---
+title:
+  ko: "객체의 생성과 파괴"
+  en: "Object Creation and Destruction"
+slug: effective-java-object-creation-and-destruction
+date: 2026-04-29
+category: language-backend
+book: effective-java
+tags:
+  - backend
+  - java
+  - effective-java
+  - design-pattern
+keywords:
+  - 정적 팩토리 메서드
+  - Static Factory Method
+  - 빌더 패턴
+  - Builder Pattern
+  - try-with-resources
+summary:
+  ko: "이펙티브 자바 3판 2장 객체의 생성과 파괴에서 다섯 가지 아이템을 골라 정리합니다. 정적 팩토리, 빌더, private 생성자, 참조 해제, try-with-resources를 자바 예시 코드와 Before/After 비교로 살펴봅니다."
+  en: "A walk through five items from Effective Java 3E Chapter 2 — static factory methods, the Builder pattern, private constructors, reference nulling, and try-with-resources — with Java samples and before/after comparisons."
+draft: false
+---
+
+이펙티브 자바 3판 2장은 객체의 <E>생성</E>과 <E>파괴</E>를 다룬다. 객체를 어떻게 만들고, 다 쓴 객체를 어떻게 안전하게 정리할 것인지가 곧 자바 코드의 가독성과 안정성을 결정한다는 관점이다. 이 글에서는 그중 자주 인용되는 다섯 아이템을 자바 예시 코드와 Before/After 비교로 정리한다.
+
+<Note title="이 글에서 다루는 다섯 아이템">
+  - Item 1. 생성자 대신 정적 팩토리 메서드를 고려하라
+  - Item 2. 생성자에 매개변수가 많다면 빌더를 고려하라
+  - Item 4. 인스턴스화를 막으려거든 private 생성자를 사용하라
+  - Item 7. 다 쓴 객체 참조를 해제하라
+  - Item 9. try-finally보다는 try-with-resources를 사용하라
+</Note>
+
+## 정적 팩토리 메서드
+
+클래스는 클라이언트에 인스턴스를 제공할 때 가장 흔하게 <E>public 생성자</E>를 사용한다. 그러나 생성자 대신, 인스턴스를 반환하는 <E>정적 팩토리 메서드(static factory method)</E>를 둘 수 있다는 사실은 자주 잊힌다. 디자인 패턴의 팩토리 메서드(Factory Method)와 이름은 비슷하지만 GoF의 그것과는 다른 개념이다.
+
+대표적인 예시는 자바 표준 라이브러리에 이미 깊게 박혀 있다.
+
+```java title="StaticFactoryExamples.java"
+// boolean 박싱: 매번 새로 만들지 않는다
+Boolean trueBox = Boolean.valueOf(true);
+
+// List of: 불변 리스트를 명시적으로 만든다
+List<String> names = List.of("alice", "bob", "carol");
+
+// Optional empty/of: 의도가 이름에 드러난다
+Optional<String> empty = Optional.empty();
+Optional<String> some  = Optional.of("hello");
+```
+
+### 다섯 가지 장점
+
+- <E>이름을 가질 수 있다.</E> 생성자는 클래스 이름과 같아야 하지만, 정적 팩토리 메서드는 의도를 이름에 담을 수 있다. `BigInteger(int, int, Random)`보다 `BigInteger.probablePrime(int, Random)`이 훨씬 명확하다.
+- <E>호출될 때마다 새 인스턴스를 만들지 않아도 된다.</E> `Boolean.valueOf(boolean)`은 객체를 새로 만들지 않고 캐싱된 인스턴스를 돌려준다. 이는 플라이웨이트(Flyweight) 패턴과 비슷하게 작동한다.
+- <E>반환 타입의 하위 타입 객체를 반환할 수 있다.</E> 즉 인터페이스를 반환 타입으로 두고, 실제로는 그 구현체 중 하나를 골라 줄 수 있다. `Collections.unmodifiableList(...)`가 이 방식이다.
+- <E>입력 매개변수에 따라 매번 다른 클래스의 객체를 반환할 수 있다.</E> `EnumSet.of(...)`는 원소 수가 64개 이하이면 `RegularEnumSet`을, 그보다 많으면 `JumboEnumSet`을 반환한다. 클라이언트는 어느 구현체인지 알 필요가 없다.
+- <E>정적 팩토리 메서드를 작성하는 시점에 반환 객체의 클래스가 존재하지 않아도 된다.</E> 이것이 서비스 제공자 프레임워크(JDBC, ServiceLoader 등)의 기반이다.
+
+### 두 가지 단점
+
+- 상속을 하려면 public이나 protected 생성자가 필요하니, 정적 팩토리 메서드<E>만</E> 제공하면 하위 클래스를 만들 수 없다. 컬렉션 프레임워크의 유틸리티 구현 클래스들(`Collections.unmodifiableList` 결과 타입 등)을 상속할 수 없는 것은 이 때문이다. 다만 이 제약은 <E>상속보다 컴포지션을 권장</E>한다는 측면에서는 오히려 장점이 된다.
+- 프로그래머가 찾기 어렵다. 생성자처럼 Javadoc에서 자동 분리되어 표시되지 않으므로, 클래스나 메서드 설명을 잘 써 두어야 하고 <E>널리 알려진 명명 규약</E>을 따라야 한다.
+
+### 흔히 쓰이는 명명 관례
+
+| 이름 | 의미 | 예시 |
+|---|---|---|
+| `from` | 매개변수를 하나 받아 해당 타입의 인스턴스를 반환 (형변환) | `Date.from(instant)` |
+| `of` | 여러 매개변수를 받아 해당 타입의 인스턴스를 반환 | `Set.of(a, b, c)` |
+| `valueOf` | from과 of의 보다 자세한 버전 | `BigInteger.valueOf(Long.MAX_VALUE)` |
+| `instance` / `getInstance` | 매개변수가 같다면 매번 같은 인스턴스를 반환할 수도 있음 | `StackWalker.getInstance(options)` |
+| `create` / `newInstance` | 매번 새로운 인스턴스를 생성해 반환함을 보장 | `Array.newInstance(classObject, length)` |
+| `getType` | `getInstance`와 같으나 다른 클래스에 정의된 경우 | `Files.getFileStore(path)` |
+| `newType` | `newInstance`와 같으나 다른 클래스에 정의된 경우 | `Files.newBufferedReader(path)` |
+
+### Before / After
+
+같은 결제 수단 객체를 만드는 두 방식을 비교하면 의도 표현 차이가 분명히 드러난다.
+
+<Tabs group="static-factory-vs-ctor">
+  <Tab label="Before — 생성자">
+```java title="PaymentMethod.java"
+public class PaymentMethod {
+    private final Type type;
+    private final String number;
+
+    public PaymentMethod(Type type, String number) {
+        this.type = type;
+        this.number = number;
+    }
+
+    // 호출부
+    PaymentMethod card = new PaymentMethod(Type.CARD, "1234");
+    PaymentMethod cash = new PaymentMethod(Type.CASH, "");
+}
+```
+  </Tab>
+  <Tab label="After — 정적 팩토리">
+```java title="PaymentMethod.java"
+public class PaymentMethod {
+    private final Type type;
+    private final String number;
+
+    private PaymentMethod(Type type, String number) {
+        this.type = type;
+        this.number = number;
+    }
+
+    public static PaymentMethod card(String number) {
+        return new PaymentMethod(Type.CARD, number);
+    }
+
+    public static PaymentMethod cash() {
+        return new PaymentMethod(Type.CASH, "");
+    }
+
+    // 호출부
+    PaymentMethod card = PaymentMethod.card("1234");
+    PaymentMethod cash = PaymentMethod.cash();
+}
+```
+  </Tab>
+</Tabs>
+
+정리하면, 정적 팩토리 메서드와 public 생성자는 각자의 쓰임이 있다. 생성자가 그저 데이터를 채우는 역할이라면, 정적 팩토리는 <E>의도와 캐싱 전략, 반환 타입 선택의 자유</E>까지 표현할 수 있는 도구다. 두 방식의 상대적 장단점을 이해한 뒤, 정적 팩토리를 먼저 검토하고 그 다음 생성자를 쓰는 습관이 좋다.
+
+## 빌더 패턴
+
+생성자나 정적 팩토리 메서드는 매개변수가 늘어날수록 빠르게 한계에 부딪힌다. 음식의 영양 정보를 표현하는 `NutritionFacts` 같은 클래스를 떠올려 보자. 1회 제공량, 1회당 인분 수, 칼로리, 지방, 나트륨, 탄수화물 같은 필드가 있고, 그중 일부만 의미가 있다.
+
+전통적으로 두 가지 우회로가 있었다.
+
+### 점층적 생성자 패턴의 한계
+
+매개변수가 많아질수록 코드를 작성하기도, 읽기도 어렵다. 클라이언트는 자기 머릿속 순서대로 인자를 끼워 맞춰야 하고, 같은 타입(예: int) 두 개의 위치를 바꿔도 컴파일이 통과하기 때문에 <E>버그가 생기면 추적이 어렵다</E>.
+
+### 자바빈즈 패턴의 한계
+
+여러 setter를 호출해 객체를 채우면 가독성은 좋아지지만, <E>객체 하나를 만들기 위해 메서드를 여러 번 호출해야 하고</E>, 객체가 완전히 만들어지기 전까지 <E>일관성(consistency)이 깨진 상태</E>로 존재한다. 이 때문에 자바빈즈 패턴에서는 객체를 불변으로 만들 수 없고, 스레드 안전성을 얻으려면 추가 작업이 필요하다.
+
+### Before / After
+
+세 패턴을 같은 도메인으로 비교하면 다음과 같다.
+
+<Tabs group="builder-vs-alternatives">
+  <Tab label="점층적 생성자">
+```java title="NutritionFacts.java"
+public class NutritionFacts {
+    private final int servingSize;
+    private final int servings;
+    private final int calories;
+    private final int fat;
+    private final int sodium;
+    private final int carbohydrate;
+
+    public NutritionFacts(int servingSize, int servings) {
+        this(servingSize, servings, 0);
+    }
+    public NutritionFacts(int servingSize, int servings, int calories) {
+        this(servingSize, servings, calories, 0);
+    }
+    public NutritionFacts(int servingSize, int servings, int calories, int fat) {
+        this(servingSize, servings, calories, fat, 0);
+    }
+    public NutritionFacts(int servingSize, int servings,
+                          int calories, int fat, int sodium) {
+        this(servingSize, servings, calories, fat, sodium, 0);
+    }
+    public NutritionFacts(int servingSize, int servings,
+                          int calories, int fat, int sodium, int carbohydrate) {
+        this.servingSize  = servingSize;
+        this.servings     = servings;
+        this.calories     = calories;
+        this.fat          = fat;
+        this.sodium       = sodium;
+        this.carbohydrate = carbohydrate;
+    }
+}
+
+// 호출부 — 35라는 숫자가 무엇을 의미하는지 한눈에 보이지 않는다
+NutritionFacts cocaCola = new NutritionFacts(240, 8, 100, 0, 35, 27);
+```
+  </Tab>
+  <Tab label="자바빈즈">
+```java title="NutritionFacts.java"
+public class NutritionFacts {
+    private int servingSize  = -1; // 필수, 기본값 없음
+    private int servings     = -1; // 필수, 기본값 없음
+    private int calories     = 0;
+    private int fat          = 0;
+    private int sodium       = 0;
+    private int carbohydrate = 0;
+
+    public NutritionFacts() {}
+
+    public void setServingSize(int v)  { this.servingSize = v; }
+    public void setServings(int v)     { this.servings = v; }
+    public void setCalories(int v)     { this.calories = v; }
+    public void setFat(int v)          { this.fat = v; }
+    public void setSodium(int v)       { this.sodium = v; }
+    public void setCarbohydrate(int v) { this.carbohydrate = v; }
+}
+
+// 호출부 — 가독성은 좋아지지만, 일관성 깨진 상태가 잠시 존재한다
+NutritionFacts cocaCola = new NutritionFacts();
+cocaCola.setServingSize(240);
+cocaCola.setServings(8);
+cocaCola.setCalories(100);
+cocaCola.setSodium(35);
+cocaCola.setCarbohydrate(27);
+```
+  </Tab>
+  <Tab label="빌더">
+```java title="NutritionFacts.java"
+public class NutritionFacts {
+    private final int servingSize;
+    private final int servings;
+    private final int calories;
+    private final int fat;
+    private final int sodium;
+    private final int carbohydrate;
+
+    public static class Builder {
+        // 필수
+        private final int servingSize;
+        private final int servings;
+
+        // 선택, 기본값으로 초기화
+        private int calories     = 0;
+        private int fat          = 0;
+        private int sodium       = 0;
+        private int carbohydrate = 0;
+
+        public Builder(int servingSize, int servings) {
+            this.servingSize = servingSize;
+            this.servings    = servings;
+        }
+
+        public Builder calories(int v)     { this.calories = v;     return this; }
+        public Builder fat(int v)          { this.fat = v;          return this; }
+        public Builder sodium(int v)       { this.sodium = v;       return this; }
+        public Builder carbohydrate(int v) { this.carbohydrate = v; return this; }
+
+        public NutritionFacts build() {
+            return new NutritionFacts(this);
+        }
+    }
+
+    private NutritionFacts(Builder b) {
+        this.servingSize  = b.servingSize;
+        this.servings     = b.servings;
+        this.calories     = b.calories;
+        this.fat          = b.fat;
+        this.sodium       = b.sodium;
+        this.carbohydrate = b.carbohydrate;
+    }
+}
+
+// 호출부 — 각 인자의 의미가 이름으로 드러나고, 객체는 build() 시점에 한 번에 완성된다
+NutritionFacts cocaCola = new NutritionFacts.Builder(240, 8)
+        .calories(100)
+        .sodium(35)
+        .carbohydrate(27)
+        .build();
+```
+  </Tab>
+</Tabs>
+
+빌더의 본질은 단순한 가독성 향상이 아니다. <E>객체를 만들기 시작한 시점부터 완성된 시점까지 외부에 일관성 깨진 상태가 노출되지 않는다</E>는 점이 핵심이다. 또한 가변 인수 매개변수와 잘 어울려 유연성도 얻을 수 있다.
+
+<Callout type="info" title="기억할 한 줄">
+  매개변수가 4개 이상이면, 그리고 그중 다수가 선택적이라면, 빌더를 먼저 검토하라.
+</Callout>
+
+## private 생성자로 인스턴스화 막기
+
+가끔은 인스턴스를 만들 필요가 없는 클래스를 작성한다. <E>정적 메서드와 정적 필드만</E>을 담는 유틸리티 클래스가 그 예다. `java.lang.Math`, `java.util.Arrays`, `java.util.Collections`가 모두 이 형태다.
+
+이런 클래스에 생성자를 명시하지 않으면, 컴파일러가 자동으로 매개변수가 없는 <E>기본 생성자(default constructor)</E>를 만들어 준다. 사용자 입장에서는 이것이 의도된 것인지, 아니면 잊어버린 것인지 구분할 수 없다.
+
+해법은 단순하다. private 생성자를 명시적으로 추가해, <E>인스턴스화를 컴파일 단계에서 차단</E>한다.
+
+### Before / After
+
+<Tabs group="utility-class">
+  <Tab label="Before — 인스턴스화 가능 (의도치 않음)">
+```java title="StringUtils.java"
+public class StringUtils {
+    // 컴파일러가 자동 생성한 public 기본 생성자가 들어간다
+    public static boolean isEmpty(String s) {
+        return s == null || s.isEmpty();
+    }
+}
+
+// 의도치 않은 사용
+StringUtils utils = new StringUtils(); // 컴파일 통과
+```
+  </Tab>
+  <Tab label="After — private 생성자로 차단">
+```java title="StringUtils.java"
+public class StringUtils {
+    // 인스턴스화 방지
+    private StringUtils() {
+        throw new AssertionError("No StringUtils instances for you!");
+    }
+
+    public static boolean isEmpty(String s) {
+        return s == null || s.isEmpty();
+    }
+}
+
+// 시도 자체가 컴파일 에러
+// new StringUtils(); // 'StringUtils()' has private access
+```
+  </Tab>
+</Tabs>
+
+`AssertionError`를 던지는 이유는, 같은 클래스 내부에서 실수로 호출되거나 리플렉션으로 강제 호출되었을 때를 대비한 <E>이중 안전장치</E>다. 또한 이 패턴은 부작용으로 <E>상속도 함께 막는다</E>. 모든 생성자는 명시적이든 묵시적이든 상위 클래스 생성자를 호출해야 하는데, 상위의 유일한 생성자가 private이라면 자식은 호출할 길이 없기 때문이다. 유틸리티 클래스가 상속될 일이 없다는 점에서, 이는 부작용이 아니라 보너스다.
+
+## 다 쓴 객체 참조를 해제하라
+
+자바에는 가비지 컬렉터가 있으니 메모리 관리에서 자유로울 것 같지만, 사실은 그렇지 않다. <E>가비지 컬렉터는 도달 가능한 객체를 회수하지 않는다</E>. 어딘가에서 참조가 살아 있다면, 비록 그 객체가 두 번 다시 쓰이지 않을 예정이라도 GC는 회수하지 않는다. 이렇게 의도와 달리 살아남은 객체가 <E>메모리 누수(memory leak)</E>다.
+
+대표적인 사례가 직접 메모리를 관리하는 자료구조다. 책에서 인용된 `Stack` 구현은 다음과 같다.
+
+### Before / After
+
+<Tabs group="memory-leak-stack">
+  <Tab label="Before — 메모리 누수">
+```java title="Stack.java"
+public class Stack {
+    private Object[] elements;
+    private int size = 0;
+    private static final int DEFAULT_INITIAL_CAPACITY = 16;
+
+    public Stack() {
+        elements = new Object[DEFAULT_INITIAL_CAPACITY];
+    }
+
+    public void push(Object e) {
+        ensureCapacity();
+        elements[size++] = e;
+    }
+
+    public Object pop() {
+        if (size == 0) throw new EmptyStackException();
+        return elements[--size]; // 참조는 그대로 남는다
+    }
+
+    private void ensureCapacity() {
+        if (elements.length == size)
+            elements = Arrays.copyOf(elements, 2 * size + 1);
+    }
+}
+```
+  </Tab>
+  <Tab label="After — 참조 해제">
+```java title="Stack.java"
+public Object pop() {
+    if (size == 0) throw new EmptyStackException();
+    Object result = elements[--size];
+    elements[size] = null; // 다 쓴 참조 해제
+    return result;
+}
+```
+  </Tab>
+</Tabs>
+
+`pop()`이 끝난 뒤에도 `elements[size]` 위치에는 여전히 객체 참조가 남아 있다. 클라이언트는 이 객체를 더 이상 사용할 의도가 없지만, 배열은 그것을 모르고 계속 붙들고 있다. 그 결과 GC는 이 객체를 회수하지 못하고, 객체가 참조하는 또 다른 객체들까지 줄줄이 살아남는다.
+
+다만 모든 객체 참조를 일일이 null로 만들 필요는 없다. <E>메모리 직접 관리, 캐시, 콜백 리스너</E> 세 영역만 주의하면 충분하다.
+
+<Note title="자주 의심해볼 누수 자리">
+  - 자기 메모리를 직접 관리하는 자료구조 (`Stack`, 풀, 링버퍼 등)에서 슬롯이 비활성 영역에 들어갈 때
+  - 강한 참조로 보관하는 캐시. `WeakHashMap`이나 `LinkedHashMap`의 LRU 정책을 검토할 것
+  - 콜백을 등록만 하고 해제하지 않는 리스너. 약한 참조(`WeakReference`)로 관리하면 GC가 회수해 준다
+</Note>
+
+대부분의 변수는 그것을 담은 메서드가 끝나는 순간 스코프에서 빠져나가며 GC 후보가 된다. <E>변수의 범위(scope)를 최소화</E>하는 일반 원칙을 지키면 명시적 null화는 필요하지 않다.
+
+## try-with-resources
+
+자바 라이브러리에는 `close` 메서드를 호출해 직접 닫아 줘야 하는 자원이 적지 않다. `InputStream`, `OutputStream`, `Connection`, `Statement`, `ResultSet`, `Reader`, `Writer` 등이 모두 그렇다. 자원 닫기는 클라이언트가 잊기 쉽고, 잊으면 성능 저하나 자원 고갈로 이어진다.
+
+전통적으로는 `try-finally`로 처리해 왔지만, 자원이 둘 이상이면 코드가 빠르게 지저분해진다. 게다가 try 블록과 finally 블록 양쪽에서 예외가 발생하면 <E>finally 쪽 예외가 try 쪽 예외를 덮어써</E>, 디버깅에 필요한 진짜 원인이 사라지는 문제도 있다.
+
+자바 7부터 도입된 <E>try-with-resources</E>는 이 두 문제를 한 번에 해결한다. 자원이 `AutoCloseable` 인터페이스를 구현하기만 하면 사용할 수 있는데, 자바 표준 라이브러리와 서드파티의 자원 클래스 대부분이 이미 구현해 두었다.
+
+### Before / After
+
+```java title="TopLine.java"
+// 1개 자원 — try-finally는 그래도 봐줄 만하다
+static String firstLineOfFile(String path) throws IOException {
+    BufferedReader br = new BufferedReader(new FileReader(path));
+    try {
+        return br.readLine();
+    } finally {
+        br.close();
+    }
+}
+```
+
+자원이 둘로 늘어나면 본격적으로 무너지기 시작한다.
+
+<Tabs group="try-finally-vs-twr">
+  <Tab label="Before — try-finally (자원 2개)">
+```java title="Copy.java"
+static void copy(String src, String dst) throws IOException {
+    InputStream in = new FileInputStream(src);
+    try {
+        OutputStream out = new FileOutputStream(dst);
+        try {
+            byte[] buf = new byte[BUFFER_SIZE];
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                out.write(buf, 0, n);
+            }
+        } finally {
+            out.close();
+        }
+    } finally {
+        in.close();
+    }
+}
+```
+  </Tab>
+  <Tab label="After — try-with-resources">
+```java title="Copy.java"
+static void copy(String src, String dst) throws IOException {
+    try (InputStream in = new FileInputStream(src);
+         OutputStream out = new FileOutputStream(dst)) {
+        byte[] buf = new byte[BUFFER_SIZE];
+        int n;
+        while ((n = in.read(buf)) >= 0) {
+            out.write(buf, 0, n);
+        }
+    }
+}
+```
+  </Tab>
+</Tabs>
+
+코드가 짧아지는 것은 부수 효과다. 더 중요한 건 <E>예외가 잡아먹히지 않는다</E>는 점이다. try 블록과 close 양쪽에서 예외가 발생하면, try 블록의 예외가 주 예외로 던져지고 close 측 예외는 <E>suppressed exception</E>으로 함께 보존된다 (`Throwable.getSuppressed()`로 조회 가능). 디버거를 켜고 진짜 원인을 찾아야 했던 시절이 끝난다.
+
+`catch` 절도 함께 쓸 수 있어, 자원을 닫는 책임은 맡기면서 예외 처리 흐름은 평소처럼 작성할 수 있다.
+
+```java title="FirstLineOrDefault.java"
+static String firstLineOrDefault(String path, String defaults) {
+    try (BufferedReader br = new BufferedReader(new FileReader(path))) {
+        return br.readLine();
+    } catch (IOException e) {
+        return defaults;
+    }
+}
+```
+
+## 정리
+
+다섯 아이템을 한 줄씩 다시 적어 두면 다음과 같다.
+
+- <E>Item 1.</E> 정적 팩토리 메서드는 이름·캐싱·반환 타입의 자유를 준다. 생성자보다 먼저 검토할 가치가 있다.
+- <E>Item 2.</E> 매개변수가 많고 그중 다수가 선택적이라면 빌더로 일관성 깨짐 없는 객체 생성을 한다.
+- <E>Item 4.</E> 인스턴스화가 의미 없는 유틸리티 클래스는 private 생성자로 차단해 의도를 코드에 박아 둔다.
+- <E>Item 7.</E> GC는 도달 가능한 객체를 회수하지 않는다. 직접 관리하는 자료구조·캐시·리스너에서는 다 쓴 참조를 직접 끊어 준다.
+- <E>Item 9.</E> `close`가 필요한 자원은 try-with-resources로. 코드가 짧아지는 것은 덤이고, 본질은 예외가 가려지지 않는다는 데 있다.
+
+객체의 생성과 파괴는 자바 코드의 첫 줄과 마지막 줄을 정의한다. 다섯 아이템의 공통점은 분명하다. <E>의도를 코드에 직접 박아 두라</E>는 것이다. 이름으로, 빌더로, private 생성자로, 명시적 null화로, 그리고 try-with-resources로.
+
+## 참고 자료
+
+- 조슈아 블로크, 『이펙티브 자바 3판』, 인사이트, 2판→3판, 2장 객체 생성과 파괴 (Item 1, 2, 4, 7, 9).
+- Oracle Java Tutorials, [The try-with-resources Statement](https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html).
+- Oracle Java Documentation, [`AutoCloseable`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html).
+- Oracle Java Documentation, [`EnumSet.of`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/EnumSet.html#of(E)) — 매개변수에 따라 다른 구현체를 반환하는 정적 팩토리의 표준 예시.
+- 디자인 패턴: GoF, 『Design Patterns: Elements of Reusable Object-Oriented Software』, Builder · Factory Method.

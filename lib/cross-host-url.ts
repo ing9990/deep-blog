@@ -1,26 +1,69 @@
 /**
- * Cross-host URL constants for navigating between the three deployed hosts
- * (apex landing, blog, books). In production these point at the canonical
- * domains; in dev they fall back to *.localhost so that local navigation
- * stays inside the running dev server.
+ * Cross-host URL resolution for navigating between the three deployed surfaces
+ * (apex landing, blog, books).
  *
- * Use these for **navigation links rendered in the UI**. SEO-related URLs
- * (canonical, og:url, sitemap) must keep the production domain — those are
- * intentionally hardcoded in metadata blocks and should NOT use this helper.
+ * Resolution depends on the current request host:
+ *   - Production canonical hosts (ing9990.com / deep.ing9990.com / books.ing9990.com /
+ *     www.ing9990.com): route to canonical https domains.
+ *   - `localhost` or `*.localhost` dev: use subdomain-based routing
+ *     (matches middleware.ts behavior).
+ *   - Anything else (LAN IP like 192.168.x.x:3010, custom domain, ngrok host, etc):
+ *     stay on the current host. Middleware falls through there, so all surfaces
+ *     coexist via filesystem path prefixes (/landing, /books).
+ *
+ * Use {@link getCrossHostUrls} from server components / route handlers.
+ * Use {@link resolveCrossHostUrls} when you already have a host string.
+ *
+ * Note: SEO-related URLs (canonical, og:url, sitemap) intentionally use the
+ * production domain regardless of the request and stay hardcoded in metadata
+ * blocks. Do NOT use this helper for those.
  */
 
-const isDev = process.env.NODE_ENV !== 'production'
+import { headers } from 'next/headers'
 
-const DEV_PORT = 3010
+const APEX_HOST = 'ing9990.com'
+const BLOG_HOST = 'deep.ing9990.com'
+const BOOKS_HOST = 'books.ing9990.com'
+const WWW_HOST = `www.${APEX_HOST}`
 
-export const APEX_URL = isDev
-  ? `http://localhost:${DEV_PORT}/landing`
-  : 'https://ing9990.com'
+const PROD_HOSTS = new Set([APEX_HOST, BLOG_HOST, BOOKS_HOST, WWW_HOST])
 
-export const BLOG_URL = isDev
-  ? `http://blog.localhost:${DEV_PORT}`
-  : 'https://deep.ing9990.com'
+export interface CrossHostUrls {
+  apex: string
+  blog: string
+  books: string
+}
 
-export const BOOKS_URL = isDev
-  ? `http://books.localhost:${DEV_PORT}`
-  : 'https://books.ing9990.com'
+const PROD_URLS: CrossHostUrls = {
+  apex: `https://${APEX_HOST}`,
+  blog: `https://${BLOG_HOST}`,
+  books: `https://${BOOKS_HOST}`,
+}
+
+export function resolveCrossHostUrls(rawHost: string | null | undefined): CrossHostUrls {
+  if (!rawHost) return PROD_URLS
+
+  const [hostname, port] = rawHost.split(':')
+  const portSuffix = port ? `:${port}` : ''
+
+  if (PROD_HOSTS.has(hostname)) return PROD_URLS
+
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    return {
+      apex: `http://localhost${portSuffix}/landing`,
+      blog: `http://blog.localhost${portSuffix}`,
+      books: `http://books.localhost${portSuffix}`,
+    }
+  }
+
+  return {
+    apex: `http://${rawHost}/landing`,
+    blog: `http://${rawHost}`,
+    books: `http://${rawHost}/books`,
+  }
+}
+
+export async function getCrossHostUrls(): Promise<CrossHostUrls> {
+  const h = await headers()
+  return resolveCrossHostUrls(h.get('host'))
+}

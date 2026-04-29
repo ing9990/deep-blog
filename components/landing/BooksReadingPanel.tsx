@@ -2,12 +2,13 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { BookCover } from '@/components/books/BookCover'
 import { getAllBooks } from '@/lib/books'
-import { BOOKS_URL } from '@/lib/cross-host-url'
+import { getCrossHostUrls } from '@/lib/cross-host-url'
 
 const PREVIEW_COUNT = 6
 
-export function BooksReadingPanel() {
+export async function BooksReadingPanel() {
   const books = getAllBooks().slice(0, PREVIEW_COUNT)
+  const { books: booksUrl } = await getCrossHostUrls()
 
   if (books.length === 0) return null
 
@@ -19,7 +20,7 @@ export function BooksReadingPanel() {
             Reading log · books
           </div>
           <Link
-            href={BOOKS_URL}
+            href={booksUrl}
             className="group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-[length:var(--text-sm)] text-muted-foreground transition-colors hover:border-border-strong hover:bg-accent hover:text-foreground"
           >
             <span>전체 보기</span>
@@ -40,7 +41,7 @@ export function BooksReadingPanel() {
             >
               <BookCover
                 book={book}
-                href={`${BOOKS_URL}/${book.slug}`}
+                href={`${booksUrl}/${book.slug}`}
                 sizes="(min-width: 768px) 140px, (min-width: 640px) 130px, 120px"
               />
             </li>
