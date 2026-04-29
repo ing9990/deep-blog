@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.deepblog.minicoupang.domain.member.domain.Member;
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

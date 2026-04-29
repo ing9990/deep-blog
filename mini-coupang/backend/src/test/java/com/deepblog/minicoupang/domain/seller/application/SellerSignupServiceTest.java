@@ -3,8 +3,8 @@ package com.deepblog.minicoupang.domain.seller.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

@@ -1,4 +1,4 @@
-package com.deepblog.minicoupang.global.exception;
+package com.deepblog.common.exception;
 
 import org.springframework.http.HttpStatus;
 
@@ -14,6 +14,8 @@ public enum ErrorCode {
     INVALID_ORDER(HttpStatus.BAD_REQUEST, "주문 정보가 올바르지 않습니다."),
     INVALID_MEMBER(HttpStatus.BAD_REQUEST, "회원 정보가 올바르지 않습니다."),
     INVALID_STOCK(HttpStatus.BAD_REQUEST, "재고 정보가 올바르지 않습니다."),
+    PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
+    PRODUCT_NOT_AVAILABLE(HttpStatus.CONFLICT, "구매 불가 상품입니다."),
     OPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "옵션을 찾을 수 없습니다."),
     STOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "재고 정보를 찾을 수 없습니다."),
     INSUFFICIENT_AMOUNT(HttpStatus.CONFLICT, "재고가 부족합니다."),

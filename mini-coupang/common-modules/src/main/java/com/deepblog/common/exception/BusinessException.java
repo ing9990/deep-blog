@@ -1,4 +1,4 @@
-package com.deepblog.minicoupang.global.exception;
+package com.deepblog.common.exception;
 
 public class BusinessException extends RuntimeException {
 

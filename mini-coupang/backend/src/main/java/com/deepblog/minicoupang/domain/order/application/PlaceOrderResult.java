@@ -2,8 +2,8 @@ package com.deepblog.minicoupang.domain.order.application;
 
 import com.deepblog.minicoupang.domain.order.domain.Order;
 import com.deepblog.minicoupang.domain.order.domain.OrderItem;
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 
 public record PlaceOrderResult(
     Long orderId,
