@@ -1,7 +1,8 @@
 package com.deepblog.order.global.auth;
 
-import com.deepblog.common.exception.BusinessException;
-import com.deepblog.common.exception.ErrorCode;
+import com.deepblog.order.application.port.out.AuthVerifyPort;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
@@ -12,9 +13,15 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 /**
  * {@code @LoginRequired AuthContext auth} 파라미터에 회원/판매자 식별자 묶음을 주입한다.
  * 회원 전용 엔드포인트는 사용 측에서 {@code auth.memberId() == null} 검증.
+ *
+ * <p>{@link AuthVerifyPort} 를 {@link ObjectProvider} 로 받는 이유는
+ * {@link LoginAccountIdArgumentResolver} 와 동일.
  */
 @Component
+@RequiredArgsConstructor
 public class LoginAuthContextArgumentResolver implements HandlerMethodArgumentResolver {
+
+    private final ObjectProvider<AuthVerifyPort> authVerifyPortProvider;
 
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
@@ -29,7 +36,6 @@ public class LoginAuthContextArgumentResolver implements HandlerMethodArgumentRe
         NativeWebRequest webRequest,
         WebDataBinderFactory binderFactory
     ) {
-        return AuthContextHolder.get()
-            .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED));
+        return AuthLookup.require(webRequest, authVerifyPortProvider.getObject());
     }
 }
