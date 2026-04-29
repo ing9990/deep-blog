@@ -186,20 +186,22 @@ public class StockReserveFeignAdapter implements StockReservePort {
 
 ### 9.1 토픽
 
-`com.deepblog.common.event.EventTopic` enum 으로 중앙 관리. **토픽 1개에 여러 eventType 을 담는다** (도메인 단위로 토픽 분할).
+`com.deepblog.common.event.EventTopic` enum 으로 중앙 관리. **이벤트 1개 = 토픽 1개** (`<domain>.<event-past-tense>` 패턴, kebab-case). 한 토픽에 여러 eventType 을 섞지 않는다 (consumer 가 자기가 필요한 토픽만 구독). 상세 카탈로그는 별도 문서 `Kafka-Topics.md` 가 SSOT.
 
 ```java
 public enum EventTopic {
-    MEMBER("member"),
-    ORDER("order"),
-    PAYMENT("payment");
+    MEMBER_SIGNED_UP("member.signed-up"),
+    SELLER_SIGNED_UP("seller.signed-up"),
+    ORDER_CONFIRMED("order.confirmed"),
+    ORDER_PAYMENT_FAILED("order.payment-failed"),
+    PAYMENT_COMPLETED("payment.completed");
 
     private final String name;
     // ...
 }
 ```
 
-토픽 추가는 enum 갱신 + 본 문서의 §9.7 토픽 매트릭스 갱신.
+토픽 추가는 `Kafka-Topics.md` 갱신 + enum 추가 + 본 문서 §9.7 갱신 순서.
 
 ### 9.2 메시지 봉투
 
@@ -321,7 +323,7 @@ public class OrderConfirmedEventHandler {
     public void handle(OrderConfirmedEvent event) {
         String key = String.valueOf(event.getPayload().orderId());
         kafkaProducer.sendMessage(
-            EventTopic.ORDER.getName(),
+            EventTopic.ORDER_CONFIRMED.getName(),
             key,
             jsonConverter.toJson(event),
             () -> log.error("publish failed. orderId={}", event.getPayload().orderId())
@@ -350,23 +352,26 @@ public class OrderEventConsumer {
         topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
         exclude = { IllegalArgumentException.class }
     )
-    @KafkaListener(topics = "#{T(com.deepblog.common.event.EventTopic).ORDER.getName()}")
-    public void consume(String message) {
+    @KafkaListener(topics = {
+        "#{T(com.deepblog.common.event.EventTopic).ORDER_CONFIRMED.getName()}",
+        "#{T(com.deepblog.common.event.EventTopic).ORDER_PAYMENT_FAILED.getName()}"
+    })
+    public void consume(String message,
+                        @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         long eventId = 0L;
         try {
             EventEnvelope envelope = jsonConverter.fromJson(message, EventEnvelope.class);
             eventId = envelope.eventId();
 
-            switch (envelope.eventType()) {
-                case "ORDER_CONFIRMED" -> {
-                    OrderConfirmedPayload p = jsonConverter.treeToValue(envelope.payload(), OrderConfirmedPayload.class);
-                    orderEventProcessor.processOrderConfirmed(eventId, p.optionId(), p.quantity());
-                }
-                case "ORDER_PAYMENT_FAILED" -> {
-                    OrderPaymentFailedPayload p = jsonConverter.treeToValue(envelope.payload(), OrderPaymentFailedPayload.class);
-                    orderEventProcessor.processPaymentFailed(eventId, p.optionId(), p.quantity());
-                }
-                default -> log.warn("Unknown order event type: {}", envelope.eventType());
+            // 이벤트 1개 = 토픽 1개 이므로 라우팅은 topic 으로 한다 (eventType 은 self-describing 보조).
+            if (EventTopic.ORDER_CONFIRMED.getName().equals(topic)) {
+                OrderConfirmedPayload p = jsonConverter.treeToValue(envelope.payload(), OrderConfirmedPayload.class);
+                orderEventProcessor.processOrderConfirmed(eventId, p.optionId(), p.quantity());
+            } else if (EventTopic.ORDER_PAYMENT_FAILED.getName().equals(topic)) {
+                OrderPaymentFailedPayload p = jsonConverter.treeToValue(envelope.payload(), OrderPaymentFailedPayload.class);
+                orderEventProcessor.processPaymentFailed(eventId, p.optionId(), p.quantity());
+            } else {
+                log.warn("Unknown topic: {}", topic);
             }
         } catch (DataIntegrityViolationException e) {
             log.info("Duplicate event skipped. eventId={}", eventId);
@@ -385,6 +390,7 @@ public class OrderEventConsumer {
 규칙:
 - `@RetryableTopic` 으로 자동 retry topic 생성 (`<topic>-retry-0`, `<topic>-retry-1`, ...). DLT 는 `<topic>-dlt`.
 - `exclude` 에 비즈니스 예외 (e.g. `IllegalArgumentException`) 를 두면 retry 없이 DLT 로 직행.
+- 이벤트 1개 = 토픽 1개 이므로 consumer 가 여러 토픽을 같은 listener 메서드로 묶을 때만 `@Header(KafkaHeaders.RECEIVED_TOPIC)` 으로 라우팅. 단일 토픽 listener 라면 분기 자체가 없다.
 - consumer-group-id 는 서비스명 그대로 (e.g. `product-server`). 같은 서비스의 인스턴스는 같은 group.
 - payload record 는 consumer 자기 모듈 (`event/payload/`) 에 다시 정의. publisher 모듈 record 를 import 하지 않는다.
 
@@ -427,17 +433,17 @@ public void processOrderConfirmed(long eventId, long optionId, long quantity) {
 }
 ```
 
-### 9.7 토픽 매트릭스 (mini-coupang 현재)
+### 9.7 토픽 매트릭스 (요약)
 
-| Topic | EventType | Producer | Consumer | 용도 |
-|---|---|---|---|---|
-| `member` | `MEMBER_SIGNED_UP` | member-server | notification-server | 회원 가입 알림 |
-| `member` | `SELLER_SIGNED_UP` | member-server | notification-server | 판매자 가입 알림 |
-| `order` | `ORDER_CONFIRMED` | order-server | product-server, notification-server | MySQL 재고 영구 차감 + 주문 알림 |
-| `order` | `ORDER_PAYMENT_FAILED` | order-server | product-server, notification-server | Redis 재고 복구 (Saga) + 결제 실패 알림 |
-| `payment` | `PAYMENT_COMPLETED` | payment-server | notification-server | 결제 완료 알림 |
+| Topic | Producer | Consumer | 용도 |
+|---|---|---|---|
+| `member.signed-up` | member-server | notification-server | 회원 가입 알림 |
+| `seller.signed-up` | member-server | notification-server | 판매자 가입 알림 |
+| `order.confirmed` | order-server | product-server, notification-server | MySQL 재고 영구 차감 + 주문 알림 |
+| `order.payment-failed` | order-server | product-server, notification-server | Redis 재고 복구 (Saga) + 결제 실패 알림 |
+| `payment.completed` | payment-server | notification-server | 결제 완료 알림 |
 
-토픽/타입 추가 시 이 표를 갱신한다 (Single Source Of Truth).
+토픽 카탈로그의 단일 출처는 `Kafka-Topics.md`. 페이로드/Phase/세부 사항은 거기서 본다. 본 표는 코드 작성 중 빠른 참조용 요약.
 
 ### 9.8 도입 보류 (sandbox 정책)
 
