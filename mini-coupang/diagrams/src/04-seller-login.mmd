@@ -1,9 +1,9 @@
 flowchart TD
-    C["Client"] --> MS["member-server :8081"]
-    MS --> A["Account 조회<br/>MySQL: member.accounts"]
+    C["클라이언트"] --> MS["회원 서비스 :8081"]
+    MS --> A["계정 조회<br/>MySQL: member.accounts"]
     A --> B["BCrypt.matches"]
-    B --> SP["Seller 권한 확인<br/>(member.sellers 행 존재)"]
+    B --> SP["판매자 권한 확인<br/>MySQL: member.sellers"]
     SP --> S["HttpSession 에 accountId 저장"]
-    S --> R[("Redis<br/>session:account:{accountId}")]
-    R --> Resp["응답: Set-Cookie"]
+    S --> R[("Redis<br/>spring:session:sessions:{id}")]
+    R --> Resp["응답: Set-Cookie SESSION=..."]
     Resp --> C
