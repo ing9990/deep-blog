@@ -1,0 +1,387 @@
+---
+title:
+  ko: "제네릭"
+  en: "Generics"
+slug: effective-java-generics
+date: 2026-04-30
+category: books
+book: effective-java
+tags:
+  - 이펙티브 자바
+keywords:
+  - 제네릭
+  - Generics
+  - Raw Type
+  - 매개변수화 타입
+  - Parameterized Type
+  - 한정적 와일드카드
+  - Bounded Wildcard
+  - PECS
+  - 타입 소거
+  - Type Erasure
+  - 공변
+  - Covariant
+  - 불공변
+  - Invariant
+summary:
+  ko: "이펙티브 자바 3판 5장 제네릭에서 핵심 3가지 아이템을 한 글로 정리합니다. Raw 타입을 피해야 하는 이유, 배열과 리스트의 근본적 차이, 그리고 한정적 와일드카드 PECS 원칙까지 자바 예시 코드와 Before/After 비교로 따라갑니다."
+  en: "Three core items from Effective Java 3E Chapter 5 Generics (eliminating raw types, choosing lists over arrays, and using bounded wildcards via PECS for API flexibility), illustrated with Java samples and Before/After comparisons."
+draft: false
+---
+
+이펙티브 자바 3판 5장은 <E>제네릭(Generics)</E>을 다룬다. 자바 5에서 제네릭이 들어온 이유는 단순하다. 컬렉션에서 원소를 꺼낼 때마다 손으로 형변환하던 시절을 끝내고, 잘못된 타입이 들어가는 사고를 <E>컴파일 시점에</E> 잡아내기 위해서다. 이 글에서는 5장에서 가장 자주 인용되는 3가지 아이템을 자바 예시 코드와 Before/After 비교로 정리한다.
+
+<Note title="이 글에서 다루는 3가지 아이템">
+  - Item 26. Raw 타입은 사용하지 말라
+  - Item 28. 배열보다는 리스트를 사용하라
+  - Item 31. 한정적 와일드카드를 사용해 API의 유연성을 높여라
+</Note>
+
+이 글의 코드 예시는 4장과 같은 주문 도메인을 공유한다. 식별자 `OrderId`, 값 객체 `Money`, 라인 아이템 `LineItem`. 그리고 제네릭 자체를 보여주기 위해 `Stack<E>` 같은 컬렉션 예시가 추가로 등장한다.
+
+## Raw 타입은 쓰지 않는다
+
+클래스나 인터페이스 선언에 타입 매개변수가 등장하면 그 타입을 <E>제네릭 타입(generic type)</E>이라고 부른다. `List` 인터페이스는 원소 타입을 나타내는 타입 매개변수 `E`를 받아 `List<E>`로 선언되어 있다. 사용하는 쪽은 매개변수 자리에 실제 타입을 채워 `List<String>`처럼 쓰는데, 이렇게 채워진 형태를 <E>매개변수화 타입(parameterized type)</E>이라고 부른다.
+
+문제는 매개변수를 채우지 않은 형태도 여전히 사용 가능하다는 것이다. `List` 그 자체. 이걸 <E>Raw 타입(raw type)</E>이라고 부르며, 자바 5 이전 코드와의 호환을 위해 남겨둔 형태다.
+
+Raw 타입을 쓰면 컴파일러가 타입 검사를 포기한다. `List<Integer>`로 선언했다면 String을 넣는 시점에 컴파일 에러로 잡히는 반면, `List`는 무엇이든 받는다. 사고는 한참 뒤에 원소를 꺼낼 때 `ClassCastException`으로 폭발한다.
+
+<Tabs group="raw-vs-parameterized">
+  <Tab label="Before: Raw 타입">
+```java title="OrderTotalCalculator.java"
+public class OrderTotalCalculator {
+
+    // Raw 타입: 컴파일러는 원소 타입을 알지 못한다
+    public Money sum(List items) {
+        long total = 0L;
+        for (Object item : items) {
+            // 매번 손으로 형변환
+            LineItem line = (LineItem) item;
+            total += line.price().amount();
+        }
+        return Money.of(total, Currency.getInstance("KRW"));
+    }
+}
+
+// 사용
+List items = new ArrayList();
+items.add(new LineItem(productId, 1, Money.of(1000, krw)));
+items.add("문자열도 들어간다");          // 컴파일 통과
+
+calculator.sum(items);                   // 런타임 ClassCastException
+```
+  </Tab>
+  <Tab label="After: 매개변수화 타입">
+```java title="OrderTotalCalculator.java"
+public class OrderTotalCalculator {
+
+    public Money sum(List<LineItem> items) {
+        long total = 0L;
+        for (LineItem line : items) {     // 형변환 불필요
+            total += line.price().amount();
+        }
+        return Money.of(total, Currency.getInstance("KRW"));
+    }
+}
+
+// 사용
+List<LineItem> items = new ArrayList<>();
+items.add(new LineItem(productId, 1, Money.of(1000, krw)));
+items.add("문자열도 들어간다");           // 컴파일 에러 (잡힘)
+```
+  </Tab>
+</Tabs>
+
+After 쪽 매개변수화 타입은 두 가지 일을 동시에 한다.
+
+- <E>잘못된 타입의 원소를 컴파일러가 차단</E>한다.
+- 컬렉션에서 꺼내는 모든 지점에 <E>보이지 않는 형변환</E>을 컴파일러가 자동으로 삽입한다.
+
+두 번째에서 삽입되는 형변환은 컴파일러가 타입을 검증한 뒤이므로 절대 실패하지 않는다.
+
+### List와 List&lt;Object&gt;는 다르다
+
+흔히 헷갈리는 지점이 있다. `List<Object>`도 결국 모든 타입을 담을 수 있으니 Raw `List`와 같은 것 아닌가? 결과만 보면 비슷해 보이지만 컴파일러가 보는 정보가 다르다.
+
+- `List`는 <E>제네릭 시스템에서 빠지겠다는 의사 표시</E>다. 컴파일러는 타입 검사를 포기한다.
+- `List<Object>`는 <E>모든 타입을 받겠다고 명시적으로 선언</E>한 것이다. 컴파일러는 여전히 타입을 추적하며, `List<String>`을 `List<Object>` 자리에 넘기는 것은 <E>막는다</E> (불공변, 다음 절 참조).
+
+```java title="UnsafeAdd.java"
+// Raw 타입: 컴파일러가 경고만 띄우고 통과시킴
+List rawList = new ArrayList<String>();
+rawList.add(42);                          // 경고 후 통과 → 런타임에 사고
+
+// List<Object>: 타입이 다르면 컴파일 에러로 차단
+List<String> strings = new ArrayList<>();
+List<Object> objects = strings;           // 컴파일 에러
+```
+
+Raw 타입이 살아남은 단 한 가지 이유는 자바 5 이전 코드와의 <E>이진 호환성</E>이다. 새로 짜는 코드에서는 사용할 일이 없다.
+
+<Callout type="info" title="기억할 한 줄">
+  Raw 타입은 자바 5 이전과의 호환을 위해 남겨둔 유물이다. 새 코드에서는 항상 매개변수화 타입을 쓴다.
+</Callout>
+
+## 배열보다 리스트
+
+배열과 제네릭은 표면적으로 비슷한 일을 하는 것 같지만, 두 가지 근본 차이가 있다. 이 차이 때문에 둘은 서로 잘 어울리지 않으며, 같이 쓰려고 하면 거의 항상 어색한 코드가 나온다.
+
+### 공변과 불공변
+
+<E>공변(covariant)</E>이란 하위 타입 관계가 컨테이너로 그대로 전이되는 성질을 말한다. `Sub`가 `Super`의 하위 타입이면 `Sub[]`도 `Super[]`의 하위 타입이다. 자바 배열은 공변이다.
+
+반면 제네릭은 <E>불공변(invariant)</E>이다. `Sub`가 `Super`의 하위 타입이라도 `List<Sub>`와 `List<Super>` 사이에는 아무 관계도 없다. 서로 다른 타입이다.
+
+이 차이가 만드는 결과는 사고가 잡히는 시점이 달라지는 것이다.
+
+<Tabs group="covariance">
+  <Tab label="배열: 공변 → 런타임에 폭발">
+```java title="ArrayCovariance.java"
+// Long은 Object의 하위 타입이므로 Long[]은 Object[]의 하위 타입
+Object[] array = new Long[1];
+array[0] = "문자열";                       // 컴파일 통과
+// 런타임: ArrayStoreException
+```
+  </Tab>
+  <Tab label="리스트: 불공변 → 컴파일에서 차단">
+```java title="ListInvariance.java"
+// List<Long>은 List<Object>의 하위 타입이 아니다
+List<Object> list = new ArrayList<Long>();  // 컴파일 에러
+list.add("문자열");
+```
+  </Tab>
+</Tabs>
+
+배열의 공변은 런타임에 `ArrayStoreException`으로 사고가 터진다. 리스트의 불공변은 같은 의도의 코드를 <E>컴파일 단계에서</E> 차단한다. 사고는 빨리 잡힐수록 좋다.
+
+### 실체화와 타입 소거
+
+배열은 <E>실체화(reified)</E> 타입이다. 런타임에도 자기가 담기로 한 원소 타입을 기억하고 있다. `Long[]`에 `String`을 넣으려 하면 JVM이 직접 막는다.
+
+제네릭은 그 반대다. 컴파일 시점에만 타입을 검사하고, 컴파일이 끝나면 타입 정보를 <E>지운다(erasure)</E>. 런타임의 `List<String>`은 그냥 `List`다. 이 설계 덕분에 자바 5 이전의 컬렉션 라이브러리가 그대로 살아남을 수 있었지만, 동시에 `new T[size]` 같은 코드가 <E>컴파일 에러</E>가 되는 원인이기도 하다. 런타임에 `T`가 무엇인지 알 수 없기 때문이다.
+
+```java title="GenericArrayCreation.java"
+// 컴파일 에러: generic array creation
+List<String>[] arrays = new List<String>[10];
+
+// 우회하려고 Object[]에 캐스팅하면 unchecked 경고
+@SuppressWarnings("unchecked")
+List<String>[] arrays2 = (List<String>[]) new List[10];
+```
+
+이 모든 어색함의 결론은 단순하다. 제네릭과 배열을 섞지 말 것. 컬렉션이 필요하면 배열 대신 `List`를 쓴다.
+
+<Tabs group="chooser-array-vs-list">
+  <Tab label="Before: 배열 + 형변환">
+```java title="OrderItemPicker.java"
+// 사용자가 가진 LineItem 중 무작위 1개를 고르는 도구
+public class OrderItemPicker {
+    private final Object[] items;        // 무엇이든 넣을 수 있는 배열
+    private final Random random = new Random();
+
+    public OrderItemPicker(Collection<?> source) {
+        this.items = source.toArray();
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T choose() {
+        return (T) items[random.nextInt(items.length)];   // 호출자가 타입을 책임
+    }
+}
+
+// 사용. 호출 시점까지 잘못된 타입이 잡히지 않음
+OrderItemPicker picker = new OrderItemPicker(List.of("a", "b"));
+LineItem item = picker.choose();         // 런타임 ClassCastException
+```
+  </Tab>
+  <Tab label="After: 제네릭 리스트">
+```java title="OrderItemPicker.java"
+public class OrderItemPicker<T> {
+    private final List<T> items;
+    private final Random random = new Random();
+
+    public OrderItemPicker(Collection<? extends T> source) {
+        this.items = List.copyOf(source);
+    }
+
+    public T choose() {
+        return items.get(random.nextInt(items.size()));   // 형변환 불필요
+    }
+}
+
+// 사용. 잘못된 타입은 생성 시점에 차단
+OrderItemPicker<LineItem> picker = new OrderItemPicker<>(order.lines());
+LineItem item = picker.choose();         // 안전
+```
+  </Tab>
+</Tabs>
+
+After 쪽은 형변환이 한 번도 없다. 컴파일러가 모든 지점에서 타입 검사를 마쳤으므로 `unchecked` 경고도 없다. 사고가 날 자리도 없다.
+
+<Callout type="info" title="기억할 한 줄">
+  배열은 공변·실체화. 제네릭은 불공변·소거. 둘은 잘 어울리지 않는다. 컬렉션이 필요하면 `List`를 쓴다.
+</Callout>
+
+## 한정적 와일드카드와 PECS
+
+제네릭이 불공변이라는 사실은 안전하지만 동시에 불편하다. 같은 의미의 코드인데 컴파일러가 막는 경우가 자주 생긴다. 예를 들어 `Stack<Number>`에 `Iterable<Integer>`의 모든 원소를 밀어 넣고 싶다면, `Number`가 `Integer`의 상위 타입이라는 사실은 사람에게는 자명하지만 제네릭은 그 관계를 인정하지 않는다.
+
+이 자리를 풀어주는 도구가 <E>한정적 와일드카드(bounded wildcard)</E>다. 형태는 두 가지.
+
+| 형태 | 의미 |
+|---|---|
+| `<? extends E>` | `E` 또는 `E`의 하위 타입을 받는다 (생산자) |
+| `<? super E>` | `E` 또는 `E`의 상위 타입을 받는다 (소비자) |
+
+이펙티브 자바의 `Stack<E>` 예시를 주문 도메인으로 옮겨 보자. `pushAll`은 외부에서 원소를 받아 자기 안으로 <E>생산</E>해 받는다. `popAll`은 자기 안의 원소를 외부로 <E>소비</E>되도록 보낸다.
+
+<Tabs group="pecs-stack">
+  <Tab label="Before: 와일드카드 없이">
+```java title="OrderStack.java"
+public class OrderStack<E> {
+    private final Deque<E> store = new ArrayDeque<>();
+
+    public void pushAll(Iterable<E> src) {
+        for (E e : src) {
+            store.push(e);
+        }
+    }
+
+    public void popAll(Collection<E> dst) {
+        while (!store.isEmpty()) {
+            dst.add(store.pop());
+        }
+    }
+}
+
+// 사용
+OrderStack<Number> stack = new OrderStack<>();
+Iterable<Integer> integers = List.of(1, 2, 3);
+stack.pushAll(integers);                  // 컴파일 에러: Iterable<Integer> ≠ Iterable<Number>
+
+Collection<Object> objects = new ArrayList<>();
+stack.popAll(objects);                    // 컴파일 에러: Collection<Object> ≠ Collection<Number>
+```
+  </Tab>
+  <Tab label="After: PECS 적용">
+```java title="OrderStack.java"
+public class OrderStack<E> {
+    private final Deque<E> store = new ArrayDeque<>();
+
+    // 외부 → 내부로 원소를 생산받음 → extends
+    public void pushAll(Iterable<? extends E> src) {
+        for (E e : src) {
+            store.push(e);
+        }
+    }
+
+    // 내부 → 외부로 원소를 소비함 → super
+    public void popAll(Collection<? super E> dst) {
+        while (!store.isEmpty()) {
+            dst.add(store.pop());
+        }
+    }
+}
+
+// 사용. 모두 컴파일 통과
+OrderStack<Number> stack = new OrderStack<>();
+Iterable<Integer> integers = List.of(1, 2, 3);
+stack.pushAll(integers);                  // Integer extends Number
+
+Collection<Object> objects = new ArrayList<>();
+stack.popAll(objects);                    // Object super Number
+```
+  </Tab>
+</Tabs>
+
+After 쪽은 두 메서드의 시그니처에 한정적 와일드카드를 끼워 넣은 것뿐이지만, 호출자 입장에서 자연스럽게 받아들여지는 모든 호출이 컴파일을 통과한다.
+
+이 패턴을 외우는 약어가 <E>PECS</E>다.
+
+<Callout type="info" title="PECS: Producer extends, Consumer super">
+  매개변수가 원소를 <E>생산(produce)</E>하면 `<? extends T>`. 매개변수가 원소를 <E>소비(consume)</E>하면 `<? super T>`. 양쪽 다이면 와일드카드를 쓰지 않는다.
+</Callout>
+
+### 반환 타입에는 와일드카드를 쓰지 않는다
+
+한 가지 주의할 자리가 있다. <E>반환 타입에 한정적 와일드카드를 쓰면 오히려 유연성이 떨어진다.</E> 클라이언트 코드 쪽이 와일드카드를 떠안게 되어 변수 선언이 지저분해지기 때문이다.
+
+```java title="ReturnTypeAntipattern.java"
+// 안티패턴: 반환 타입에 와일드카드
+public Set<? extends Number> numbersFromOrder(Order order) {
+    return order.lines().stream()
+                .map(line -> line.price().amount())
+                .collect(Collectors.toSet());
+}
+
+// 사용. 호출자가 와일드카드를 떠안는다
+Set<? extends Number> result = service.numbersFromOrder(order);
+```
+
+반환 자리에는 그냥 구체 타입(`Set<Long>`)을 쓴다. 와일드카드는 입력 매개변수에서만 일을 한다.
+
+## 타입 매개변수와 와일드카드
+
+같은 효과를 내는 두 가지 시그니처가 있을 때 어느 쪽을 골라야 할지 헷갈리는 자리가 있다. 리스트에서 두 원소의 자리를 바꾸는 `swap` 메서드가 대표 예시다.
+
+```java title="SwapSignatures.java"
+// (1) 비한정 타입 매개변수
+public static <E> void swap(List<E> list, int i, int j) { ... }
+
+// (2) 비한정 와일드카드
+public static void swap(List<?> list, int i, int j) { ... }
+```
+
+원칙은 단순하다. <E>타입 매개변수가 메서드 선언에서 한 번만 등장하면 와일드카드로 대체한다.</E> public API에서는 (2)가 더 깔끔하다. 호출자가 신경 쓸 타입 변수가 줄어든다.
+
+문제는 (2)의 본문 작성이 까다롭다는 점이다. `List<?>`에는 `null` 외에는 어떤 값도 넣을 수 없다. 와일드카드의 정체를 모르기 때문이다. 책에서 제시하는 정답은 <E>타입 매개변수를 갖는 private 도우미 메서드</E>를 한 단계 끼우는 것이다.
+
+```java title="Swap.java"
+public class CollectionUtils {
+
+    // public API: 와일드카드
+    public static void swap(List<?> list, int i, int j) {
+        swapHelper(list, i, j);
+    }
+
+    // private 도우미: 와일드카드 자리에 타입 매개변수 E를 잡아냄(capture)
+    private static <E> void swapHelper(List<E> list, int i, int j) {
+        E tmp = list.get(i);
+        list.set(i, list.get(j));
+        list.set(j, tmp);
+    }
+}
+```
+
+이 패턴을 <E>와일드카드 캡처(wildcard capture)</E>라고 부른다. public 시그니처는 와일드카드로 깔끔하게 두면서, 내부 구현은 타입 매개변수의 자유를 누린다. 호출자에게 보이는 면적과 구현의 표현력을 동시에 챙기는 정석 패턴이다.
+
+```java title="Usage.java"
+// 호출자는 와일드카드 시그니처만 본다
+List<LineItem> lines = new ArrayList<>(order.lines());
+CollectionUtils.swap(lines, 0, 1);        // OK
+```
+
+<Callout type="info" title="기억할 한 줄">
+  타입 매개변수가 한 번만 등장하면 와일드카드로 바꾼다. 와일드카드 자리에 값을 넣어야 한다면 private 도우미 메서드로 캡처한다.
+</Callout>
+
+## 정리
+
+3가지 아이템을 한 줄씩 다시 적어 두면 다음과 같다.
+
+- <E>Item 26.</E> Raw 타입은 자바 5 이전과의 호환을 위해 남겨둔 유물이다. 새 코드에서는 항상 매개변수화 타입을 쓴다.
+- <E>Item 28.</E> 배열은 공변·실체화, 제네릭은 불공변·소거. 둘을 섞으면 어색해진다. 컬렉션이 필요하면 `List`를 쓴다.
+- <E>Item 31.</E> 한정적 와일드카드로 API의 유연성을 높인다. <E>Producer extends, Consumer super</E>(PECS). 반환 타입에는 쓰지 않는다.
+
+제네릭이 처음 자바에 들어온 이유는 컬렉션의 형변환을 줄이는 데 있었지만, 그 자리에 머물지 않았다. 매개변수화 타입은 <E>컴파일 시점에 잘못된 타입의 사고를 차단하는 가장 단순하고 강력한 도구</E>가 되었고, 한정적 와일드카드는 그 안전성을 깨뜨리지 않으면서 API를 유연하게 만든다. 안전과 유연성, 두 가지를 동시에 챙기는 자리에 제네릭이 있다.
+
+<RelatedPost slug="effective-java-classes-and-interfaces" type="parallel" />
+
+## 참고 자료
+
+- 조슈아 블로크, 『이펙티브 자바 3판』, 인사이트, 5장 제네릭 (Item 26, 28, 31).
+- Oracle Java Tutorials, [Generics (Updated)](https://docs.oracle.com/javase/tutorial/java/generics/index.html): 제네릭 타입 선언, 타입 추론, 와일드카드, 타입 소거의 공식 정리.
+- Java Language Specification, [§4.5 Parameterized Types](https://docs.oracle.com/javase/specs/jls/se21/html/jls-4.html#jls-4.5).
+- Angelika Langer, [Java Generics FAQ](http://www.angelikalanger.com/GenericsFAQ/JavaGenericsFAQ.html): 제네릭의 모든 코너 케이스를 정리한 표준 FAQ.
+- 망경의 일기, [\[Effective Java\] 5장. 제네릭](https://mangkyu.tistory.com/133): 사용자가 참고한 한국어 정리 글.
