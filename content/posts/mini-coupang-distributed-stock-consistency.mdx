@@ -19,8 +19,8 @@ keywords:
   - Outbox 패턴
   - 토스 prepare confirm 분리
 summary:
-  ko: "재고 100개 옵션에 동시 101명이 주문 요청을 던져도 정확히 100건만 PAID 로 수렴하고 1건은 즉시 INSUFFICIENT 응답을 받는 흐름을 만든 기록입니다. Redis Luascript 한 명령으로 재고를 락 없이 선점하고, 결제는 토스페이먼츠 모델을 따라 prepare/confirm 두 단계로 쪼갭니다. 결제가 실패하면 Kafka 의 PaymentFailedEvent 를 통해 Saga 보상으로 재고를 안전하게 롤백합니다. 통합 테스트 4 시나리오 모두 통과한 실제 코드와 흐름을 공유합니다."
-  en: "How mini-coupang accepts only 100 PAID orders out of 101 concurrent buyers on a 100-stock option, with the 1 leftover request returning INSUFFICIENT immediately. Reserves stock atomically with Redis Lua (no locks), splits payment into prepare/confirm following the Toss Payments model, and rolls back stock through a Kafka PaymentFailedEvent Saga compensation when payment fails. All four integration scenarios pass."
+  ko: "재고 100개 옵션에 동시 101명이 주문 요청을 던져도 정확히 100건만 PAID 로 수렴하고 1건은 즉시 INSUFFICIENT 응답을 받는 흐름을 만든 기록입니다. Redis 의 단일 스레드 위에서 Luascript 한 명령으로 재고를 선점해 락 보유 시간을 최소화하고, 결제는 토스페이먼츠 모델을 따라 prepare/confirm 두 단계로 쪼갭니다. 결제가 실패하면 Kafka 의 PaymentFailedEvent 를 통해 Saga 보상으로 재고를 안전하게 롤백합니다. 통합 테스트 4 시나리오 모두 통과한 실제 코드와 흐름을 공유합니다."
+  en: "How mini-coupang accepts only 100 PAID orders out of 101 concurrent buyers on a 100-stock option, with the 1 leftover request returning INSUFFICIENT immediately. Reserves stock atomically with Redis Lua on a single thread to minimize lock-holding time, splits payment into prepare/confirm following the Toss Payments model, and rolls back stock through a Kafka PaymentFailedEvent Saga compensation when payment fails. All four integration scenarios pass."
 relatedServices:
   - order
   - product
@@ -30,15 +30,20 @@ category: mini-coupang
 draft: false
 ---
 
-인기 옵션의 재고가 100개 있을 때 동시에 101명이 주문 요청을 던지면 <E>정확히 100명만 결제까지 도달</E>해야 하고, 1명은 즉시 `INSUFFICIENT_AMOUNT` 응답을 받아야 합니다. 결제 단계에서 카드사가 거절하거나 사용자가 창을 닫으면 <E>선점된 재고를 안전하게 환원해야</E> 합니다. 이 글은 미니쿠팡이 분산 환경에서 그 두 조건을 동시에 만족시키기 위해 한 결정과, 실제로 동작하는 소스코드와 측정값을 공유합니다.
+인기 옵션의 재고가 100개 있을 때 동시에 101명이 주문 요청을 던지면 <E>정확히 100명만 결제까지 도달</E>해야 하고, 1명은 즉시 `INSUFFICIENT_AMOUNT` 응답을 받아야 합니다. 결제 단계에서 카드사가 거절하거나 사용자가 창을 닫으면 <E>선점된 재고를 안전하게 복구해야</E> 합니다. 이 글은 미니쿠팡이 분산 환경에서 그 두 조건을 동시에 만족시키기 위해 한 결정과, 실제로 동작하는 소스코드와 측정값을 공유합니다.
 
 이번 글은 <E>세 가지 기술 포인트</E>에 집중했습니다.
 
-- **Redis Luascript 로 재고를 선점**: 락 없이 GET-VALIDATE-DECRBY 를 한 명령으로 묶어 상품 재고의 원자성을 보장합니다.
+- **Redis Luascript 로 재고를 선점**: Redis 의 단일 스레드를 활용해 GET-VALIDATE-DECRBY 를 한 명령으로 묶고, 락 보유 시간을 최소화하면서 상품 재고의 원자성을 보장합니다.
 - **Choreography Saga 패턴으로 결제 실패 보상**: 결제가 실패하면 메시지를 발행해 상품 서비스의 Consumer 가 주문 생성으로 선점됐던 재고를 INCRBY 로 복구합니다.
 - **메시지 발행 신뢰성 확보**: 유실 방지가 중요한 Producer 의 메시지는 Outbox 를 사용해 발행을 보장하고, 멱등이 중요한 Consumer 는 Inbox 와 UNIQUE 제약 조건을 사용해 중복 처리를 방지합니다.
 
-결제는 토스페이먼츠 모델을 따라 prepare 와 confirm 두 단계로 쪼갰습니다. 사용자 인증은 브라우저의 결제 SDK 가 담당하고, 백엔드는 SDK 가 발급한 `paymentKey` 를 받아 PG 승인 API 만 호출합니다. 학습 환경에서는 PG 호출 자체를 `StubTossPgClient` 어댑터가 150~400ms 사이로 흉내 냅니다.
+주문 과정은 두 단계로 나누어집니다.
+
+1. **주문 요청 (prepare)**: 결제를 요청하기 전 재고를 선점하고 PENDING 상태의 Order 엔티티를 만듭니다.
+2. **주문 완료 (confirm)**: 결제가 완료되면 PG 혹은 브라우저를 통해 Callback 을 받습니다. 이 Callback 에 포함된 `orderId` 와 `paymentKey` 로 주문을 완료합니다.
+
+학습 환경에서는 PG 호출 자체를 `StubTossPgClient` 어댑터가 150~400ms 사이로 흉내 냅니다.
 
 - 옵션 초기 재고는 100개로 가정합니다.
 - 같은 옵션에 도착하는 동시 주문 수가 재고를 초과한다고 가정합니다 (예: 재고 100, 동시 101).
@@ -58,8 +63,6 @@ draft: false
 
 ### 시나리오 1: 결제까지 성공해 주문 완료
 
-prepare 가 Redis 에 재고를 선점하고 Order 를 PENDING 으로 INSERT 합니다. 사용자가 SDK 로 카드 인증을 마친 뒤 confirm 이 PG 승인을 호출하고 Order 를 PAID 로 전이합니다. 두 번 모두 비즈니스 상태와 outbox 행이 같은 트랜잭션으로 묶여 RDB 에 기록되고, relay 가 별도 스레드에서 Kafka 로 발행합니다.
-
 <Diagram caption="prepare 와 confirm 두 번 모두 RDB 영속화 + outbox INSERT 가 같은 트랜잭션으로 묶입니다. Kafka 발행은 relay 가 비동기로 진행">{`flowchart LR
     User["브라우저 + 결제 SDK"]
     OS["주문 서비스"]
@@ -71,7 +74,7 @@ prepare 가 Redis 에 재고를 선점하고 Order 를 PENDING 으로 INSERT 합
     RDB[("RDB")]
 
     User -->|"1. prepare"| OS
-    OS -->|"2. 재고 선점 Lua"| PS
+    OS -->|"2. 재고 선점 Luascript"| PS
     PS -->|"DECRBY"| Redis
     OS -->|"3. Order PENDING + outbox<br/>(같은 TX)"| RDB
     OS -->|"4. orderId, amount"| User
@@ -85,11 +88,11 @@ prepare 가 Redis 에 재고를 선점하고 Order 를 PENDING 으로 INSERT 합
     PS -->|"option_stock 차감"| RDB
 `}</Diagram>
 
+prepare 가 Redis 에 재고를 선점하고 Order 를 PENDING 으로 INSERT 합니다. 사용자가 SDK 로 카드 인증을 마친 뒤 confirm 이 PG 승인을 호출하고 Order 를 PAID 로 전이합니다. 두 번 모두 비즈니스 상태와 outbox 행이 같은 트랜잭션으로 묶여 RDB 에 기록되고, relay 가 별도 스레드에서 Kafka 로 발행합니다.
+
 상품 서비스의 컨슈머가 `order.confirmed` 를 받아 RDB 의 `option_stock` 을 영구 차감하면 두 저장소(Redis 잔여 / RDB 영구) 가 같은 값으로 수렴합니다.
 
 ### 시나리오 2: 결제 실패 → Choreography Saga 보상
-
-prepare 까지는 시나리오 1과 같습니다. confirm 단계에서 PG 가 거절하면 주문 서비스가 Order 를 CANCELED 로 전이하면서 보상 이벤트를 outbox 에 INSERT 합니다. relay 가 Kafka 로 발행하고, 상품 서비스의 컨슈머가 자체 결정으로 Redis 재고를 INCRBY 로 복구합니다. 중앙 오케스트레이터가 보상을 지시하지 않습니다.
 
 <Diagram caption="confirm 실패 시 Order CANCELED 전이와 보상 outbox INSERT 를 같은 트랜잭션으로 묶고, 상품 서비스가 이벤트만 보고 자체 복구">{`flowchart LR
     User["브라우저 + 결제 SDK"]
@@ -111,39 +114,40 @@ prepare 까지는 시나리오 1과 같습니다. confirm 단계에서 PG 가 �
     OS -->|"5. PAYMENT_FAILED 응답"| User
 `}</Diagram>
 
-복구가 도착하기 전 짧은 lag 동안 다른 사용자에게 일시적 `INSUFFICIENT_AMOUNT` 가 보일 수 있고, 이는 UX 재시도로 흡수됩니다. RDB `option_stock` 은 PAID 시에만 차감되므로 이 시나리오에서는 손대지 않습니다.
+prepare 까지는 시나리오 1과 같습니다. confirm 단계에서 PG 가 거절하면 주문 서비스가 Order 를 CANCELED 로 전이하면서 보상 이벤트를 outbox 에 INSERT 합니다. relay 가 Kafka 로 발행하고, 상품 서비스의 컨슈머가 자체 결정으로 Redis 재고를 INCRBY 로 복구합니다.
+
+RDB `option_stock` 은 PAID 시에만 차감되므로 이 시나리오에서는 손대지 않습니다.
 
 ### 시나리오 3: 재고 선점 실패 → 주문 거절
 
-prepare 단계에서 Redis 의 Lua 스크립트가 GET 으로 본 재고가 요청 수량보다 적으면 DECRBY 를 건너뛰고 `INSUFFICIENT_AMOUNT` 를 반환합니다. Order 는 만들어지지 않고 사용자에게 즉시 4xx 응답이 나갑니다. RDB·Kafka 어느 쪽도 손대지 않습니다.
-
-<Diagram caption="재고 부족은 Lua 안에서 DECRBY 없이 즉시 반환. Order 와 outbox 둘 다 만들어지지 않으므로 보상도 없음">{`flowchart LR
+<Diagram caption="재고 부족은 Luascript 안에서 DECRBY 없이 즉시 반환. Order 와 outbox 둘 다 만들어지지 않으므로 보상도 없음">{`flowchart LR
     User["브라우저"]
     OS["주문 서비스"]
     PS["상품 서비스"]
     Redis[("Redis")]
 
     User -->|"1. prepare"| OS
-    OS -->|"2. 재고 선점 Lua"| PS
+    OS -->|"2. 재고 선점 Luascript"| PS
     PS -->|"3. GET 비교"| Redis
     Redis -->|"4. 부족"| PS
     PS -->|"5. INSUFFICIENT_AMOUNT"| OS
     OS -->|"6. 4xx 응답"| User
 `}</Diagram>
 
+prepare 단계에서 Redis 의 Luascript 가 GET 으로 본 재고가 요청 수량보다 적으면 DECRBY 를 건너뛰고 `INSUFFICIENT_AMOUNT` 를 반환합니다. Order 는 만들어지지 않고 사용자에게 즉시 4xx 응답이 나갑니다. RDB·Kafka 어느 쪽도 손대지 않습니다.
+
 이 경로가 가장 가벼우면서도 이 글의 요구사항에서 가장 자주 발생하는 시나리오입니다. 100개 재고에 101명이 동시 도달하면 정확히 1명이 이 경로로 빠집니다.
 
-이 구조에는 세 가지 결정이 있습니다.
+이 구조에는 두 가지 결정이 있습니다.
 
-1. **재고는 상품 서비스가 단독으로 소유한다.** 주문 서비스는 재고 행을 직접 만지지 않고 Feign 으로 위임합니다. <E>재고의 단일 소유자</E>라는 원칙이 이후 결정의 출발점입니다.
-2. **재고 차감은 Redis Lua, 영구 차감은 Kafka 비동기로.** 즉시 일관성이 필요한 작업은 Redis 의 단일 스레드가, 최종 일관성이 필요한 작업은 Kafka 의 비동기 처리가 책임집니다.
-3. **결제 실패는 Choreography Saga 로 보상한다.** confirm 실패 시 주문을 CANCELED 로 전이하고 `order.payment-failed` 만 발행하면 상품 서비스가 자체 결정으로 Redis 재고를 환원합니다. 중앙 오케스트레이터 없음.
+1. **즉시 일관성이 필요한 재고 선점은 Redis 의 단일 스레드가, 최종 일관성이 필요한 다른 작업들은 Kafka 의 비동기 처리가 책임집니다.**
+2. **결제 실패는 Choreography Saga 로 보상합니다.** confirm 실패 시 주문을 CANCELED 로 전이하고 `order.payment-failed` 만 발행하면, 상품 서비스가 자체 결정으로 Redis 재고를 복구합니다.
 
-## 재고 차감을 락이 아니라 Redis Lua 로
+## 재고 선점 구현에 Luascript 를 사용한 이유
 
 ### 왜 락이 아닌가
 
-비관적 락이나 낙관적 락으로도 동시성은 막을 수 있습니다. 그런데 락 보유 시간이 결제 응답 시간과 겹치면, 같은 옵션을 100명이 동시에 주문할 때 첫 사람이 결제하는 동안 99명이 행 락을 기다리며 멈춥니다. 토스 모델로 인증/승인을 분리해도 confirm 단계의 PG 호출은 여전히 외부 호출입니다. 차감 시점을 confirm 보다 앞으로 당기고, 차감 동작 자체를 락 없이 원자적으로 만들면 PG 응답 시간과 재고 차감 사이의 결합을 분리할 수 있습니다.
+비관적 락이나 낙관적 락으로도 동시성은 막을 수 있습니다. 그런데 락 보유 시간이 결제 응답 시간과 겹치면, 같은 옵션을 100명이 동시에 주문할 때 첫 사람이 결제하는 동안 99명이 행 락을 기다리며 멈춥니다. 토스 모델로 인증/승인을 분리해도 confirm 단계의 PG 호출은 여전히 외부 호출입니다. 차감 시점을 confirm 보다 앞으로 당기고, 차감 동작 자체를 Redis 단일 스레드의 EVAL 한 번으로 줄이면 PG 응답 시간과 재고 차감 사이의 결합을 분리하면서 락 보유 시간을 최소화할 수 있습니다.
 
 Redis 는 단일 스레드로 명령을 처리하고, EVAL 로 묶인 명령들 사이에는 다른 클라이언트가 끼어들 수 없습니다.
 
@@ -175,64 +179,7 @@ public long reserveStock(long optionId, long quantity) {
 
 ### 무엇을 해결했나
 
-같은 옵션에 101명이 동시에 들어와도 Redis 단일 스레드 큐에서 101개의 EVAL 이 순서대로 실행됩니다. 100번째까지는 DECRBY 가 성공하고 101번째는 `-2` 가 반환됩니다. <E>락 없이 lost update 0건</E>이고, 한 사용자의 차감이 다음 사용자의 차감을 막지 않습니다 (대기 시간은 EVAL 한 번, 0.5ms 안팎).
-
-## 결제 흐름은 prepare 와 confirm 두 단계로
-
-### 왜 두 단계로 쪼개는가
-
-토스페이먼츠 흐름은 사용자 인증과 PG 승인을 분리합니다. 사용자가 카드를 입력하고 3DS 를 통과하는 시간은 브라우저 SDK 안에서 일어나고, 백엔드는 인증이 끝난 뒤 successUrl 로 받은 `paymentKey` 로 짧은 승인 API 만 호출합니다. 한 요청에 다 묶으면 백엔드 요청 스레드가 사용자 입력 시간까지 떠안게 되어 처리량이 사용자 페이스에 묶입니다.
-
-prepare 단계에서 재고를 잡고 Order 를 PENDING 으로 영속화한 뒤 orderId 와 amount 를 응답으로 돌려주고, confirm 단계에서 paymentKey 와 amount 를 검증한 뒤 PG 승인을 호출합니다. 두 엔드포인트가 같은 트랜잭션을 공유하지 않으므로, 사용자가 인증 도중에 창을 닫아도 백엔드는 멈추지 않습니다.
-
-### 어떻게 구현했나
-
-prepare 는 `OrderFacade.prepare` 가 조립합니다. 옵션 조회, Redis 재고 예약, Order(PENDING) INSERT 까지 진행한 뒤 `PrepareOrderResult` 로 `orderId` 와 `amount` 를 반환합니다.
-
-```java title="OrderFacade.java (prepare)"
-public PrepareOrderResult prepare(PrepareOrderCommand command) {
-    OptionSnapshot snapshot = productOptionPort.findOption(command.optionId());
-    ensurePurchasable(snapshot);
-
-    StockReserveOutcome reserved = stockReservePort.reserve(                            // [!code highlight]
-        new StockReserveRequest(command.optionId(), command.quantity()));
-    if (!reserved.reserved()) throw mapReserveFailure(reserved.reason());
-
-    return orderService.createPendingOrder(                                             // [!code highlight]
-        command.memberId(), snapshot, command.quantity());
-}
-```
-
-confirm 은 `paymentKey` 와 amount 검증을 거친 뒤 payment-server 의 승인 API 를 호출합니다. 성공이면 PAID 전이 + `OrderConfirmedEvent`, 실패이면 보상 흐름으로 빠집니다.
-
-```java title="OrderFacade.java (confirm)"
-public ConfirmOrderResult confirm(ConfirmOrderCommand command) {
-    PendingOrderSnapshot pending = orderService.findPendingOwned(                       // [!code highlight]
-        command.orderId(), command.memberId());
-
-    if (!pending.totalAmount().equals(command.amount())) {
-        cancelAndCompensate(pending, "AMOUNT_MISMATCH");
-        throw new BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
-    }
-
-    PaymentConfirmOutcome outcome = paymentConfirmPort.confirm(                         // [!code highlight]
-        new PaymentConfirmRequest(command.paymentKey(),
-            String.valueOf(command.orderId()), command.amount(), command.simulateFailure()));
-
-    if (!outcome.paid()) {
-        cancelAndCompensate(pending, outcome.reason());
-        throw new BusinessException(ErrorCode.PAYMENT_FAILED);
-    }
-
-    return orderService.confirmOrder(command.orderId(), command.memberId(), outcome.paymentId());
-}
-```
-
-payment-server 안쪽은 도메인이 PG 호출을 직접 모르도록 `PgClient` 포트로 한 단계 더 감쌌습니다. 학습 환경에서는 `StubTossPgClient` 가 어댑터로 붙어 150~400ms 사이 sleep 후 승인 응답을 반환하고, 운영 환경에서는 같은 포트의 토스 어댑터로 교체하면 됩니다.
-
-### 무엇을 해결했나
-
-prepare 가 잡는 트랜잭션은 옵션 조회 + Order INSERT 한 번으로 짧고, confirm 도 PG 호출 한 번 + Order 상태 전이 한 번으로 끝납니다. <E>사용자가 SDK 안에서 인증을 진행하는 시간은 백엔드 요청 스레드와 무관</E>하므로, 100명이 동시에 결제 페이지를 띄워두고 있어도 백엔드 처리량은 영향받지 않습니다.
+같은 옵션에 101명이 동시에 들어와도 Redis 단일 스레드 큐에서 101개의 EVAL 이 순서대로 실행됩니다. 100번째까지는 DECRBY 가 성공하고 101번째는 `-2` 가 반환됩니다. <E>lost update 0건</E>이고, 한 사용자의 차감이 다음 사용자의 차감을 막지 않습니다.
 
 ## Kafka 로 영구 차감과 보상을 비동기로 발행한다
 
@@ -242,7 +189,26 @@ confirm 성공 시 MySQL 재고를 영구 차감하고, confirm 실패 시 Redis
 
 ### 어떻게 구현했나
 
-주문 서비스는 영속화 트랜잭션 안에서 `outbox_events` 테이블에 INSERT 합니다. 비즈니스 commit 과 outbox INSERT 가 같은 트랜잭션이라 둘은 같이 성공하거나 같이 롤백됩니다. 별도의 `OutboxEventRelay` 가 200ms 간격으로 미발행 행을 폴링해 Kafka 에 보내고, ack 가 오면 `published=true` 로 표시합니다. Kafka 가 잠시 죽어도 outbox 에 행은 남아 있어 다음 polling 에서 재시도됩니다.
+주문 서비스는 같은 `@Transactional` 메서드 한 번에 두 개의 쓰기를 묶습니다. 하나는 Order 의 상태를 PENDING 에서 PAID 로 바꾸는 `orders` 테이블 UPDATE (JPA dirty checking 이 flush) 고, 다른 하나는 발행할 메시지 한 건을 `outbox_events` 테이블에 INSERT 하는 쓰기입니다. 메서드가 정상 종료되면 두 SQL 이 한 커밋에 함께 들어가고, 어디서든 예외가 터지면 둘 다 롤백됩니다. 그래서 Order 는 PAID 로 바뀌었는데 보낼 메시지는 사라지거나, 메시지만 남고 Order 는 PENDING 그대로인 어긋남이 만들어지지 않습니다.
+
+별도 스레드인 `OutboxEventRelay` 가 200ms 마다 `outbox_events` 에서 `published=false` 인 행을 골라 Kafka 로 보내고, 브로커에서 ack 가 돌아오면 그 행을 `published=true` 로 표시합니다. Kafka 가 잠시 끊겨도 행은 `outbox_events` 에 그대로 남아 있어 다음 폴링이 같은 메시지를 다시 보냅니다.
+
+**폴링 200ms 의 기준**
+
+폴링 레이트가 너무 짧으면:
+
+1. 빈 결과를 가져오는 SELECT 가 초당 여러 번 돌아 DB CPU 와 커넥션이 의미 없이 소모된다
+2. 폴링 워커가 CPU 를 더 쓴다
+
+폴링 레이트가 너무 길면:
+
+1. 발행까지 wall-clock 지연이 폴링 주기만큼 커진다
+2. 컨슈머 측 p95 지연 SLA 가 깨질 위험이 커진다
+
+대안 (CDC): DB binlog 를 watch 하는 CDC (Debezium 등) 를 쓰면 INSERT 즉시 발행돼 폴링 주기 자체가 사라집니다.
+
+<RelatedPost slug="change-data-capture" type="deep-dive" />
+
 
 ```java title="OrderService.java"
 @Transactional
@@ -258,7 +224,7 @@ public ConfirmOrderResult confirmOrder(Long orderId, Long memberId, String payme
 }
 ```
 
-발행 형식은 `EventEnvelope` 로 통일됩니다. `eventId` 는 분산 안전 long, `eventType` 은 enum 이름, `payload` 는 도메인별 record 입니다. 통합 테스트로 101명 시나리오를 돌리고 Kafka UI 로 토픽을 들여다보면 다음과 같이 흐릅니다.
+발행하는 모든 메시지는 `eventId`, `eventType`, `occurredAt`, `payload` 네 필드의 같은 JSON 모양을 공유합니다. `eventId` 는 TSID 로 만든 시간순 정렬 가능한 64비트 정수로, 컨슈머가 멱등성 키로 씁니다. 101명 시나리오를 통합 테스트로 돌리고 Kafka UI 로 토픽을 들여다보면 다음과 같이 흐릅니다.
 
 ```json title="order.confirmed (한 메시지)"
 {
@@ -296,12 +262,23 @@ public ConfirmOrderResult confirmOrder(Long orderId, Long memberId, String payme
     "#{T(...EventTopic).ORDER_CONFIRMED.getName()}",
     "#{T(...EventTopic).ORDER_PAYMENT_FAILED.getName()}"
 })
-public void consume(String message, @Header(RECEIVED_TOPIC) String topic) {
-    EventEnvelope envelope = jsonConverter.fromJson(message, EventEnvelope.class);
-    if (EventTopic.ORDER_CONFIRMED.getName().equals(topic)) {
-        processor.processOrderConfirmed(envelope.eventId(), ...);                       // [!code highlight]
-    } else if (EventTopic.ORDER_PAYMENT_FAILED.getName().equals(topic)) {
-        processor.processPaymentFailed(envelope.eventId(), ...);                        // [!code highlight]
+public void consume(String message, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+    long eventId = 0L;
+    try {
+        EventMessage eventMessage = jsonConverter.fromJson(message, EventMessage.class);  // [!code highlight]
+        eventId = eventMessage.eventId();
+
+        if (EventTopic.ORDER_CONFIRMED.getName().equals(topic)) {
+            OrderConfirmedPayload p = jsonConverter.treeToValue(                          // [!code highlight]
+                eventMessage.payload(), OrderConfirmedPayload.class);
+            processor.processOrderConfirmed(eventId, p);
+        } else if (EventTopic.ORDER_PAYMENT_FAILED.getName().equals(topic)) {
+            OrderPaymentFailedPayload p = jsonConverter.treeToValue(
+                eventMessage.payload(), OrderPaymentFailedPayload.class);
+            processor.processPaymentFailed(eventId, p);
+        }
+    } catch (DataIntegrityViolationException e) {                                         // [!code highlight]
+        log.info("Duplicate event skipped. eventId={}, topic={}", eventId, topic);
     }
 }
 ```
@@ -311,16 +288,17 @@ public void consume(String message, @Header(RECEIVED_TOPIC) String topic) {
 ```java title="OrderEventProcessor.java"
 @Transactional
 public void processOrderConfirmed(long eventId, OrderConfirmedPayload payload) {
-    int updated = optionStockRepository.decreaseQuantityIfEnough(                       // [!code highlight]
+    processedEventRepository.save(ProcessedEvent.of(eventId, "ORDER_CONFIRMED"));       // [!code highlight]
+    int updated = optionStockRepository.decreaseQuantityIfEnough(
         payload.optionId(), payload.quantity());
     if (updated == 0) {
-        log.error("MySQL 재고 영구 차감 실패. orderId={}, optionId={}, quantity={}",
+        log.error("MySQL 재고 영구 차감 실패 (Redis-MySQL drift?). orderId={}, optionId={}, quantity={}",
             payload.orderId(), payload.optionId(), payload.quantity());
     }
 }
 ```
 
-Outbox relay 의 재시도와 Kafka 의 at-least-once 전달이 합쳐지면 같은 메시지가 두 번 들어올 수 있습니다. consumer 측은 Inbox 패턴 (`processed_events` UNIQUE 제약) 으로 두 번째 처리를 막아 차감이 한 번만 일어나도록 했습니다. Outbox relay 의 polling 주기 / batch 크기 / 실패 시 backoff, Inbox 의 `DataIntegrityViolationException` 처리 등 자세한 디자인은 별도 글에서 다룹니다.
+Outbox relay 의 재시도와 Kafka 의 at-least-once 전달이 합쳐지면 같은 메시지가 두 번 들어올 수 있습니다. consumer 측은 Inbox 패턴 (`processed_events` UNIQUE 제약) 으로 두 번째 처리를 막아 차감이 한 번만 일어나도록 했습니다.
 
 ### 무엇을 해결했나
 
@@ -332,7 +310,7 @@ Outbox relay 의 재시도와 Kafka 의 at-least-once 전달이 합쳐지면 같
 
 Redis 차감은 prepare 단계에서 일어납니다. confirm 에서 amount 가 안 맞거나 PG 가 거절하면 MySQL 은 아무 변화가 없지만 Redis 재고는 이미 줄어 있습니다. 그대로 두면 다음 사용자가 잘못된 잔여 재고를 보게 됩니다.
 
-분산 트랜잭션은 미니쿠팡에 도입하지 않았습니다. 주문 서비스의 MySQL, 결제 서비스의 PG 호출, 상품 서비스의 Redis 가 한 트랜잭션으로 묶일 수 없는 환경에서, Saga 패턴은 <E>실패한 단계의 결과를 다른 단계에서 보상으로 되돌리는 방식</E>으로 정합성을 만듭니다. 미니쿠팡은 그중에서도 <E>중앙 오케스트레이터 없이 각 서비스가 이벤트를 보고 자체 결정</E>하는 choreography 방식을 택했습니다. 주문 서비스는 `order.payment-failed` 를 던지기만 하고, 상품 서비스는 그 이벤트를 보고 자기 책임 (Redis 복구) 만 수행합니다.
+분산 트랜잭션의 선택지는 크게 둘로 나뉩니다. <E>2PC (XA)</E> 는 트랜잭션 코디네이터로 강한 ACID 를 만들고, <E>Saga</E> 는 보상 트랜잭션으로 결과적 일관성을 만듭니다. 주문 서비스의 MySQL, 결제 서비스의 PG 호출, 상품 서비스의 Redis 를 한 코디네이터로 묶기에는 PG 가 외부 시스템이라 2PC 는 현실적이지 않고, 미니쿠팡은 Saga 를 택했습니다. Saga 는 다시 <E>중앙 오케스트레이터가 보상 단계를 지시하는 orchestration</E> 과 <E>각 서비스가 이벤트를 보고 자체 결정하는 choreography</E> 로 갈리는데, 미니쿠팡은 후자입니다. 주문 서비스는 `order.payment-failed` 를 던지기만 하고, 상품 서비스는 그 이벤트를 보고 자기 책임 (Redis 복구) 만 수행합니다.
 
 ### 어떻게 구현했나
 
@@ -356,7 +334,8 @@ public void cancelOrder(Long orderId, Long memberId, String reason) {
 ```java title="OrderEventProcessor.java (Redis 복구)"
 @Transactional
 public void processPaymentFailed(long eventId, OrderPaymentFailedPayload payload) {
-    long remaining = productStockRedisRepository.releaseStock(                           // [!code highlight]
+    processedEventRepository.save(ProcessedEvent.of(eventId, "ORDER_PAYMENT_FAILED"));   // [!code highlight]
+    long remaining = productStockRedisRepository.releaseStock(
         payload.optionId(), payload.quantity());
     if (remaining == -1) {
         log.error("Redis 재고 복구 실패: 키 없음. optionId={}, quantity={}, reason={}",
@@ -365,15 +344,13 @@ public void processPaymentFailed(long eventId, OrderPaymentFailedPayload payload
 }
 ```
 
-<Callout type="error" title="핵심 통찰: 락이 아니라 책임 분리로 정합성을 만든다">
+<Callout type="error" title="핵심 통찰: Redis 단일 스레드와 책임 분리로 정합성을 만든다">
 재고 정합성의 책임을 한 곳에 모으지 않고 세 갈래로 나눴습니다. 동시성은 Redis 단일 스레드의 EVAL 이, 영구 차감은 `order.confirmed` 컨슈머가, 결제 실패 복구는 `order.payment-failed` 를 받는 상품 서비스의 자체 보상이 책임집니다. 어떤 단계도 락을 길게 잡지 않고, 외부 호출이 처리량을 묶지 않습니다.
 </Callout>
 
 ### 무엇을 해결했나
 
-결제 실패는 <E>정합성을 깨지 않고 흡수</E>됩니다. Redis 는 다음 사용자가 보기 전에 원복되고, MySQL 은 애초에 변경되지 않았으므로 두 저장소가 같은 상태로 남습니다. 보상 이벤트가 도착할 때까지 짧은 lag 동안에는 다른 사용자에게 일시적 `INSUFFICIENT_AMOUNT` 가 보일 수 있고, 이는 UX 재시도로 흡수됩니다.
-
-k6 부하 측정은 다음 글에서 다룹니다.
+결제 실패는 <E>정합성을 깨지 않고 흡수</E>됩니다. Redis 는 다음 사용자가 보기 전에 원복되고, MySQL 은 애초에 변경되지 않았으므로 두 저장소가 같은 상태로 남습니다. 보상 이벤트가 도착할 때까지 짧은 lag 동안에는 다른 사용자에게 일시적으로 차감된 재고가 보일 수 있습니다.
 
 ## 통합 테스트로 검증
 
@@ -401,8 +378,6 @@ k6 부하 측정은 다음 글에서 다룹니다.
 
 ![재고 1 · 동시 100명, 1 성공 99 거절](/images/posts/mini-coupang-distributed-stock-consistency/scenario3-stock1-100concurrent.png)
 
-스크린샷의 ms 표시는 IDE 의 `@Test` 메서드 본문 시간이며, `@BeforeAll` 안에서 도는 200명 사전 시드 + 동시 주문 fire 시간은 포함하지 않습니다. 이 글에서는 정합성 (binary 결과) 만 보장하는 용도로 첨부했고, wall-clock 과 처리량은 k6 측정 글에서 별도로 다룹니다.
-
 ## 남은 한계와 다음 단계
 
 이 구현으로 닫지 못한 한계 세 가지입니다.
@@ -412,8 +387,6 @@ k6 부하 측정은 다음 글에서 다룹니다.
 | PENDING 만료 미구현 | 사용자가 결제 SDK 페이지에서 창을 닫고 confirm 을 안 보내면 PENDING Order 와 Redis 차감이 그대로 남음 | TTL 기반 만료 잡 또는 timeout 시 자동 보상 |
 | Redis 단일 노드 | 동시성의 1차 책임이 Redis 한 인스턴스에 있어 장애 시 차감이 멈춤 | Redis 클러스터 또는 Sentinel + replica |
 | 부하 측정 미수행 | 통합 테스트는 정합성만 검증. p95, 처리량, 커넥션 풀 한계는 아직 데이터로 닫지 못함 | k6 부하 시나리오 + Grafana 대시보드 |
-
-후속 글의 주제는 이 글에서 한두 줄로만 짚고 넘어간 것들입니다. **Outbox + Inbox 패턴 디자인** (relay polling, retry/backoff, `DataIntegrityViolationException` 처리) 과 **분산 안전 ID** (TSID 적용 위치, Persistable 패턴, IDENTITY 와의 trade-off) 를 각각 별도 글에서 다룹니다.
 
 ## 참고 자료
 
