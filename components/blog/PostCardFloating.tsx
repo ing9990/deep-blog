@@ -4,13 +4,15 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { formatDate } from '@/lib/utils'
+import { getCategoryColor } from '@/lib/category-colors'
+import { cn, formatDate } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function PostCardFloating({ post }: { post: Post }) {
   const { lang } = useTranslation()
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
+  const colorClass = getCategoryColor(post.category)
 
   return (
     <Link
@@ -22,7 +24,7 @@ export function PostCardFloating({ post }: { post: Post }) {
         className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-muted transition-transform group-hover:scale-105"
         aria-hidden
       >
-        <Icon className="h-5 w-5 text-muted-foreground" strokeWidth={1.8} />
+        <Icon className={cn('h-5 w-5 text-muted-foreground', colorClass)} strokeWidth={1.8} />
       </span>
 
       {/* Content */}

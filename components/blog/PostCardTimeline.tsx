@@ -4,8 +4,9 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
+import { getCategoryColor } from '@/lib/category-colors'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { EN_MONTHS } from '@/lib/utils'
+import { cn, EN_MONTHS } from '@/lib/utils'
 
 interface PostCardTimelineProps {
   post: Post
@@ -18,6 +19,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
   const { lang } = useTranslation()
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
+  const colorClass = getCategoryColor(post.category)
   const d = new Date(post.date)
   const day = String(d.getUTCDate()).padStart(2, '0')
   const month = EN_MONTHS[d.getUTCMonth()]
@@ -57,7 +59,7 @@ export function PostCardTimeline({ post, isFirst = false, isLast = false, showDa
         {/* Category */}
         <div className="mb-2 flex items-center gap-2">
           <span className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--radius-chip)] bg-muted">
-            <Icon className="h-[14px] w-[14px] text-muted-foreground" strokeWidth={2.2} aria-hidden />
+            <Icon className={cn('h-[14px] w-[14px] text-muted-foreground', colorClass)} strokeWidth={2.2} aria-hidden />
           </span>
           <span className="text-[length:var(--text-caption)] font-semibold text-muted-foreground">
             {meta.label[lang]}

@@ -4,13 +4,15 @@ import Link from 'next/link'
 import type { Post } from '@/lib/posts'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { formatDate } from '@/lib/utils'
+import { getCategoryColor } from '@/lib/category-colors'
+import { cn, formatDate } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function PostCardEditorial({ post }: { post: Post }) {
   const { lang } = useTranslation()
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]
+  const colorClass = getCategoryColor(post.category)
 
   return (
     <Link
@@ -26,7 +28,7 @@ export function PostCardEditorial({ post }: { post: Post }) {
       {/* Top row: category pill + date */}
       <div className="mb-2.5 flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-[3px] text-[length:var(--text-caption)] font-semibold tracking-wide text-muted-foreground">
-          <Icon className="h-[13px] w-[13px]" strokeWidth={2.2} aria-hidden />
+          <Icon className={cn('h-[13px] w-[13px]', colorClass)} strokeWidth={2.2} aria-hidden />
           {meta.label[lang]}
         </span>
         <time className="text-[length:var(--text-meta)] tabular-nums text-muted-foreground" dateTime={post.date}>
