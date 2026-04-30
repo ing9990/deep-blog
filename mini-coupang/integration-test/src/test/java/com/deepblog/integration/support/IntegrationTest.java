@@ -3,7 +3,6 @@ package com.deepblog.integration.support;
 import static com.deepblog.integration.support.HttpSupport.json;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.deepblog.integration.MsaCompose;
 import com.deepblog.integration.MsaEndpoints;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
@@ -15,22 +14,17 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 
+/**
+ * 통합 테스트 베이스. docker-compose 는 사용자가 미리 띄워 둔 상태를 가정한다 (포트 1xxxx).
+ * 서비스가 안 떠 있으면 첫 HTTP 호출에서 ConnectException 으로 그냥 실패시킨다.
+ *
+ * <p>{@code scenario} 는 inline final 필드. nested @BeforeAll 이 @BeforeEach 보다 먼저
+ * 돌기 때문에 lifecycle 메서드 초기화로는 nested 진입 시 null 이 된다.
+ */
 public abstract class IntegrationTest {
 
-    protected OrderScenario scenario;
-
-    @BeforeAll
-    static void bootCompose() {
-        MsaCompose.instance();
-    }
-
-    @BeforeEach
-    void initScenario() {
-        scenario = new OrderScenario();
-    }
+    protected final OrderScenario scenario = new OrderScenario();
 
     /**
      * 토스 결제 모델에 맞춘 두 단계 호출:
@@ -74,6 +68,12 @@ public abstract class IntegrationTest {
 
     protected OrderResult fireConcurrent(OrderScenario.Prepared prepared, int threads)
         throws InterruptedException {
+        return fireConcurrent(prepared, threads, false);
+    }
+
+    protected OrderResult fireConcurrent(
+        OrderScenario.Prepared prepared, int threads, boolean simulateFailure
+    ) throws InterruptedException {
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         CountDownLatch barrier = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(threads);
@@ -89,7 +89,7 @@ public abstract class IntegrationTest {
                 try {
                     barrier.await();
                     HttpSupport.Result res = placeOrder(
-                        sessionCookie, prepared.optionId(), 1L, false);
+                        sessionCookie, prepared.optionId(), 1L, simulateFailure);
                     if (res.status() == 200) {
                         success.incrementAndGet();
                     } else {

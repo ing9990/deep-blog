@@ -5,8 +5,12 @@ import static com.deepblog.integration.support.HttpSupport.json;
 import com.deepblog.integration.MsaEndpoints;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.api.StatefulRedisConnection;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
@@ -19,6 +23,8 @@ public final class OrderScenario {
     public static final long PRODUCT_ID = 1L;
     public static final long OPTION_ID = 1L;
     public static final long INITIAL_STOCK = 100L;
+    public static final String SEED_PASSWORD = "passw0rd!";
+    public static final int SEED_MEMBER_COUNT = 200;
 
     private static final String SEED_SCRIPT = "test-seed.sql";
 
@@ -26,9 +32,23 @@ public final class OrderScenario {
     private final JdbcTemplate productJdbc = new JdbcTemplate(productDs);
 
     public Prepared prepare(int memberCount) {
+        return prepare(memberCount, INITIAL_STOCK);
+    }
+
+    /**
+     * 시드 적용 + Redis/MySQL 옵션 재고를 {@code initialStock} 으로 강제 세팅 + 병렬 로그인.
+     * 시나리오마다 시작 재고를 다르게 두고 싶을 때 사용한다 (재고 0, 1, 10 등).
+     */
+    public Prepared prepare(int memberCount, long initialStock) {
+        if (memberCount > SEED_MEMBER_COUNT) {
+            throw new IllegalArgumentException(
+                "memberCount(" + memberCount + ") > SEED_MEMBER_COUNT(" + SEED_MEMBER_COUNT
+                    + "). test-seed.sql 의 시드 계정 수를 늘리세요.");
+        }
         applySeed();
-        resetRedisAndSetStock();
-        List<String> sessionCookies = signupAndLogin(memberCount);
+        resetRedisAndSetStock(initialStock);
+        setMysqlOptionStock(OPTION_ID, initialStock);
+        List<String> sessionCookies = loginPreseededAccounts(memberCount);
         return new Prepared(PRODUCT_ID, OPTION_ID, sessionCookies);
     }
 
@@ -38,7 +58,7 @@ public final class OrderScenario {
         populator.execute(productDs);
     }
 
-    private void resetRedisAndSetStock() {
+    private void resetRedisAndSetStock(long initialStock) {
         try (RedisClient client = RedisSupport.client();
              StatefulRedisConnection<String, String> conn = RedisSupport.connect(client)) {
             for (String key : conn.sync().keys("stock:option:*")) {
@@ -47,43 +67,60 @@ public final class OrderScenario {
             for (String key : conn.sync().keys("spring:session:*")) {
                 conn.sync().del(key);
             }
-            RedisSupport.setStock(conn.sync(), OPTION_ID, INITIAL_STOCK);
+            RedisSupport.setStock(conn.sync(), OPTION_ID, initialStock);
         }
     }
 
-    private List<String> signupAndLogin(int memberCount) {
+    private void setMysqlOptionStock(long optionId, long quantity) {
+        productJdbc.update(
+            "UPDATE option_stocks SET quantity = ? WHERE option_id = ?", quantity, optionId);
+    }
+
+    /**
+     * 사전 시드된 계정 (it-1@test.local ~ it-N@test.local) 으로 병렬 로그인.
+     * signup HTTP 호출은 건너뛰어 셋업 시간 단축.
+     */
+    private List<String> loginPreseededAccounts(int memberCount) {
         String memberServer = MsaEndpoints.memberServer();
-        List<String> sessionCookies = new ArrayList<>(memberCount);
-        long suffix = System.currentTimeMillis();
+        String[] sessions = new String[memberCount];
+        int poolSize = Math.min(memberCount, 32);
+        ExecutorService exec = Executors.newFixedThreadPool(poolSize);
+        CountDownLatch done = new CountDownLatch(memberCount);
         for (int i = 0; i < memberCount; i++) {
-            String email = "it-" + suffix + "-" + i + "@test.local";
-            String password = "passw0rd!";
-            String phone = String.format("010%07d", i);
-
-            String signupBody = json(
-                "email", email,
-                "password", password,
-                "name", "회원" + i,
-                "phoneNumber", phone,
-                "nickname", "닉" + i
-            );
-            HttpSupport.Result signupRes = HttpSupport.postJson(
-                memberServer + "/auth/signup/member", signupBody, null);
-            if (signupRes.status() != 201 && signupRes.status() != 200) {
-                throw new IllegalStateException(
-                    "signup failed: status=" + signupRes.status() + " body=" + signupRes.body());
-            }
-
-            String loginBody = json("email", email, "password", password);
-            HttpSupport.Result loginRes = HttpSupport.postJson(
-                memberServer + "/auth/login", loginBody, null);
-            if (loginRes.status() != 200 || loginRes.sessionCookie() == null) {
-                throw new IllegalStateException(
-                    "login failed: status=" + loginRes.status() + " body=" + loginRes.body());
-            }
-            sessionCookies.add(loginRes.sessionCookie());
+            final int idx = i;
+            exec.submit(() -> {
+                try {
+                    String email = "it-" + (idx + 1) + "@test.local";
+                    String body = json("email", email, "password", SEED_PASSWORD);
+                    HttpSupport.Result res = HttpSupport.postJson(
+                        memberServer + "/auth/login", body, null);
+                    if (res.status() != 200 || res.sessionCookie() == null) {
+                        throw new IllegalStateException(
+                            "login failed for " + email + ": status=" + res.status()
+                                + " body=" + res.body());
+                    }
+                    sessions[idx] = res.sessionCookie();
+                } finally {
+                    done.countDown();
+                }
+            });
         }
-        return sessionCookies;
+        try {
+            if (!done.await(120, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("login phase timed out (120s)");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("login phase interrupted", e);
+        } finally {
+            exec.shutdown();
+        }
+        for (int i = 0; i < memberCount; i++) {
+            if (sessions[i] == null) {
+                throw new IllegalStateException("login produced null session for index " + i);
+            }
+        }
+        return Arrays.asList(sessions);
     }
 
     public long mysqlOptionStock(long optionId) {
