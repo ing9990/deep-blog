@@ -26,7 +26,7 @@ relatedServices:
   - product
   - payment
   - notification
-category: mini-coupang-backend
+category: mini-coupang
 draft: false
 ---
 
@@ -374,6 +374,34 @@ public void processPaymentFailed(long eventId, OrderPaymentFailedPayload payload
 결제 실패는 <E>정합성을 깨지 않고 흡수</E>됩니다. Redis 는 다음 사용자가 보기 전에 원복되고, MySQL 은 애초에 변경되지 않았으므로 두 저장소가 같은 상태로 남습니다. 보상 이벤트가 도착할 때까지 짧은 lag 동안에는 다른 사용자에게 일시적 `INSUFFICIENT_AMOUNT` 가 보일 수 있고, 이는 UX 재시도로 흡수됩니다.
 
 k6 부하 측정은 다음 글에서 다룹니다.
+
+## 통합 테스트로 검증
+
+위에서 다룬 시나리오들이 실제로 정합성을 만족하는지는 `integration-test` 모듈의 BDD 통합 테스트로 검증했습니다. Docker Compose 로 5개 서비스 + Kafka + MySQL × 5 + Redis 를 띄우고, 같은 옵션에 동시 주문을 던진 뒤 최후 상태를 단언합니다.
+
+![통합 테스트 7 시나리오 모두 통과](/images/posts/mini-coupang-distributed-stock-consistency/test-results-overview.png)
+
+각 테스트는 `@Nested` + `@TestInstance(PER_CLASS)` + `@BeforeAll` 패턴으로 시나리오 한 번을 돌리고, 그 결과에 대해 단언을 한 줄씩 쪼갭니다. 화면 스크린샷만으로 어떤 정합성 조건이 통과했는지 한눈에 보이게 하기 위함입니다.
+
+### 시나리오 1: 재고 100 · 동시 주문 50명
+
+가용 재고 안에서 모두 정상 결제하는 happy path 입니다. PAID 가 50건, Redis 와 MySQL 재고가 둘 다 50으로 같이 줄어드는지를 봅니다.
+
+![재고 100 · 동시 50명 happy path 단언 7건](/images/posts/mini-coupang-distributed-stock-consistency/scenario1-stock100-50concurrent.png)
+
+### 시나리오 3: 재고 100 · 동시 주문 101명
+
+가용 재고보다 한 명 더 들어오는 경계 시나리오입니다. <E>정확히 100명만 PAID 로 도달</E>하고 1명만 `INSUFFICIENT_AMOUNT` 로 거절돼야 합니다 (oversell 0건).
+
+![재고 100 · 동시 101명, 100 성공 1 거절](/images/posts/mini-coupang-distributed-stock-consistency/scenario3-stock100-101concurrent.png)
+
+### 시나리오 3 극단: 재고 1 · 동시 주문 100명
+
+같은 옵션에 100명이 동시에 들어와 단 한 개의 재고를 노리는 극단 경합입니다. Redis 단일 스레드 큐가 100개의 EVAL 을 순차 처리해 1명만 통과시키고 99명은 거절합니다.
+
+![재고 1 · 동시 100명, 1 성공 99 거절](/images/posts/mini-coupang-distributed-stock-consistency/scenario3-stock1-100concurrent.png)
+
+스크린샷의 ms 표시는 IDE 의 `@Test` 메서드 본문 시간이며, `@BeforeAll` 안에서 도는 200명 사전 시드 + 동시 주문 fire 시간은 포함하지 않습니다. 이 글에서는 정합성 (binary 결과) 만 보장하는 용도로 첨부했고, wall-clock 과 처리량은 k6 측정 글에서 별도로 다룹니다.
 
 ## 남은 한계와 다음 단계
 
