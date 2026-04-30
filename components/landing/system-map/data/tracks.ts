@@ -7,16 +7,16 @@ import type { Track } from '../types'
 export const tracks: Track[] = [
   {
     id: 'order-concurrency',
-    topic: '분산 환경에서 재고 서비스의 원자성 보장',
+    topic: '분산 환경에서 재고 서비스의 정합성을 보장',
     trace:
-      '락 없는 환경에서 시작해 모놀리스, MSA까지 단계적으로 옮겨가며 상품 주문 도메인의 재고 서비스가 원자성을 어떻게 보장하는지 정리한다.',
+      '락 없는 환경에서 시작해 모놀리스, MSA까지 단계적으로 옮겨가며 상품 주문 도메인의 재고 서비스가 정합성을 어떻게 보장하는지 정리한다. Redis Lua 원자 선점, Choreography Saga 보상, Outbox/Inbox 패턴으로 발행 신뢰성을 닫는다.',
     status: 'in-progress',
     ctas: [
       {
         kind: 'blog',
-        label: '분산 환경에서 재고 서비스의 원자성 보장',
-        href: '/posts/mini-coupang-order-concurrency-locks',
-        postSlug: 'mini-coupang-order-concurrency-locks',
+        label: '분산 환경에서 재고 서비스의 정합성을 보장',
+        href: '/posts/mini-coupang-distributed-stock-consistency',
+        postSlug: 'mini-coupang-distributed-stock-consistency',
       },
     ],
   },

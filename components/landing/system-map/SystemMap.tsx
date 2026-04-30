@@ -10,7 +10,7 @@ import { TrackCard } from './TrackCard'
 export async function SystemMap() {
   const existingSlugs = new Set(getAllSlugs())
   const { blog: blogUrl } = await getCrossHostUrls()
-  const blogCategoryUrl = `${blogUrl}/?cat=mini-coupang-backend`
+  const blogCategoryUrl = `${blogUrl}/?cat=mini-coupang`
 
   const tracksWithAbsoluteHrefs = tracks.map((t) => ({
     ...t,
