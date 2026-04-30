@@ -39,10 +39,10 @@ Redis는 메모리 위에서 동작하는 키-값 저장소입니다. Remote Dic
 
 | 카테고리 | 대표 | Redis와의 차이 |
 |---|---|---|
-| In-memory cache (단순형) | Memcached | Memcached는 `String`만 지원, 영속성과 복제 없음. Redis는 풍부한 자료구조에 RDB/AOF 영속성과 복제까지 제공 |
-| 로컬 캐시 (프로세스 내) | Caffeine, Guava Cache | 프로세스당 독립이라 여러 인스턴스 간 공유 불가. Redis는 네트워크로 공유 |
+| 인메모리 캐시 | Memcached | Memcached는 `String`만 지원, 영속성과 복제 없음. Redis는 풍부한 자료구조에 RDB/AOF 영속성과 복제까지 제공 |
+| 로컬 캐시 | Caffeine, Guava Cache | 프로세스당 독립이라 여러 인스턴스 간 공유 불가. Redis는 네트워크로 공유 |
 | RDBMS | MySQL, PostgreSQL | 디스크 기반, 강한 정합성, 복잡한 쿼리. Redis는 메모리 기반, 단순 연산, 처리량 우선 |
-| 전통 NoSQL | MongoDB, DynamoDB | 디스크 영속성이 기본. Redis는 메모리가 기본이고 영속성은 옵션 |
+| NoSQL | MongoDB, DynamoDB | 디스크 영속성이 기본. Redis는 메모리가 기본이고 영속성은 옵션 |
 
 Redis의 자리는 이 네 카테고리 어디에도 정확히 속하지 않습니다. 네트워크로 노출되는 풍부한 자료구조 서버에 선택적 영속성이 얹힌 중간 계층이며, 그래서 캐시뿐 아니라 세션 저장소, 실시간 랭킹, Rate Limiter, 메시지 큐 역할까지 한 인프라로 커버할 수 있습니다.
 

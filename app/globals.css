@@ -740,16 +740,6 @@ body {
   line-height: var(--leading-relaxed);
 }
 
-/* Inline code inside Note = dark chip pill. Overrides the teal body
-   style so references scan as neutral chips within the frame. */
-.prose-kr .note code:not(pre code) {
-  color: var(--code-chip-fg);
-  background-color: var(--code-chip-bg);
-  border-radius: 4px;
-  padding: 0.15em 0.45em;
-  font-weight: var(--weight-medium);
-}
-
 .prose-kr blockquote {
   border-left: 3px solid var(--border);
   padding-left: 1em;
