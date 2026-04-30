@@ -1,0 +1,556 @@
+---
+title:
+  ko: "Spring Kafka 어노테이션 정리"
+  en: "Spring Kafka Annotations Guide"
+slug: "spring-kafka-annotations"
+date: 2026-04-30
+tags:
+  - Backend
+  - Spring
+  - Kafka
+  - Spring Kafka
+keywords:
+  - "Spring Kafka"
+  - "@KafkaListener"
+  - "@RetryableTopic"
+  - "@KafkaHandler"
+  - "@DltHandler"
+  - "@SendTo"
+  - "KafkaHeaders"
+  - "@EnableKafka"
+summary:
+  ko: "Spring Kafka가 제공하는 어노테이션으로 컨슈머·헤더 추출·재시도와 DLT를 선언적으로 구성하는 방법을 정리합니다. @EnableKafka, @KafkaListener, @Payload, @Header, @KafkaHandler, @SendTo, @RetryableTopic, @DltHandler 8가지를 실제 Kotlin·Java 예시와 함께 살펴봅니다."
+  en: "Walk through the Spring Kafka annotations that turn imperative KafkaConsumer code into declarative listener methods. Covers @EnableKafka, @KafkaListener, @Payload, @Header, @KafkaHandler, @SendTo, @RetryableTopic, and @DltHandler with Kotlin and Java examples."
+category: kafka
+draft: false
+---
+
+Kafka 컨슈머를 직접 구현하면 `KafkaConsumer.poll()` 루프, 예외 처리, 오프셋 커밋, 스레드 모델까지 전부 손으로 짜야 합니다. Spring Kafka는 이 모든 것을 어노테이션 뒤에 숨겨 메서드 하나에 토픽과 처리 로직만 적도록 합니다. 이 글은 현업에서 자주 쓰는 8가지 어노테이션의 기능과 사용법을 Kotlin과 Java 예시로 정리합니다.
+
+<Note title="이 글의 학습 목표">
+  - `@EnableKafka`·`@KafkaListener`·`@KafkaHandler`가 컨슈머를 어떻게 등록하는지 이해한다
+  - `@Payload`·`@Header`·`@Headers`로 메시지 본문과 메타데이터를 분리해서 받는 방법을 구분할 수 있다
+  - `@RetryableTopic`·`@DltHandler`로 재시도와 DLT를 선언적으로 구성하는 기준을 얻는다
+</Note>
+
+<RelatedPost slug="kafka-essentials" type="prerequisite" />
+
+## 왜 어노테이션인가
+
+Kafka의 표준 클라이언트로 컨슈머를 직접 짜면 다음과 같은 코드가 됩니다.
+
+```kotlin title="ManualConsumer.kt"
+val props = Properties().apply {
+    put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    put(ConsumerConfig.GROUP_ID_CONFIG, "order-group")
+    put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java)
+    put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java)
+}
+val consumer = KafkaConsumer<String, String>(props)
+consumer.subscribe(listOf("order-events"))
+
+while (true) {
+    val records = consumer.poll(Duration.ofMillis(500))
+    for (record in records) {
+        try {
+            handle(record)
+        } catch (e: Exception) {
+            // 재시도, DLT, 오프셋 커밋 정책을 모두 직접 결정해야 함
+        }
+    }
+    consumer.commitSync()
+}
+```
+
+`poll` 루프, 스레드 모델, 예외 처리, 커밋 시점, 셧다운 훅을 전부 직접 챙겨야 합니다. Spring Kafka는 이 보일러플레이트를 컨테이너로 추상화하고, 우리는 어노테이션으로 <E>어떤 토픽을 어떤 메서드로 처리할지</E>만 선언합니다.
+
+```kotlin title="DeclarativeConsumer.kt"
+@KafkaListener(topics = ["order-events"], groupId = "order-group")
+fun handle(record: ConsumerRecord<String, String>) {
+    // 처리 로직만 작성
+}
+```
+
+루프, 스레드, 커밋은 Spring이 만든 `MessageListenerContainer`가 담당하고, 어노테이션은 그 컨테이너에 메서드를 결합하는 선언이 됩니다.
+
+## 의존성과 활성화
+
+Spring Boot 3.2 기준, `spring-kafka` 의존성만 추가하면 됩니다.
+
+```kotlin title="build.gradle.kts"
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.kafka:spring-kafka")
+}
+```
+
+`application.yml`에 브로커와 컨슈머 기본값을 둡니다.
+
+```yaml title="application.yml"
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: default-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.example.*"
+```
+
+### `@EnableKafka`
+
+`@KafkaListener`를 스캔해 컨테이너로 변환하는 후처리기(`KafkaListenerAnnotationBeanPostProcessor`)를 활성화합니다. 설정 클래스에 부착합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="KafkaConfig.kt"
+    @EnableKafka
+    @Configuration
+    class KafkaConfig
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="KafkaConfig.java"
+    @EnableKafka
+    @Configuration
+    public class KafkaConfig {
+    }
+    ```
+  </Tab>
+</Tabs>
+
+Spring Boot의 `KafkaAutoConfiguration`이 클래스패스에 `spring-kafka`가 있으면 `@EnableKafka`를 자동으로 활성화하므로, 표준 부트 프로젝트에서는 별도로 부착하지 않아도 동작합니다. 다만 직접 `ConcurrentKafkaListenerContainerFactory`를 빈으로 정의하거나 자동 설정을 끄는 환경에서는 명시적으로 붙여야 합니다.
+
+## `@KafkaListener`
+
+가장 중심에 있는 어노테이션입니다. 메서드에 부착하면 그 메서드 하나가 컨슈머의 진입점이 됩니다.
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Spring Kafka의 어노테이션은 그 자체로 메시지를 받지 않습니다. `KafkaListenerAnnotationBeanPostProcessor`가 빈 등록 시점에 어노테이션을 스캔해 `MessageListenerContainer`를 만들고, 실제 `poll` 루프는 컨테이너가 돌립니다. 어노테이션은 <E>컨테이너에 어떤 메서드를 결합할지</E>를 선언하는 메타데이터입니다.
+</Callout>
+
+### 기본 사용
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="OrderConsumer.kt"
+    @Component
+    class OrderConsumer {
+
+        @KafkaListener(topics = ["order-events"], groupId = "order-service")
+        fun onOrderEvent(message: String) {
+            println("received: $message")
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="OrderConsumer.java"
+    @Component
+    public class OrderConsumer {
+
+        @KafkaListener(topics = "order-events", groupId = "order-service")
+        public void onOrderEvent(String message) {
+            System.out.println("received: " + message);
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### 자주 쓰는 옵션
+
+| 옵션 | 의미 |
+|---|---|
+| `topics` | 구독할 토픽 이름 배열 |
+| `topicPattern` | 정규식으로 토픽 매칭 (예: `order-.*`) |
+| `groupId` | Consumer Group ID. 미지정 시 `application.yml`의 기본값 |
+| `containerFactory` | 사용할 컨테이너 팩토리 빈 이름. 미지정 시 기본 팩토리 |
+| `concurrency` | 이 리스너가 띄울 컨슈머 스레드 수. 파티션 수 이하로 설정 |
+| `autoStartup` | 애플리케이션 시작 시 자동 기동 여부 (기본 `true`) |
+| `id` | 리스너 ID. JMX·`KafkaListenerEndpointRegistry`에서 컨트롤할 때 사용 |
+| `properties` | 컨슈머 단위로 덮어쓸 Kafka 속성 |
+
+`concurrency`는 이 리스너가 띄울 <E>컨슈머 스레드(=KafkaConsumer 인스턴스) 개수</E>입니다. 파티션 수와의 관계를 이해하지 않으면 의도와 다르게 동작하기 쉬워서 따로 짚습니다.
+
+Kafka의 기본 규칙은 <E>한 파티션은 같은 Consumer Group 안에서 정확히 한 컨슈머 스레드에만 할당된다</E>는 것입니다. 즉, 한 파티션을 두 스레드가 같이 읽지는 않습니다. 그래서 처리 병렬도의 상한은 항상 <E>파티션 수</E>가 됩니다.
+
+이 규칙 위에 Spring의 `concurrency`는 "한 애플리케이션 인스턴스 안에서 몇 개의 컨슈머 스레드를 띄울지"를 정합니다. 토픽이 6 파티션이고, 같은 그룹의 인스턴스가 이 애플리케이션 하나뿐이라고 가정하면 다음처럼 됩니다.
+
+| 설정 | 결과 | 비고 |
+|---|---|---|
+| `concurrency = 1` | 스레드 1개가 6 파티션 전부 담당 | 직렬 처리. 파티션 6개를 굳이 만든 이점이 사라짐 |
+| `concurrency = 3` | 스레드 3개가 각자 2 파티션씩 | 처리량 약 3배. 가장 흔한 균형점 |
+| `concurrency = 6` | 스레드 6개가 1 파티션씩 | 최대 병렬도. 한 파티션의 처리는 여전히 직렬 |
+| `concurrency = 8` | 스레드 6개에 1 파티션씩, 나머지 2개는 놀음 | 메모리·스레드만 낭비. `concurrency > 파티션 수` 금지 |
+
+여기서 두 가지를 더 챙겨야 합니다.
+
+- **인스턴스가 여러 대일 때**: 같은 그룹 ID를 공유하는 애플리케이션 인스턴스가 N대 떠 있으면, 각 인스턴스의 `concurrency`가 합쳐져 그룹 전체의 컨슈머 스레드 수가 됩니다. 인스턴스 2대에 `concurrency = 3`이면 총 6개 스레드가 6 파티션을 1:1로 가져갑니다. 운영에서 오토스케일링과 함께 쓰면 인스턴스가 늘어나는 순간 일부 스레드가 놀게 되므로, `인스턴스 수 × concurrency ≤ 파티션 수`가 되도록 둘을 같이 결정합니다.
+- **한 파티션의 순서 보장**: 같은 키로 들어온 메시지는 항상 같은 파티션에 쌓이고, 같은 파티션은 항상 한 스레드가 처리합니다. 그래서 같은 키의 처리 순서는 `concurrency`를 올려도 깨지지 않습니다. 반대로 말하면, `concurrency`로 늘릴 수 있는 병렬도는 <E>키가 다른 메시지들 사이의 처리</E>뿐입니다. 키가 한쪽에 몰려 있으면 파티션과 스레드를 늘려도 효과가 없습니다.
+
+요약하면, 처리량을 늘리고 싶을 때는 `concurrency`만 만지는 게 아니라 <E>파티션 수 → concurrency → 인스턴스 수</E> 세 값을 함께 보고 결정해야 합니다.
+
+### 메서드 시그니처
+
+`@KafkaListener` 메서드는 인자 형태에 따라 받는 정보가 달라집니다. 가장 자주 쓰는 4가지 시그니처입니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ListenerSignatures.kt"
+    // 1) 메시지 value만
+    @KafkaListener(topics = ["a"])
+    fun onA(value: String) { }
+
+    // 2) ConsumerRecord 통째로
+    @KafkaListener(topics = ["b"])
+    fun onB(record: ConsumerRecord<String, OrderEvent>) {
+        record.key()
+        record.partition()
+        record.offset()
+        record.value()
+    }
+
+    // 3) 배치 모드 (ContainerFactory에서 batchListener=true 설정 필요)
+    @KafkaListener(topics = ["c"], containerFactory = "batchFactory")
+    fun onC(records: List<ConsumerRecord<String, OrderEvent>>) { }
+
+    // 4) Acknowledgment 수동 커밋 (ENABLE_AUTO_COMMIT=false + AckMode.MANUAL)
+    @KafkaListener(topics = ["d"])
+    fun onD(value: String, ack: Acknowledgment) {
+        // 처리 성공 후 커밋
+        ack.acknowledge()
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ListenerSignatures.java"
+    // 1) 메시지 value만
+    @KafkaListener(topics = "a")
+    public void onA(String value) { }
+
+    // 2) ConsumerRecord 통째로
+    @KafkaListener(topics = "b")
+    public void onB(ConsumerRecord<String, OrderEvent> record) {
+        record.key();
+        record.partition();
+        record.offset();
+        record.value();
+    }
+
+    // 3) 배치 모드
+    @KafkaListener(topics = "c", containerFactory = "batchFactory")
+    public void onC(List<ConsumerRecord<String, OrderEvent>> records) { }
+
+    // 4) Acknowledgment 수동 커밋
+    @KafkaListener(topics = "d")
+    public void onD(String value, Acknowledgment ack) {
+        ack.acknowledge();
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`Acknowledgment`를 쓰려면 컨테이너 팩토리의 ack 모드가 `MANUAL` 계열이어야 하고, `auto-commit`은 꺼야 합니다.
+
+## 메시지 분해 어노테이션
+
+`ConsumerRecord<K, V>`를 통째로 받지 않고 필요한 부분만 메서드 파라미터로 분해해 받을 때 사용합니다.
+
+### `@Payload`
+
+메시지 value를 바인딩합니다. 메서드 첫 인자가 명시적 어노테이션 없이 와도 Spring Kafka가 value로 추론하지만, Bean Validation을 적용하거나 의도를 명시할 때 유용합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="PayloadExample.kt"
+    @KafkaListener(topics = ["order-events"])
+    fun onOrder(@Payload @Valid order: OrderEvent) {
+        // OrderEvent의 @NotNull, @Min 등이 검증된 후 진입
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="PayloadExample.java"
+    @KafkaListener(topics = "order-events")
+    public void onOrder(@Payload @Valid OrderEvent order) {
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### `@Header`
+
+특정 헤더 한 개를 메서드 파라미터로 꺼냅니다. Kafka 표준 메타데이터(키, 파티션, 오프셋, 토픽 등)도 모두 헤더로 노출되므로 `KafkaHeaders` 상수를 키로 사용합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="HeaderExample.kt"
+    @KafkaListener(topics = ["order-events"])
+    fun onOrder(
+        @Payload order: OrderEvent,
+        @Header(KafkaHeaders.RECEIVED_KEY) key: String,
+        @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
+        @Header(KafkaHeaders.OFFSET) offset: Long,
+        @Header("trace-id", required = false) traceId: String?,
+    ) {
+        // 비즈니스 헤더 trace-id는 없을 수도 있어 nullable
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="HeaderExample.java"
+    @KafkaListener(topics = "order-events")
+    public void onOrder(
+        @Payload OrderEvent order,
+        @Header(KafkaHeaders.RECEIVED_KEY) String key,
+        @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+        @Header(KafkaHeaders.OFFSET) long offset,
+        @Header(value = "trace-id", required = false) String traceId
+    ) {
+    }
+    ```
+  </Tab>
+</Tabs>
+
+자주 쓰는 `KafkaHeaders` 상수입니다.
+
+| 상수 | 의미 |
+|---|---|
+| `KafkaHeaders.RECEIVED_KEY` | 메시지 키 |
+| `KafkaHeaders.RECEIVED_TOPIC` | 토픽 이름 |
+| `KafkaHeaders.RECEIVED_PARTITION` | 파티션 번호 |
+| `KafkaHeaders.OFFSET` | 오프셋 |
+| `KafkaHeaders.RECEIVED_TIMESTAMP` | 메시지 타임스탬프 |
+| `KafkaHeaders.GROUP_ID` | Consumer Group ID |
+
+### `@Headers`
+
+전체 헤더를 `Map<String, Object>` 또는 `MessageHeaders`로 한 번에 받습니다. 동적으로 헤더 키를 탐색해야 하거나 헤더 전체를 다음 단계로 그대로 넘길 때 유용합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="HeadersExample.kt"
+    @KafkaListener(topics = ["order-events"])
+    fun onOrder(
+        @Payload order: OrderEvent,
+        @Headers headers: Map<String, Any>,
+    ) {
+        val custom = headers.filterKeys { it.startsWith("x-") }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="HeadersExample.java"
+    @KafkaListener(topics = "order-events")
+    public void onOrder(
+        @Payload OrderEvent order,
+        @Headers Map<String, Object> headers
+    ) {
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## `@KafkaHandler`
+
+같은 토픽으로 여러 타입의 메시지가 들어오는 경우, 클래스에 `@KafkaListener`를 붙이고 메서드별로 `@KafkaHandler`를 달아 타입에 따라 분기할 수 있습니다. 역직렬화는 헤더에 담긴 클래스 정보 또는 사용자 지정 `JsonDeserializer.TYPE_MAPPINGS`로 결정됩니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="MultiTypeConsumer.kt"
+    @Component
+    @KafkaListener(topics = ["order-events"], groupId = "order-service")
+    class MultiTypeConsumer {
+
+        @KafkaHandler
+        fun onCreated(event: OrderCreatedEvent) {
+            // OrderCreatedEvent로 역직렬화된 메시지만 진입
+        }
+
+        @KafkaHandler
+        fun onCancelled(event: OrderCancelledEvent) {
+            // OrderCancelledEvent로 역직렬화된 메시지만 진입
+        }
+
+        @KafkaHandler(isDefault = true)
+        fun onUnknown(value: Any) {
+            // 위 두 타입에 매칭되지 않는 메시지의 폴백
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="MultiTypeConsumer.java"
+    @Component
+    @KafkaListener(topics = "order-events", groupId = "order-service")
+    public class MultiTypeConsumer {
+
+        @KafkaHandler
+        public void onCreated(OrderCreatedEvent event) { }
+
+        @KafkaHandler
+        public void onCancelled(OrderCancelledEvent event) { }
+
+        @KafkaHandler(isDefault = true)
+        public void onUnknown(Object value) { }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`isDefault = true` 메서드가 없는 상태에서 매칭되지 않는 타입이 들어오면 예외가 발생하고, 그대로 두면 무한 재시도에 빠질 수 있으므로 폴백을 두거나 헤더 기반 라우팅을 명확히 합니다.
+
+## `@SendTo`
+
+리스너 메서드의 반환값을 다른 토픽으로 그대로 보냅니다. 단순 변환·필터링·요청-응답 패턴에서 짧고 명료한 코드를 만들어 줍니다. 사용하려면 컨테이너 팩토리에 `KafkaTemplate`을 주입해 둬야 합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="SendToExample.kt"
+    @KafkaListener(topics = ["order-created"])
+    @SendTo("order-enriched")
+    fun enrich(event: OrderCreatedEvent): EnrichedOrder {
+        return EnrichedOrder(
+            orderId = event.orderId,
+            customer = customerService.find(event.customerId),
+        )
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="SendToExample.java"
+    @KafkaListener(topics = "order-created")
+    @SendTo("order-enriched")
+    public EnrichedOrder enrich(OrderCreatedEvent event) {
+        return new EnrichedOrder(
+            event.orderId(),
+            customerService.find(event.customerId())
+        );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+반환값이 `null`이면 전송이 생략됩니다. 응답 토픽을 헤더 기반으로 동적으로 결정하고 싶다면 `Message<T>`를 직접 반환하면서 `KafkaHeaders.TOPIC`을 셋팅하는 방식도 가능합니다.
+
+## 재시도와 DLT
+
+처리 실패를 어떻게 다룰지는 컨슈머 설계의 절반입니다. Spring Kafka는 두 가지 어노테이션으로 이것을 선언적으로 풀어냅니다.
+
+### `@RetryableTopic`
+
+리스너 메서드에서 예외가 던져지면, Spring Kafka가 자동으로 만든 retry 토픽으로 메시지를 비동기로 재발행하고, 정해진 시도 횟수를 모두 소진하면 DLT(Dead Letter Topic)로 보냅니다. 동기적으로 같은 스레드에서 재시도하지 않으므로 컨슈머 스레드가 막히지 않습니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="RetryableConsumer.kt"
+    @Component
+    class PaymentConsumer {
+
+        @RetryableTopic(
+            attempts = "4",
+            backoff = Backoff(delay = 1000, multiplier = 2.0),
+            dltStrategy = DltStrategy.FAIL_ON_ERROR,
+            include = [PaymentGatewayException::class],
+            autoCreateTopics = "true",
+        )
+        @KafkaListener(topics = ["payment-events"], groupId = "payment-service")
+        fun onPayment(event: PaymentEvent) {
+            paymentGateway.confirm(event)
+        }
+
+        @DltHandler
+        fun onDlt(event: PaymentEvent, @Header(KafkaHeaders.ORIGINAL_TOPIC) topic: String) {
+            alertService.notify("payment DLT from $topic", event)
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="RetryableConsumer.java"
+    @Component
+    public class PaymentConsumer {
+
+        @RetryableTopic(
+            attempts = "4",
+            backoff = @Backoff(delay = 1000, multiplier = 2.0),
+            dltStrategy = DltStrategy.FAIL_ON_ERROR,
+            include = { PaymentGatewayException.class },
+            autoCreateTopics = "true"
+        )
+        @KafkaListener(topics = "payment-events", groupId = "payment-service")
+        public void onPayment(PaymentEvent event) {
+            paymentGateway.confirm(event);
+        }
+
+        @DltHandler
+        public void onDlt(
+            PaymentEvent event,
+            @Header(KafkaHeaders.ORIGINAL_TOPIC) String topic
+        ) {
+            alertService.notify("payment DLT from " + topic, event);
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+위 설정은 다음과 같은 토픽들을 자동으로 만듭니다.
+
+- `payment-events` (원본)
+- `payment-events-retry-0` (1초 후 재시도)
+- `payment-events-retry-1` (2초 후)
+- `payment-events-retry-2` (4초 후)
+- `payment-events-dlt` (최종 실패)
+
+자주 쓰는 옵션입니다.
+
+| 옵션 | 의미 |
+|---|---|
+| `attempts` | 총 시도 횟수 (원본 시도 포함). 위 예시는 4 = 원본 1 + 재시도 3 |
+| `backoff` | `@Backoff(delay, multiplier, maxDelay)`. 지수 백오프로 retry 토픽 간격 결정 |
+| `dltStrategy` | `FAIL_ON_ERROR`, `ALWAYS_RETRY_ON_ERROR`, `NO_DLT` 중 선택 |
+| `include` / `exclude` | 재시도 대상 예외 화이트/블랙리스트. 미지정 시 모든 예외 재시도 |
+| `autoCreateTopics` | retry/dlt 토픽 자동 생성 여부 |
+| `topicSuffixingStrategy` | retry 토픽 이름 규칙. 기본은 `-retry-N`, `SUFFIX_WITH_INDEX_VALUE` |
+| `kafkaTemplate` | 사용할 `KafkaTemplate` 빈 이름 (기본 자동 탐지) |
+
+### `@DltHandler`
+
+같은 클래스 안에 `@DltHandler`를 단 메서드를 두면 DLT 메시지를 처리할 수 있습니다. 알림, 영구 저장, 운영팀 통보 같은 후속 동작을 여기에 둡니다. `@RetryableTopic`이 있는 같은 클래스에 있어야 자동 결합됩니다.
+
+`@RetryableTopic` 없이 별도의 컨슈머로 DLT를 받고 싶다면, 그냥 `@KafkaListener(topics = "payment-events-dlt")`를 다른 빈에 두는 방식도 흔합니다.
+
+## 동작 원리
+
+여기까지 어노테이션의 사용법을 봤습니다. 이 어노테이션들이 실제로 어떻게 컨슈머가 되는지 한 번 짚고 갑니다.
+
+<Callout type="error" title="핵심 통찰: 어노테이션은 컨테이너에 대한 선언일 뿐이다">
+  실제로 메시지를 받는 주체는 어노테이션이 아니라 `MessageListenerContainer`입니다. `@KafkaListener`는 그 컨테이너에 어떤 토픽을 어떤 메서드로 처리할지를 선언적으로 지정하는 메타데이터이며, 빈 등록 시점에 한 번 스캔되고 그 뒤로는 컨테이너만 동작합니다.
+</Callout>
+
+흐름은 다음과 같습니다.
+
+1. `@EnableKafka`가 `KafkaListenerAnnotationBeanPostProcessor`를 등록합니다.
+2. 모든 빈이 초기화될 때, 후처리기가 클래스와 메서드의 `@KafkaListener`를 스캔합니다.
+3. 각 어노테이션마다 `KafkaListenerEndpoint` 메타데이터를 만들어 `KafkaListenerEndpointRegistrar`에 누적합니다.
+4. 컨텍스트가 refresh될 때 `KafkaListenerEndpointRegistry`가 각 endpoint마다 `ConcurrentMessageListenerContainer`를 생성하고 시작합니다.
+5. 컨테이너가 내부에서 `concurrency` 개수만큼 `KafkaMessageListenerContainer`를 띄우고, 각자 `KafkaConsumer.poll()` 루프를 돕니다.
+6. poll 결과는 `MethodInvokingMessageListener`를 거쳐 어노테이션이 붙은 메서드 인자로 분해되어 호출됩니다.
+
+`@RetryableTopic`은 이 위에 한 단계 더 얹힙니다. 후처리기가 `@RetryableTopic`을 발견하면 retry 토픽 N개와 DLT 토픽을 만들기 위한 `RetryTopicConfigurer`를 활성화하고, 원본 리스너에 실패 시 retry 토픽으로 publish하는 에러 핸들러를 묶어 둡니다. 그래서 우리가 보는 메서드는 단순한 `fun onPayment(...)` 한 줄이지만, 실제로는 그 뒤에 컨테이너 + 에러 핸들러 + 동적으로 만들어진 retry 컨슈머들이 함께 돌아갑니다.
+
+## 마무리
+
+Spring Kafka의 어노테이션은 결국 두 가지 일을 합니다. 하나는 `@EnableKafka`·`@KafkaListener`·`@KafkaHandler`로 <E>어떤 토픽을 어떤 메서드로 받을지</E>를 선언하는 것이고, 다른 하나는 `@Payload`·`@Header`·`@Headers`로 <E>메시지의 어느 조각을 메서드 파라미터로 풀어 받을지</E>를 정하는 것입니다. 거기에 `@SendTo`로 응답 토픽을, `@RetryableTopic`과 `@DltHandler`로 실패 정책을 선언적으로 얹으면, 컨슈머 구현의 대부분이 어노테이션 한두 줄로 끝납니다.
+
+본문에서 본 코드들이 동작하는 이유는, 이 어노테이션들이 모두 `KafkaListenerAnnotationBeanPostProcessor`를 통해 `MessageListenerContainer`로 변환되기 때문입니다. 어노테이션이 곧 컨슈머는 아니지만, 어노테이션을 어떻게 조합하느냐가 컨슈머의 동작을 결정합니다.
+
+## 참고 자료
+
+- [Spring for Apache Kafka Reference (공식 문서)](https://docs.spring.io/spring-kafka/reference/index.html)
+- [Spring Kafka — Annotation-driven Listener Endpoints](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/listener-annotation.html)
+- [Spring Kafka — Retry Topic](https://docs.spring.io/spring-kafka/reference/retrytopic.html)
+- [Apache Kafka — Consumer Configurations](https://kafka.apache.org/documentation/#consumerconfigs)

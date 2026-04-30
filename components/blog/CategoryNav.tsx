@@ -32,7 +32,12 @@ export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProp
             className="group/cat border-b border-border/60 pb-1 last:border-b-0"
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-[length:var(--text-nav-header)] font-semibold uppercase tracking-[var(--tracking-wide)] text-foreground transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
-              <span>{category.label[lang]}</span>
+              <span className="flex items-center gap-1.5">
+                <span>{category.label[lang]}</span>
+                <span className="tabular-nums text-[length:var(--text-meta)] font-normal text-muted-foreground">
+                  ({categoryPosts.length})
+                </span>
+              </span>
               <ChevronDown
                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 group-open/cat:rotate-180"
                 aria-hidden="true"
