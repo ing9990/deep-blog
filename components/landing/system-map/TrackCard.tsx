@@ -14,12 +14,9 @@ export function TrackCard({ track, existingSlugs }: Props) {
   )
 
   return (
-    <article className="rounded-xl border border-border bg-popover px-5 py-4 shadow-[var(--shadow-card)] transition-shadow hover:shadow-[var(--shadow-card-hover)] md:px-6 md:py-5">
-      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <h3
-          className="min-w-0 flex-1 text-[length:var(--text-md)] font-semibold tracking-tight text-foreground md:text-[length:var(--text-lg)]"
-          style={{ fontFamily: 'var(--font-reading)' }}
-        >
+    <article className="rounded-xl border border-border bg-popover px-5 py-1.5 shadow-[var(--shadow-card)] transition-shadow hover:shadow-[var(--shadow-card-hover)] md:px-6 md:py-2">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h3 className="min-w-0 flex-1 text-[length:var(--text-md)] font-semibold tracking-tight text-foreground">
           {track.topic}
         </h3>
         {primary ? <DetailLink cta={primary} /> : null}

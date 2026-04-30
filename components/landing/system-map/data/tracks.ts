@@ -7,12 +7,12 @@ import type { Track } from '../types'
 export const tracks: Track[] = [
   {
     id: 'order-concurrency',
-    topic: '분산 환경에서 재고 서비스의 정합성을 보장',
+    topic: '분산 환경에서도 상품 재고 정합성은 깨지지 않아야 한다: Choreography Saga',
     status: 'in-progress',
     ctas: [
       {
         kind: 'blog',
-        label: '분산 환경에서 재고 서비스의 정합성을 보장',
+        label: '분산 환경에서도 상품 재고 정합성은 깨지지 않아야 한다',
         href: '/posts/mini-coupang-distributed-stock-consistency',
         postSlug: 'mini-coupang-distributed-stock-consistency',
       },
