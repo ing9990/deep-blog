@@ -54,7 +54,7 @@ Spring Data Redis 의존성(`spring-boot-starter-data-redis`)이 기본으로 �
     Code -->|"redissonClient.getLock('k').lock()"| R
     R --> RNetty
     L -->|"SET k v"| Redis
-    RNetty -->|"EVAL Lua 스크립트<br/>SUBSCRIBE channel"| Redis
+    RNetty -->|"EVAL Luascript<br/>SUBSCRIBE channel"| Redis
 
     classDef thin fill:transparent,stroke:#2563eb,stroke-width:1.5px;
     classDef thick fill:transparent,stroke:#7c3aed,stroke-width:1.5px;
@@ -62,7 +62,7 @@ Spring Data Redis 의존성(`spring-boot-starter-data-redis`)이 기본으로 �
     class R,RNetty thick
 `}</Diagram>
 
-이 그림이 글 전체의 요약입니다. Lettuce는 Redis 명령 한 개를 한 개의 함수 호출로 매핑하고 끝납니다. Redisson은 사용자가 호출한 한 줄을 자신의 내부 로직으로 풀어, 다수의 Redis 명령(주로 Lua 스크립트)과 Pub/Sub 구독을 조합해 분산 객체의 의미를 만들어 냅니다.
+이 그림이 글 전체의 요약입니다. Lettuce는 Redis 명령 한 개를 한 개의 함수 호출로 매핑하고 끝납니다. Redisson은 사용자가 호출한 한 줄을 자신의 내부 로직으로 풀어, 다수의 Redis 명령(주로 Luascript)과 Pub/Sub 구독을 조합해 분산 객체의 의미를 만들어 냅니다.
 
 <RelatedPost slug="redis-template-essentials" type="prerequisite" />
 
@@ -155,7 +155,7 @@ Redis 자체가 단일 스레드로 명령을 순차 처리하므로, 클라이�
 Redisson은 같은 Netty 송신 계층을 직접 구현하면서, 그 위에 분산 객체를 얹습니다. 가장 자주 쓰이는 객체는 `RLock`이며, 이 안에서 두 가지 장치가 함께 작동합니다.
 
 <Callout type="error" title="핵심 통찰: Redisson의 객체 추상은 공짜가 아니다">
-  Redisson의 `lock()` 한 줄은 내부적으로 Lua 스크립트 실행, Pub/Sub 채널 구독, 백그라운드 만료 갱신 스레드(watchdog)를 함께 돌립니다. Java 표준 락과 같은 인터페이스를 제공하기 위해 그만큼의 Redis 부하와 백그라운드 작업이 늘 따라붙습니다.
+  Redisson의 `lock()` 한 줄은 내부적으로 Luascript 실행, Pub/Sub 채널 구독, 백그라운드 만료 갱신 스레드(watchdog)를 함께 돌립니다. Java 표준 락과 같은 인터페이스를 제공하기 위해 그만큼의 Redis 부하와 백그라운드 작업이 늘 따라붙습니다.
 </Callout>
 
 #### RLock의 락 획득 흐름
@@ -185,10 +185,10 @@ Redisson은 같은 Netty 송신 계층을 직접 구현하면서, 그 위에 분
 
 핵심은 두 가지입니다.
 
-- **Lua 스크립트로 원자성 확보**: 락 점유 여부 확인, 획득, 만료 시각 설정을 한 번의 `EVAL` 안에서 처리합니다. Hash 자료구조에 thread UUID를 필드로 두고 카운트를 올리는 방식이라 동일 스레드 재진입(reentrant)도 자연스럽게 됩니다.
+- **Luascript 로 원자성 확보**: 락 점유 여부 확인, 획득, 만료 시각 설정을 한 번의 `EVAL` 안에서 처리합니다. Hash 자료구조에 thread UUID를 필드로 두고 카운트를 올리는 방식이라 동일 스레드 재진입(reentrant)도 자연스럽게 됩니다.
 - **Pub/Sub로 대기 효율화**: 다른 holder가 점유 중일 때 단순 폴링 대신 채널을 구독하고 기다립니다. 해제 시 publish가 오기 때문에 깨어나는 시점이 정확합니다.
 
-Lua 스크립트 한 토막을 보면 의미가 더 분명해집니다. 아래는 `RLock.lock()`이 사용하는 락 획득 스크립트의 핵심부입니다.
+Luascript 한 토막을 보면 의미가 더 분명해집니다. 아래는 `RLock.lock()`이 사용하는 락 획득 스크립트의 핵심부입니다.
 
 ```lua title="lock-acquire.lua (요약)"
 if (redis.call('exists', KEYS[1]) == 0) then
@@ -413,7 +413,7 @@ class RedisConfig {
 
 ### 디버깅과 장애 가시성
 
-직접 구현한 락은 문제가 생겼을 때 `redis-cli MONITOR`로 명령 흐름을 따라가면 그대로 보입니다. Redisson은 `EVAL`로 오는 명령이 Lua 스크립트라, 어떤 의미의 호출인지 즉시 알기 어렵습니다. Redisson 디버깅은 보통 라이브러리 내부 로깅 레벨을 올리거나, RLock 키 네이밍 규칙을 외워 두는 식으로 보완합니다.
+직접 구현한 락은 문제가 생겼을 때 `redis-cli MONITOR`로 명령 흐름을 따라가면 그대로 보입니다. Redisson은 `EVAL`로 오는 명령이 Luascript 라, 어떤 의미의 호출인지 즉시 알기 어렵습니다. Redisson 디버깅은 보통 라이브러리 내부 로깅 레벨을 올리거나, RLock 키 네이밍 규칙을 외워 두는 식으로 보완합니다.
 
 ### Cluster·Sentinel에서의 동작
 
