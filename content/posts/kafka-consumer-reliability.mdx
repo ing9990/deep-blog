@@ -1,7 +1,7 @@
 ---
 title:
-  ko: "Kafka 컨슈머는 메시지를 어떻게 안전하게 처리하는가"
-  en: "How Kafka Consumers Process Messages Safely"
+  ko: "Kafka Interview 준비"
+  en: "Kafka Interview Prep"
 slug: "kafka-consumer-reliability"
 date: 2026-05-01
 tags:
@@ -11,36 +11,36 @@ tags:
   - Event Streaming
 keywords:
   - Kafka Consumer Reliability
-  - Kafka 컨슈머 신뢰성
+  - Kafka Consumer 신뢰성
   - At-least-once delivery
   - Idempotent Consumer
   - Consumer Offset
 summary:
-  ko: "Kafka 컨슈머가 메시지를 처리한다는 것이 실제로 어떤 3단계(poll → 처리 → commit)인지 풀어내고, at-least-once 표준이 강제하는 중복 처리와 idempotency 설계, 처리 후 commit 실패 시의 재처리, DB-Kafka dual write 문제에서 Outbox로 가는 흐름까지 컨슈머 측 신뢰성 메커니즘을 정리합니다."
+  ko: "Kafka Consumer가 메시지를 처리한다는 것이 실제로 어떤 3단계(poll → 처리 → commit)인지 풀어내고, at-least-once 표준이 강제하는 중복 처리와 idempotency 설계, 처리 후 commit 실패 시의 재처리, DB-Kafka dual write 문제에서 Outbox로 가는 흐름까지 Consumer 측 신뢰성 메커니즘을 정리합니다."
   en: "Walk through what it means for a Kafka consumer to process a message: the poll/handle/commit cycle, why at-least-once forces idempotency design, what happens when commit fails after processing, and how the dual-write problem leads to the Outbox pattern."
 category: kafka
 draft: false
 ---
 
-면접에서 <E>Kafka 컨슈머는 어떻게 동작하나요?</E> 라는 질문을 받으면 대부분 <E>poll로 메시지를 가져와 처리합니다</E> 정도로 답합니다. 그런데 그 다음 질문이 무섭습니다. <E>처리는 됐는데 Kafka에 응답이 안 갔다면요?</E> 이 글은 컨슈머가 메시지를 처리한다는 게 실제로 어떤 3단계인지, 그 사이에 어떤 보장이 깨지고 그래서 왜 멱등성이 강제되는지를 따라갑니다.
+면접에서 <E>Kafka Consumer는 어떻게 동작하나요?</E> 라는 질문을 받으면 대부분 <E>poll로 메시지를 가져와 처리합니다</E> 정도로 답합니다. 그런데 그 다음 질문이 무섭습니다. <E>처리는 됐는데 Kafka에 응답이 안 갔다면요?</E> 이 글은 Consumer가 메시지를 처리한다는 게 실제로 어떤 3단계인지, 그 사이에 어떤 보장이 깨지고 그래서 왜 멱등성이 강제되는지를 따라갑니다.
 
 <Note title="이 글의 학습 목표">
-  - 컨슈머의 poll → 처리 → commit 3단계가 각각 무엇을 의미하고 어디서 실패할 수 있는지 이해한다
-  - at-least-once 표준이 왜 어쩔 수 없는 선택인지, 그래서 왜 멱등성 설계가 컨슈머 측 책임이 되는지 구분할 수 있다
+  - Consumer의 poll → 처리 → commit 3단계가 각각 무엇을 의미하고 어디서 실패할 수 있는지 이해한다
+  - at-least-once 표준이 왜 어쩔 수 없는 선택인지, 그래서 왜 멱등성 설계가 Consumer 측 책임이 되는지 구분할 수 있다
   - 처리 후 commit 실패, DB-Kafka 동시 쓰기 문제, 재시도와 DLT 같은 실전 함정에서 적절한 도구를 선택하는 기준을 얻는다
 </Note>
 
 <RelatedPost slug="kafka-essentials" type="prerequisite" />
 
-## 컨슈머가 한다는 일
+## Consumer가 하는 일
 
-Kafka 컨슈머가 <E>메시지를 처리한다</E>고 말할 때, 이는 보기보다 많은 일을 가리킵니다. 컨슈머는 한 사이클 안에서 정확히 세 가지 일을 합니다.
+Kafka Consumer가 <E>메시지를 처리한다</E>고 말할 때, 이는 보기보다 많은 일을 가리킵니다. Consumer는 한 사이클 안에서 정확히 세 가지 일을 합니다.
 
 1. **poll**: Broker에 <E>내가 마지막으로 읽은 offset 다음 것부터 주세요</E>라고 묻고 메시지 묶음을 받습니다.
 2. **처리**: 받은 메시지를 비즈니스 로직(DB 쓰기, 외부 호출, 다음 토픽 발행 등)에 흘려보냅니다.
 3. **commit**: <E>여기까지 처리했다</E>는 표시로 offset을 Kafka에 기록합니다.
 
-세 단계는 보통 한 번의 `poll()` 루프 안에서 연속해서 일어나기 때문에 하나의 동작처럼 보입니다. 하지만 이 셋은 **서로 다른 시스템**에서 일어나는 별개의 작업입니다. poll은 Broker와의 네트워크 호출, 처리는 컨슈머 프로세스 내부의 비즈니스 로직, commit은 다시 Broker로 보내는 또 한 번의 네트워크 호출입니다.
+세 단계는 보통 한 번의 `poll()` 루프 안에서 연속해서 일어나기 때문에 하나의 동작처럼 보입니다. 하지만 이 셋은 **서로 다른 시스템**에서 일어나는 별개의 작업입니다. poll은 Broker와의 네트워크 호출, 처리는 Consumer 프로세스 내부의 비즈니스 로직, commit은 다시 Broker로 보내는 또 한 번의 네트워크 호출입니다.
 
 <Diagram caption="poll → 처리 → commit: 서로 다른 시스템에 걸친 세 단계">{`sequenceDiagram
     participant C as Consumer
@@ -55,9 +55,9 @@ Kafka 컨슈머가 <E>메시지를 처리한다</E>고 말할 때, 이는 보기
     B-->>C: ack
 `}</Diagram>
 
-이 그림에서 중요한 건 **commit이 처리와 분리되어 있다**는 사실입니다. 처리가 끝났다고 commit이 자동으로 따라가지 않고, commit 호출이 Broker에 도달했다고 처리가 무사했다는 보장도 아닙니다. 셋 사이의 어디든 컨슈머가 죽거나 네트워크가 끊길 수 있습니다.
+이 그림에서 중요한 건 **commit이 처리와 분리되어 있다**는 사실입니다. 처리가 끝났다고 commit이 자동으로 따라가지 않고, commit 호출이 Broker에 도달했다고 처리가 무사했다는 보장도 아닙니다. 셋 사이의 어디든 Consumer가 죽거나 네트워크가 끊길 수 있습니다.
 
-이 분리가 신뢰성 문제의 출발점입니다. <E>안전한 처리</E>는 결국 <E>이 세 단계 사이의 어떤 시점에서 컨슈머가 죽어도 데이터가 어그러지지 않게 하는 법</E>으로 환원됩니다.
+이 분리가 신뢰성 문제의 출발점입니다. <E>안전한 처리</E>는 결국 <E>이 세 단계 사이의 어떤 시점에서 Consumer가 죽어도 데이터가 어그러지지 않게 하는 법</E>으로 환원됩니다.
 
 ## 왜 한 번만 처리할 수 없는가
 
@@ -65,9 +65,9 @@ Kafka 컨슈머가 <E>메시지를 처리한다</E>고 말할 때, 이는 보기
 
 <RelatedPost slug="two-generals-problem" type="deep-dive" />
 
-가령 Consumer가 메시지를 처리한 직후 commit을 보내려는 순간 컨슈머가 죽었다고 하면, Kafka는 commit을 받지 못했으므로 그 메시지를 <E>아직 처리되지 않았다</E>고 간주하고, 컨슈머가 재시작되면 같은 메시지를 다시 보냅니다. **결과: 같은 메시지가 두 번 처리됩니다.**
+가령 Consumer가 메시지를 처리한 직후 commit을 보내려는 순간 Consumer가 죽었다고 하면, Kafka는 commit을 받지 못했으므로 그 메시지를 <E>아직 처리되지 않았다</E>고 간주하고, Consumer가 재시작되면 같은 메시지를 다시 보냅니다. **결과: 같은 메시지가 두 번 처리됩니다.**
 
-반대 시나리오도 있습니다. 메시지를 받자마자 먼저 commit을 보내고 나중에 처리한다면? 처리 도중에 컨슈머가 죽으면 그 메시지는 영원히 사라집니다. **결과: 메시지가 한 번도 처리되지 않습니다.**
+반대 시나리오도 있습니다. 메시지를 받자마자 먼저 commit을 보내고 나중에 처리한다면? 처리 도중에 Consumer가 죽으면 그 메시지는 영원히 사라집니다. **결과: 메시지가 한 번도 처리되지 않습니다.**
 
 세 가지 전달 보장은 이 두 시나리오의 트레이드오프 위에 정의됩니다.
 
@@ -79,19 +79,19 @@ Kafka 컨슈머가 <E>메시지를 처리한다</E>고 말할 때, 이는 보기
 
 대부분의 메시징 시스템이 표준으로 잡은 건 가운데, **at-least-once**입니다. 유실이 더 무섭기 때문에 <E>두 번이라도 가는 게 한 번도 안 가는 것보다 낫다</E>로 합의한 거죠.
 
-여기서 중요한 깨달음이 나옵니다. **at-least-once를 선택하는 순간 중복 처리는 버그가 아니라 명세가 됩니다.** 컨슈머는 같은 메시지가 두 번 와도 결과가 한 번 처리한 것과 같도록 만들어져야 합니다. 이게 컨슈머 측 멱등성 설계가 옵션이 아닌 의무가 되는 이유입니다.
+여기서 중요한 깨달음이 나옵니다. **at-least-once를 선택하는 순간 중복 처리는 버그가 아니라 명세가 됩니다.** Consumer는 같은 메시지가 두 번 와도 결과가 한 번 처리한 것과 같도록 만들어져야 합니다. 이게 Consumer 측 멱등성 설계가 옵션이 아닌 의무가 되는 이유입니다.
 
 ## 내부 동작
 
 <Callout type="warning" title="이 글의 핵심 포인트">
-  컨슈머의 신뢰성은 네 가지 부품의 조합으로 만들어집니다. **poll 루프와 max.poll.interval.ms**, **offset의 별도 저장**, **auto vs manual commit**, **Consumer Group 리밸런스**. 이 넷이 어떻게 맞물려 돌아가는지를 보면 <E>왜 컨슈머가 가끔 같은 메시지를 다시 받는가</E>의 모든 시나리오가 같은 그림에서 나온다는 게 보입니다.
+  Consumer의 신뢰성은 네 가지 부품의 조합으로 만들어집니다. **Poll Loop와 max.poll.interval.ms**, **offset의 별도 저장**, **auto vs manual commit**, **Rebalance**. 이 넷이 어떻게 맞물려 돌아가는지를 보면 <E>왜 Consumer가 가끔 같은 메시지를 다시 받는가</E>의 모든 시나리오가 같은 그림에서 나온다는 게 보입니다.
 </Callout>
 
-### poll 루프
+### Poll Loop
 
 `KafkaConsumer.poll(timeout)`은 한 번 호출에 메시지 묶음(`ConsumerRecords`)을 가져옵니다. 한 번에 가져올 최대 메시지 수는 `max.poll.records`(기본 500)로 제한됩니다.
 
-여기서 컨슈머가 살아있다는 신호가 어떻게 전달되는지가 중요합니다. Broker는 컨슈머가 정상 동작 중인지를 **다음 poll이 정해진 시간 안에 다시 들어오는가**로 판단합니다. 그 시간 한계가 `max.poll.interval.ms`(기본 5분)입니다.
+여기서 Consumer가 살아있다는 신호가 어떻게 전달되는지가 중요합니다. Broker는 Consumer가 정상 동작 중인지를 **다음 poll이 정해진 시간 안에 다시 들어오는가**로 판단합니다. 그 시간 한계가 `max.poll.interval.ms`(기본 5분)입니다.
 
 ```kotlin title="PollLoop.kt"
 while (true) {
@@ -103,15 +103,15 @@ while (true) {
 }
 ```
 
-`handle()`이 한 메시지당 1초 걸리고 한 번 poll에 500건이 들어오면, 다음 poll까지 500초입니다. 5분(300초)을 훌쩍 넘기죠. Broker는 <E>이 컨슈머는 죽었다</E>고 판단하고, 그 컨슈머가 담당하던 파티션을 같은 그룹의 다른 컨슈머에게 넘깁니다. 이걸 **리밸런스**라 부릅니다.
+`handle()`이 한 메시지당 1초 걸리고 한 번 poll에 500건이 들어오면, 다음 poll까지 500초입니다. 5분(300초)을 훌쩍 넘기죠. Broker는 <E>이 Consumer는 죽었다</E>고 판단하고, 그 Consumer가 담당하던 파티션을 같은 그룹의 다른 Consumer에게 넘깁니다. 이걸 **리밸런스**라 부릅니다.
 
-리밸런스가 일어나면 죽었다고 간주된 컨슈머가 처리하던 메시지의 commit은 무효가 되고, 새 컨슈머가 같은 offset부터 다시 읽기 시작합니다. **느린 처리는 곧 중복 처리로 이어집니다.** 그래서 처리가 무거우면 `max.poll.records`를 줄이거나, 처리를 별도 스레드로 떼어내거나, `max.poll.interval.ms`를 늘리는 식의 조정이 필요합니다.
+리밸런스가 일어나면 죽었다고 간주된 Consumer가 처리하던 메시지의 commit은 무효가 되고, 새 Consumer가 같은 offset부터 다시 읽기 시작합니다. **느린 처리는 곧 중복 처리로 이어집니다.** 그래서 처리가 무거우면 `max.poll.records`를 줄이거나, 처리를 별도 스레드로 떼어내거나, `max.poll.interval.ms`를 늘리는 식의 조정이 필요합니다.
 
 ### Offset의 별도 저장
 
-처리 진행 상태를 가리키는 offset은 컨슈머 메모리가 아니라 **Kafka 자체에 별도 토픽으로 저장**됩니다. 그 토픽 이름이 `__consumer_offsets`이며, 키는 `(group, topic, partition)`, 값은 마지막 commit된 offset입니다.
+처리 진행 상태를 가리키는 offset은 Consumer 메모리가 아니라 **Kafka 자체에 별도 토픽으로 저장**됩니다. 그 토픽 이름이 `__consumer_offsets`이며, 키는 `(group, topic, partition)`, 값은 마지막 commit된 offset입니다.
 
-<Diagram caption="__consumer_offsets 토픽의 키 구조와 컨슈머 그룹별 진행 상태">{`classDiagram
+<Diagram caption="__consumer_offsets 토픽의 키 구조와 Consumer 그룹별 진행 상태">{`classDiagram
     class __consumer_offsets {
       +group: order-group
       +topic: payments
@@ -141,9 +141,9 @@ while (true) {
     __consumer_offsets <|-- Entry_p2
 `}</Diagram>
 
-이 분리 덕에 컨슈머 인스턴스가 죽었다 살아나도 어디서 다시 읽어야 할지를 잊지 않습니다. 그리고 같은 그룹에 컨슈머가 새로 합류하거나 떠나면 Broker가 이 offset을 기준으로 파티션을 재분배할 수 있죠.
+이 분리 덕에 Consumer 인스턴스가 죽었다 살아나도 어디서 다시 읽어야 할지를 잊지 않습니다. 그리고 같은 그룹에 Consumer가 새로 합류하거나 떠나면 Broker가 이 offset을 기준으로 파티션을 재분배할 수 있죠.
 
-이 구조의 부산물은 **commit이 빨라야 하는 이유**가 됩니다. 처리가 끝났는데 commit이 늦어지면, 그 사이 컨슈머가 죽을 경우 처리는 됐지만 Kafka는 모르는 상태가 됩니다. 같은 메시지가 다시 옵니다.
+이 구조의 부산물은 **commit이 빨라야 하는 이유**가 됩니다. 처리가 끝났는데 commit이 늦어지면, 그 사이 Consumer가 죽을 경우 처리는 됐지만 Kafka는 모르는 상태가 됩니다. 같은 메시지가 다시 옵니다.
 
 ### Auto commit vs Manual commit
 
@@ -164,15 +164,15 @@ for (record in records) handle(record)
 consumer.commitSync()  // [!code highlight]
 ```
 
-Auto commit은 편하지만 위험합니다. <E>가져왔으니까 처리될 거다</E>라는 가정으로 commit이 먼저 나갈 수 있습니다. 처리가 실패하거나 컨슈머가 중간에 죽으면 그 메시지는 처리되지 않은 채 commit된 것으로 기록됩니다. 결과적으로 **메시지 유실(at-most-once에 가까운 동작)** 입니다.
+Auto commit은 편하지만 위험합니다. <E>가져왔으니까 처리될 거다</E>라는 가정으로 commit이 먼저 나갈 수 있습니다. 처리가 실패하거나 Consumer가 중간에 죽으면 그 메시지는 처리되지 않은 채 commit된 것으로 기록됩니다. 결과적으로 **메시지 유실(at-most-once에 가까운 동작)** 입니다.
 
 Manual commit은 <E>처리가 끝났음을 우리가 직접 보고한다</E>는 명시적 약속입니다. `commitSync()`는 동기 호출이라 Broker로부터 ack을 받기 전에 처리가 막히지만 가장 단순합니다. `commitAsync()`는 빠르지만 실패 시 재시도 책임을 우리가 져야 합니다.
 
-대부분의 신뢰성 있는 컨슈머 구성은 **Manual commit + 처리 후 commit** 조합입니다. 이 조합이 정확히 at-least-once를 만들어냅니다. 처리는 끝났는데 commit 직전에 죽으면? 같은 메시지가 다시 옵니다. 그래서 멱등성이 필요한 거죠.
+대부분의 신뢰성 있는 Consumer 구성은 **Manual commit + 처리 후 commit** 조합입니다. 이 조합이 정확히 at-least-once를 만들어냅니다. 처리는 끝났는데 commit 직전에 죽으면? 같은 메시지가 다시 옵니다. 그래서 멱등성이 필요한 거죠.
 
-### Consumer Group 리밸런스
+### Rebalance
 
-같은 `group.id`를 공유하는 컨슈머들은 한 토픽의 파티션을 자기들끼리 나눠 갖습니다. 컨슈머가 새로 합류하거나 떠날 때, 또는 위에서 본 `max.poll.interval.ms` 초과로 죽었다고 판단될 때 파티션이 재분배됩니다.
+같은 `group.id`를 공유하는 Consumer들은 한 토픽의 파티션을 자기들끼리 나눠 갖습니다. Consumer가 새로 합류하거나 떠날 때, 또는 위에서 본 `max.poll.interval.ms` 초과로 죽었다고 판단될 때 파티션이 재분배됩니다.
 
 <Diagram caption="consumer-B 이탈에 따른 파티션 재분배">{`flowchart LR
     subgraph Before[리밸런스 전]
@@ -188,17 +188,17 @@ Manual commit은 <E>처리가 끝났음을 우리가 직접 보고한다</E>는 
     Before -->|consumer-B 사망| After
 `}</Diagram>
 
-리밸런스 도중에는 그룹 전체가 잠시 멈춥니다. <E>Stop the World</E> 같은 효과가 나니, 컨슈머가 자주 들락날락하면 처리량이 떨어집니다. 그래서 무거운 처리를 별도 스레드로 떼어내거나, `session.timeout.ms`와 `heartbeat.interval.ms`를 적절히 잡는 튜닝이 필요합니다.
+리밸런스 도중에는 그룹 전체가 잠시 멈춥니다. <E>Stop the World</E> 같은 효과가 나니, Consumer가 자주 들락날락하면 처리량이 떨어집니다. 그래서 무거운 처리를 별도 스레드로 떼어내거나, `session.timeout.ms`와 `heartbeat.interval.ms`를 적절히 잡는 튜닝이 필요합니다.
 
-리밸런스가 신뢰성 측면에서 의미 있는 이유는 따로 있습니다. **죽었다고 판단된 컨슈머의 마지막 처리 결과는 commit되지 않았을 수 있고, 새 컨슈머는 그 commit되지 않은 offset부터 다시 시작합니다.** 즉 리밸런스 한 번에 한 묶음의 메시지가 두 번 처리되는 일이 벌어질 수 있습니다.
+리밸런스가 신뢰성 측면에서 의미 있는 이유는 따로 있습니다. **죽었다고 판단된 Consumer의 마지막 처리 결과는 commit되지 않았을 수 있고, 새 Consumer는 그 commit되지 않은 offset부터 다시 시작합니다.** 즉 리밸런스 한 번에 한 묶음의 메시지가 두 번 처리되는 일이 벌어질 수 있습니다.
 
-<Callout type="error" title="핵심 통찰: 컨슈머 신뢰성은 처리와 commit의 시간차에서 결정된다">
-  Kafka 컨슈머의 모든 신뢰성 함정은 같은 자리에서 나옵니다. 처리는 컨슈머 안에서 일어나고 commit은 Broker로의 또 한 번의 네트워크 호출이며, 그 둘은 절대 같은 트랜잭션에 묶이지 않습니다. 이 시간차가 적어도 한 번 이상의 처리(at-least-once)를 강제하고, 그래서 컨슈머가 멱등하지 않으면 시스템이 깨집니다.
+<Callout type="error" title="핵심 통찰: Consumer 신뢰성은 처리와 commit의 시간차에서 결정된다">
+  Kafka Consumer의 모든 신뢰성 함정은 같은 자리에서 나옵니다. 처리는 Consumer 안에서 일어나고 commit은 Broker로의 또 한 번의 네트워크 호출이며, 그 둘은 절대 같은 트랜잭션에 묶이지 않습니다. 이 시간차가 적어도 한 번 이상의 처리(at-least-once)를 강제하고, 그래서 Consumer가 멱등하지 않으면 시스템이 깨집니다.
 </Callout>
 
 ## 실전 문제
 
-이 섹션이 글의 가장 큰 축입니다. at-least-once가 명세인 이상, 위에서 본 <E>처리와 commit 사이</E>는 실제 시스템에서 네 가지 모양의 문제로 드러납니다.
+at-least-once가 명세이므로, 앞서 본 <E>처리와 commit 사이</E>의 시간차는 실제 시스템에서 네 가지 문제로 나타납니다. 아래에서 하나씩 살펴봅니다.
 
 ### 중복 처리와 멱등성
 
@@ -222,9 +222,9 @@ fun handle(event: OrderPaidEvent) {
 }
 ```
 
-핵심은 **이벤트마다 글로벌 유니크한 ID**가 있어야 한다는 점입니다. 그 ID를 컨슈머 측 DB에 기록해두고, 처리 진입 직전에 이미 있는지 확인합니다. 단순한 방식은 위처럼 별도 `processed_events` 테이블을 두는 것이고, 더 자연스러운 방식은 **자연 멱등 설계**(같은 입력에 같은 결과를 내는 도메인 연산)를 쓰는 것입니다.
+핵심은 **이벤트마다 글로벌 유니크한 ID**가 있어야 한다는 점입니다. 그 ID를 Consumer 측 DB에 기록해두고, 처리 진입 직전에 이미 있는지 확인합니다. 단순한 방식은 위처럼 별도 `processed_events` 테이블을 두는 것이고, 더 자연스러운 방식은 **자연 멱등 설계**(같은 입력에 같은 결과를 내는 도메인 연산)를 쓰는 것입니다.
 
-면접에서 <E>중복 막으려면 select로 확인하면 되지 않나요?</E>라고 답하면 종종 다음 질문이 따라옵니다. <E>그럼 select와 insert 사이에 다른 컨슈머가 같은 처리를 하면요?</E> 이 동시성 함정을 피하려면 DB의 유니크 제약 + `INSERT ... ON DUPLICATE KEY UPDATE`(MySQL) 또는 `INSERT ... ON CONFLICT DO NOTHING`(Postgres) 같은 한 번의 atomic 연산으로 처리해야 합니다.
+면접에서 <E>중복 막으려면 select로 확인하면 되지 않나요?</E>라고 답하면 종종 다음 질문이 따라옵니다. <E>그럼 select와 insert 사이에 다른 Consumer가 같은 처리를 하면요?</E> 이 동시성 함정을 피하려면 DB의 유니크 제약 + `INSERT ... ON DUPLICATE KEY UPDATE`(MySQL) 또는 `INSERT ... ON CONFLICT DO NOTHING`(Postgres) 같은 한 번의 atomic 연산으로 처리해야 합니다.
 
 <RelatedPost slug="idempotency" type="deep-dive" />
 
@@ -244,7 +244,7 @@ try {
 }
 ```
 
-컨슈머가 재시작되거나 리밸런스가 일어나면 같은 offset부터 다시 읽기 시작합니다. 같은 메시지가 두 번째로 도착하죠. 이 시점에 멱등성이 없으면 `INSERT`가 두 번 실행되어 중복 데이터가 만들어집니다.
+Consumer가 재시작되거나 리밸런스가 일어나면 같은 offset부터 다시 읽기 시작합니다. 같은 메시지가 두 번째로 도착하죠. 이 시점에 멱등성이 없으면 `INSERT`가 두 번 실행되어 중복 데이터가 만들어집니다.
 
 해결책은 항상 같은 곳을 가리킵니다. **처리 자체를 멱등하게** 짜는 것입니다. commit 실패는 막을 수 없으니, 두 번째 처리에서 결과가 달라지지 않도록 만드는 게 유일한 길입니다.
 
@@ -252,7 +252,7 @@ try {
 
 모든 처리 실패가 같지 않습니다. 일시적인 에러(외부 API 타임아웃, DB lock contention 등)는 잠시 후 재시도하면 성공할 수 있습니다. 영구적인 에러(스키마 위반, 비즈니스 규칙 위배 등)는 몇 번을 재시도해도 같은 결과가 나옵니다.
 
-이 두 부류를 구분하지 못하면 한 가지 메시지가 영원히 컨슈머를 막습니다. <E>poison pill</E>이라 부르는 현상이죠. 컨슈머는 같은 메시지를 무한히 재시도하느라 그 뒤에 쌓인 정상 메시지들을 처리하지 못합니다.
+이 두 부류를 구분하지 못하면 한 가지 메시지가 영원히 Consumer를 막습니다. <E>poison pill</E>이라 부르는 현상이죠. Consumer는 같은 메시지를 무한히 재시도하느라 그 뒤에 쌓인 정상 메시지들을 처리하지 못합니다.
 
 표준 패턴은 **재시도 N회 후 DLT(Dead Letter Topic)로 보내기**입니다. 일시적 에러는 짧은 백오프로 재시도하고, 그래도 실패하면 별도 토픽으로 격리해 메인 흐름을 막지 않게 합니다. DLT의 메시지는 사람이 들여다보고 원인을 파악한 뒤 수정해서 재처리하거나 폐기합니다.
 
@@ -277,7 +277,7 @@ fun handleDlt(event: OrderEvent) {
 
 ### DB와 Kafka 동시 쓰기 (Dual Write)
 
-마지막은 컨슈머가 다른 메시지를 발행하는 경우입니다. 가령 주문 처리 컨슈머가 `order-paid` 이벤트를 받아 DB에 주문 상태를 업데이트하고, 동시에 `points-grant` 토픽에 새 이벤트를 발행한다고 하면, 두 쓰기를 어떻게 묶어야 할지가 문제가 됩니다.
+마지막은 Consumer가 다른 메시지를 발행하는 경우입니다. 가령 주문 처리 Consumer가 `order-paid` 이벤트를 받아 DB에 주문 상태를 업데이트하고, 동시에 `points-grant` 토픽에 새 이벤트를 발행한다고 하면, 두 쓰기를 어떻게 묶어야 할지가 문제가 됩니다.
 
 ```kotlin title="DualWriteProblem.kt"
 @KafkaListener(topics = ["order-paid"])
@@ -287,7 +287,7 @@ fun handle(event: OrderPaidEvent) {
 }
 ```
 
-DB 쓰기는 성공했는데 Kafka 쓰기 직전에 컨슈머가 죽으면 어떻게 될까요? 주문은 PAID인데 포인트 적립 이벤트는 발행되지 않았습니다. **DB와 Kafka 사이의 정합성이 깨집니다.** 두 시스템이 별도라 한 트랜잭션으로 묶을 수 없으니 어쩔 수 없죠.
+DB 쓰기는 성공했는데 Kafka 쓰기 직전에 Consumer가 죽으면 어떻게 될까요? 주문은 PAID인데 포인트 적립 이벤트는 발행되지 않았습니다. **DB와 Kafka 사이의 정합성이 깨집니다.** 두 시스템이 별도라 한 트랜잭션으로 묶을 수 없으니 어쩔 수 없죠.
 
 이 문제의 표준 해법이 **Outbox 패턴**입니다. Kafka에 직접 쓰는 대신 **같은 DB의 outbox 테이블에 이벤트를 기록**하고, 별도 프로세스가 그 테이블을 읽어 Kafka로 발행합니다.
 
@@ -309,25 +309,25 @@ DB 쓰기와 outbox 기록이 한 트랜잭션이라 둘 다 성공하거나 둘
 
 ## 트레이드오프
 
-**At-least-once + 멱등 컨슈머**가 거의 모든 실전 구성에서 표준이 된 데에는 이유가 있습니다. 다른 옵션들의 비용을 보면 자연스럽게 따라옵니다.
+**At-least-once + 멱등 Consumer**가 거의 모든 실전 구성에서 표준이 된 데에는 이유가 있습니다. 다른 옵션들의 비용을 보면 자연스럽게 따라옵니다.
 
-| 보장 | 컨슈머 측 부담 | 운영 비용 | 적합한 상황 |
+| 보장 | Consumer 측 부담 | 운영 비용 | 적합한 상황 |
 |---|---|---|---|
 | **at-most-once** | 없음 (멱등성 불필요) | 낮음 | 유실이 허용되는 메트릭/로그 수집 |
 | **at-least-once** | 멱등성 필수 | 중간 | 대부분의 비즈니스 처리 |
 | **exactly-once** | Kafka 트랜잭션 + idempotent producer + read_committed 설정 | 높음 (지연 증가, 처리량 감소) | Kafka 내부에서 닫힌 stream processing (예: Kafka Streams) |
 
-Exactly-once가 비싼 이유는 단순합니다. <E>정확히 한 번</E>을 달성하려면 컨슈머의 처리 결과 + offset commit + 다음 토픽으로의 발행이 모두 한 트랜잭션으로 원자적이어야 합니다. Kafka는 이를 위해 트랜잭션 코디네이터, 트랜잭션 로그, 프로듀서 ID 매핑 같은 추가 인프라를 운용하고, 컨슈머 측은 `isolation.level=read_committed`로 미커밋 메시지를 걸러내야 합니다.
+Exactly-once가 비싼 이유는 단순합니다. <E>정확히 한 번</E>을 달성하려면 Consumer의 처리 결과 + offset commit + 다음 토픽으로의 발행이 모두 한 트랜잭션으로 원자적이어야 합니다. Kafka는 이를 위해 트랜잭션 코디네이터, 트랜잭션 로그, 프로듀서 ID 매핑 같은 추가 인프라를 운용하고, Consumer 측은 `isolation.level=read_committed`로 미커밋 메시지를 걸러내야 합니다.
 
-게다가 이 보장은 **Kafka 안에서 닫힌 작업에만 유효**합니다. 컨슈머가 외부 DB나 외부 API를 호출하는 순간 그 외부 작업은 Kafka 트랜잭션 바깥이라 exactly-once 보장이 깨집니다. 결국 컨슈머가 외부 시스템과 대화하는 한, exactly-once는 환상이고 우리는 다시 멱등성으로 돌아옵니다.
+게다가 이 보장은 **Kafka 안에서 닫힌 작업에만 유효**합니다. Consumer가 외부 DB나 외부 API를 호출하는 순간 그 외부 작업은 Kafka 트랜잭션 바깥이라 exactly-once 보장이 깨집니다. 결국 Consumer가 외부 시스템과 대화하는 한, exactly-once는 환상이고 우리는 다시 멱등성으로 돌아옵니다.
 
-그래서 현실의 권장 구성은 거의 항상 같은 모양입니다. **Manual commit + 처리 후 commit + 멱등 컨슈머 + 재시도/DLT + 필요 시 Outbox.** 이 다섯 부품의 조합이 at-least-once를 안전하게 만드는 표준 레시피입니다.
+그래서 현실의 권장 구성은 거의 항상 같은 모양입니다. **Manual commit + 처리 후 commit + 멱등 Consumer + 재시도/DLT + 필요 시 Outbox.** 이 다섯 부품의 조합이 at-least-once를 안전하게 만드는 표준 레시피입니다.
 
 ## 마무리
 
-Kafka 컨슈머의 신뢰성은 결국 한 사실에서 시작합니다. **처리와 commit은 같은 트랜잭션이 아니다.** 이 시간차가 at-least-once를 어쩔 수 없는 표준으로 만들고, 그래서 멱등성이 컨슈머 측의 옵션이 아닌 의무가 됩니다.
+Kafka Consumer의 신뢰성은 결국 한 사실에서 시작합니다. **처리와 commit은 같은 트랜잭션이 아니다.** 이 시간차가 at-least-once를 어쩔 수 없는 표준으로 만들고, 그래서 멱등성이 Consumer 측의 옵션이 아닌 의무가 됩니다.
 
-면접 질문은 다양해 보여도 결국 같은 자리를 가리킵니다. <E>중복 처리는 어떻게 막나요?</E>는 멱등성 설계, <E>commit이 실패하면요?</E>는 at-least-once의 인정, <E>DB와 Kafka의 정합성은요?</E>는 Outbox, <E>롤백은요?</E>는 Saga 보상 트랜잭션. 다른 모양의 같은 질문들이고, 그래서 답도 같은 그림에서 나옵니다. 처리와 commit의 시간차를 인정하고, 그 시간차에도 무너지지 않는 컨슈머를 짜는 것입니다.
+면접 질문은 다양해 보여도 결국 같은 자리를 가리킵니다. <E>중복 처리는 어떻게 막나요?</E>는 멱등성 설계, <E>commit이 실패하면요?</E>는 at-least-once의 인정, <E>DB와 Kafka의 정합성은요?</E>는 Outbox, <E>롤백은요?</E>는 Saga 보상 트랜잭션. 다른 모양의 같은 질문들이고, 그래서 답도 같은 그림에서 나옵니다. 처리와 commit의 시간차를 인정하고, 그 시간차에도 무너지지 않는 Consumer를 짜는 것입니다.
 
 ## 참고 자료
 

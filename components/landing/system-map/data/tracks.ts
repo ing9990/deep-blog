@@ -18,17 +18,4 @@ export const tracks: Track[] = [
       },
     ],
   },
-  {
-    id: 'search-quality',
-    topic: '검색 품질 (Lexical + Semantic)',
-    status: 'in-progress',
-    ctas: [
-      {
-        kind: 'concept',
-        label: '개념 글: Lexical vs Semantic',
-        href: '/posts/lexical-vs-semantic-search',
-        postSlug: 'lexical-vs-semantic-search',
-      },
-    ],
-  },
 ]
