@@ -42,16 +42,18 @@ Kafka 컨슈머가 <E>메시지를 처리한다</E>고 말할 때, 이는 보기
 
 세 단계는 보통 한 번의 `poll()` 루프 안에서 연속해서 일어나기 때문에 하나의 동작처럼 보입니다. 하지만 이 셋은 **서로 다른 시스템**에서 일어나는 별개의 작업입니다. poll은 Broker와의 네트워크 호출, 처리는 컨슈머 프로세스 내부의 비즈니스 로직, commit은 다시 Broker로 보내는 또 한 번의 네트워크 호출입니다.
 
-```text
-[Broker]                [Consumer]               [DB / 외부]
-   │                        │                        │
-   │ ◄─── poll() ───────────│                        │
-   │ ─── records ──────────►│                        │
-   │                        │ ─── INSERT ───────────►│
-   │                        │ ◄── ok ─────────────── │
-   │ ◄── commitSync() ──────│                        │
-   │ ─── ack ──────────────►│                        │
-```
+<Diagram caption="poll → 처리 → commit: 서로 다른 시스템에 걸친 세 단계">{`sequenceDiagram
+    participant C as Consumer
+    participant B as Broker
+    participant D as DB / 외부
+
+    C->>B: poll()
+    B-->>C: records
+    C->>D: INSERT
+    D-->>C: ok
+    C->>B: commitSync()
+    B-->>C: ack
+`}</Diagram>
 
 이 그림에서 중요한 건 **commit이 처리와 분리되어 있다**는 사실입니다. 처리가 끝났다고 commit이 자동으로 따라가지 않고, commit 호출이 Broker에 도달했다고 처리가 무사했다는 보장도 아닙니다. 셋 사이의 어디든 컨슈머가 죽거나 네트워크가 끊길 수 있습니다.
 
@@ -63,7 +65,7 @@ Kafka 컨슈머가 <E>메시지를 처리한다</E>고 말할 때, 이는 보기
 
 <RelatedPost slug="two-generals-problem" type="deep-dive" />
 
-컨슈머가 메시지를 처리한 직후 commit을 보내려는 순간 컨슈머가 죽었다고 합시다. Kafka는 commit을 받지 못했으므로 그 메시지를 <E>아직 처리되지 않았다</E>고 간주하고, 컨슈머가 재시작되면 같은 메시지를 다시 보냅니다. **결과: 같은 메시지가 두 번 처리됩니다.**
+가령 Consumer가 메시지를 처리한 직후 commit을 보내려는 순간 컨슈머가 죽었다고 하면, Kafka는 commit을 받지 못했으므로 그 메시지를 <E>아직 처리되지 않았다</E>고 간주하고, 컨슈머가 재시작되면 같은 메시지를 다시 보냅니다. **결과: 같은 메시지가 두 번 처리됩니다.**
 
 반대 시나리오도 있습니다. 메시지를 받자마자 먼저 commit을 보내고 나중에 처리한다면? 처리 도중에 컨슈머가 죽으면 그 메시지는 영원히 사라집니다. **결과: 메시지가 한 번도 처리되지 않습니다.**
 
@@ -109,12 +111,35 @@ while (true) {
 
 처리 진행 상태를 가리키는 offset은 컨슈머 메모리가 아니라 **Kafka 자체에 별도 토픽으로 저장**됩니다. 그 토픽 이름이 `__consumer_offsets`이며, 키는 `(group, topic, partition)`, 값은 마지막 commit된 offset입니다.
 
-```text
-__consumer_offsets:
-  (order-group, payments, 0) → 152
-  (order-group, payments, 1) → 89
-  (order-group, payments, 2) → 203
-```
+<Diagram caption="__consumer_offsets 토픽의 키 구조와 컨슈머 그룹별 진행 상태">{`classDiagram
+    class __consumer_offsets {
+      +group: order-group
+      +topic: payments
+      +partition: 0..N
+      +offset: long
+    }
+    class Entry_p0 {
+      group = order-group
+      topic = payments
+      partition = 0
+      offset = 152
+    }
+    class Entry_p1 {
+      group = order-group
+      topic = payments
+      partition = 1
+      offset = 89
+    }
+    class Entry_p2 {
+      group = order-group
+      topic = payments
+      partition = 2
+      offset = 203
+    }
+    __consumer_offsets <|-- Entry_p0
+    __consumer_offsets <|-- Entry_p1
+    __consumer_offsets <|-- Entry_p2
+`}</Diagram>
 
 이 분리 덕에 컨슈머 인스턴스가 죽었다 살아나도 어디서 다시 읽어야 할지를 잊지 않습니다. 그리고 같은 그룹에 컨슈머가 새로 합류하거나 떠나면 Broker가 이 offset을 기준으로 파티션을 재분배할 수 있죠.
 
@@ -149,18 +174,19 @@ Manual commit은 <E>처리가 끝났음을 우리가 직접 보고한다</E>는 
 
 같은 `group.id`를 공유하는 컨슈머들은 한 토픽의 파티션을 자기들끼리 나눠 갖습니다. 컨슈머가 새로 합류하거나 떠날 때, 또는 위에서 본 `max.poll.interval.ms` 초과로 죽었다고 판단될 때 파티션이 재분배됩니다.
 
-```text
-리밸런스 전: payments 토픽 (3 파티션)
-  consumer-A: partition-0
-  consumer-B: partition-1
-  consumer-C: partition-2
-
-consumer-B가 죽으면
-
-리밸런스 후:
-  consumer-A: partition-0, partition-1
-  consumer-C: partition-2
-```
+<Diagram caption="consumer-B 이탈에 따른 파티션 재분배">{`flowchart LR
+    subgraph Before[리밸런스 전]
+      A1[consumer-A] --- P0a[partition-0]
+      B1[consumer-B] --- P1a[partition-1]
+      C1[consumer-C] --- P2a[partition-2]
+    end
+    subgraph After[리밸런스 후 · consumer-B 이탈]
+      A2[consumer-A] --- P0b[partition-0]
+      A2 --- P1b[partition-1]
+      C2[consumer-C] --- P2b[partition-2]
+    end
+    Before -->|consumer-B 사망| After
+`}</Diagram>
 
 리밸런스 도중에는 그룹 전체가 잠시 멈춥니다. <E>Stop the World</E> 같은 효과가 나니, 컨슈머가 자주 들락날락하면 처리량이 떨어집니다. 그래서 무거운 처리를 별도 스레드로 떼어내거나, `session.timeout.ms`와 `heartbeat.interval.ms`를 적절히 잡는 튜닝이 필요합니다.
 
@@ -251,7 +277,7 @@ fun handleDlt(event: OrderEvent) {
 
 ### DB와 Kafka 동시 쓰기 (Dual Write)
 
-마지막은 컨슈머가 다른 메시지를 발행하는 경우입니다. 주문 처리 컨슈머가 `order-paid` 이벤트를 받아 DB에 주문 상태를 업데이트하고, 동시에 `points-grant` 토픽에 새 이벤트를 발행한다고 합시다.
+마지막은 컨슈머가 다른 메시지를 발행하는 경우입니다. 가령 주문 처리 컨슈머가 `order-paid` 이벤트를 받아 DB에 주문 상태를 업데이트하고, 동시에 `points-grant` 토픽에 새 이벤트를 발행한다고 하면, 두 쓰기를 어떻게 묶어야 할지가 문제가 됩니다.
 
 ```kotlin title="DualWriteProblem.kt"
 @KafkaListener(topics = ["order-paid"])
