@@ -1,5 +1,6 @@
 package com.deepblog.member.application;
 
+import com.deepblog.common.event.EventTopic;
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
 import com.deepblog.member.application.command.SellerSignupCommand;
@@ -7,10 +8,10 @@ import com.deepblog.member.application.event.SellerSignedUpEvent;
 import com.deepblog.member.application.result.SellerSignupResult;
 import com.deepblog.member.domain.Account;
 import com.deepblog.member.domain.Seller;
+import com.deepblog.member.outbox.OutboxEventStore;
 import com.deepblog.member.repository.AccountRepository;
 import com.deepblog.member.repository.SellerRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,7 @@ public class SellerSignupService {
     private final AccountRepository accountRepository;
     private final SellerRepository sellerRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxEventStore outboxEventStore;
 
     @Transactional
     public SellerSignupResult signup(SellerSignupCommand c) {
@@ -41,8 +42,13 @@ public class SellerSignupService {
                 c.representativeName(), c.phoneNumber())
         );
 
-        eventPublisher.publishEvent(
-            new SellerSignedUpEvent(account.getId(), seller.getId(), account.getEmail()));
+        SellerSignedUpEvent event = new SellerSignedUpEvent(
+            account.getId(), seller.getId(), account.getEmail());
+        outboxEventStore.save(
+            EventTopic.SELLER_SIGNED_UP.getName(),
+            String.valueOf(account.getId()),
+            event
+        );
 
         return new SellerSignupResult(account.getId(), seller.getId(), account.getEmail());
     }

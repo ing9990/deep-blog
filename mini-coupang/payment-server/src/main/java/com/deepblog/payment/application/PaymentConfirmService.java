@@ -1,5 +1,6 @@
 package com.deepblog.payment.application;
 
+import com.deepblog.common.event.EventTopic;
 import com.deepblog.common.id.TsidGenerator;
 import com.deepblog.payment.application.command.PaymentConfirmCommand;
 import com.deepblog.payment.application.event.PaymentCompletedEvent;
@@ -8,10 +9,10 @@ import com.deepblog.payment.application.port.out.dto.PgConfirmRequest;
 import com.deepblog.payment.application.port.out.dto.PgConfirmResult;
 import com.deepblog.payment.application.result.PaymentConfirmResult;
 import com.deepblog.payment.domain.Payment;
+import com.deepblog.payment.outbox.OutboxEventStore;
 import com.deepblog.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentConfirmService {
 
     private final PaymentRepository paymentRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxEventStore outboxEventStore;
     private final PgClient pgClient;
     private final TsidGenerator tsidGenerator;
 
@@ -62,8 +63,13 @@ public class PaymentConfirmService {
         String paymentId = "PAY-" + tsidGenerator.nextString();
         paymentRepository.save(Payment.success(
             paymentId, command.paymentKey(), command.orderRef(), command.amount()));
-        eventPublisher.publishEvent(new PaymentCompletedEvent(
-            paymentId, command.orderRef(), command.amount()));
+        PaymentCompletedEvent event = new PaymentCompletedEvent(
+            paymentId, command.orderRef(), command.amount());
+        outboxEventStore.save(
+            EventTopic.PAYMENT_COMPLETED.getName(),
+            String.valueOf(command.orderRef()),
+            event
+        );
 
         return PaymentConfirmResult.success(paymentId);
     }

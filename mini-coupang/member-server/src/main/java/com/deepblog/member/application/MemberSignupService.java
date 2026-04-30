@@ -1,5 +1,6 @@
 package com.deepblog.member.application;
 
+import com.deepblog.common.event.EventTopic;
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
 import com.deepblog.member.application.command.MemberSignupCommand;
@@ -7,10 +8,10 @@ import com.deepblog.member.application.event.MemberSignedUpEvent;
 import com.deepblog.member.application.result.MemberSignupResult;
 import com.deepblog.member.domain.Account;
 import com.deepblog.member.domain.Member;
+import com.deepblog.member.outbox.OutboxEventStore;
 import com.deepblog.member.repository.AccountRepository;
 import com.deepblog.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,7 @@ public class MemberSignupService {
     private final AccountRepository accountRepository;
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxEventStore outboxEventStore;
 
     @Transactional
     public MemberSignupResult signup(MemberSignupCommand command) {
@@ -37,8 +38,13 @@ public class MemberSignupService {
             Member.create(account, command.name(), command.phoneNumber(), command.nickname())
         );
 
-        eventPublisher.publishEvent(
-            new MemberSignedUpEvent(account.getId(), member.getId(), account.getEmail()));
+        MemberSignedUpEvent event = new MemberSignedUpEvent(
+            account.getId(), member.getId(), account.getEmail());
+        outboxEventStore.save(
+            EventTopic.MEMBER_SIGNED_UP.getName(),
+            String.valueOf(account.getId()),
+            event
+        );
 
         return new MemberSignupResult(account.getId(), member.getId(), account.getEmail());
     }

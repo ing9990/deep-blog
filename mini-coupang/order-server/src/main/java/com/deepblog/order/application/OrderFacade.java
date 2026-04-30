@@ -4,8 +4,6 @@ import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
 import com.deepblog.order.application.command.ConfirmOrderCommand;
 import com.deepblog.order.application.command.PrepareOrderCommand;
-import com.deepblog.order.application.event.OrderPaymentFailedEvent;
-import com.deepblog.order.application.event.OrderPaymentFailedPublisher;
 import com.deepblog.order.application.port.out.PaymentConfirmPort;
 import com.deepblog.order.application.port.out.ProductOptionPort;
 import com.deepblog.order.application.port.out.StockReservePort;
@@ -44,7 +42,6 @@ public class OrderFacade {
     private final StockReservePort stockReservePort;
     private final PaymentConfirmPort paymentConfirmPort;
     private final OrderService orderService;
-    private final OrderPaymentFailedPublisher orderPaymentFailedPublisher;
 
     public PrepareOrderResult prepare(PrepareOrderCommand command) {
         OptionSnapshot snapshot = productOptionPort.findOption(command.optionId());
@@ -86,14 +83,8 @@ public class OrderFacade {
     }
 
     private void cancelAndCompensate(PendingOrderSnapshot pending, String reason) {
-        orderService.cancelOrder(pending.orderId(), pending.memberId());
-        orderPaymentFailedPublisher.publish(new OrderPaymentFailedEvent(
-            pending.memberId(),
-            pending.optionId(),
-            pending.quantity(),
-            reason
-        ));
-        log.info("payment failed; compensation event published. orderId={}, optionId={}, reason={}",
+        orderService.cancelOrder(pending.orderId(), pending.memberId(), reason);
+        log.info("payment failed; cancel + compensation outbox INSERT done. orderId={}, optionId={}, reason={}",
             pending.orderId(), pending.optionId(), reason);
     }
 
