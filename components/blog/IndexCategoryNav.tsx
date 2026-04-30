@@ -1,11 +1,7 @@
 'use client'
 
 import { Layers } from 'lucide-react'
-import {
-  CATEGORIES,
-  groupPostsByCategory,
-  type CategoryId,
-} from '@/lib/categories'
+import { CATEGORIES, groupPostsByCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { cn } from '@/lib/utils'
 import { useIndexFilter } from './IndexFilterContext'

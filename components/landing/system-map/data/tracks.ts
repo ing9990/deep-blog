@@ -1,6 +1,9 @@
 import type { Track } from '../types'
-import { BLOG_URL } from '@/lib/cross-host-url'
 
+/**
+ * Tracks data uses relative blog paths. Consumers (SystemMap) prepend the
+ * resolved blog host so that LAN/IP access stays on the current host.
+ */
 export const tracks: Track[] = [
   {
     id: 'order-concurrency',
@@ -12,7 +15,7 @@ export const tracks: Track[] = [
       {
         kind: 'blog',
         label: '분산 환경에서 재고 서비스의 원자성 보장',
-        href: `${BLOG_URL}/posts/mini-coupang-order-concurrency-locks`,
+        href: '/posts/mini-coupang-order-concurrency-locks',
         postSlug: 'mini-coupang-order-concurrency-locks',
       },
     ],
@@ -27,7 +30,7 @@ export const tracks: Track[] = [
       {
         kind: 'concept',
         label: '개념 글: Lexical vs Semantic',
-        href: `${BLOG_URL}/posts/lexical-vs-semantic-search`,
+        href: '/posts/lexical-vs-semantic-search',
         postSlug: 'lexical-vs-semantic-search',
       },
     ],

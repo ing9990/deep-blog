@@ -117,7 +117,7 @@
   --ring: #3B82F6;
   --keyword: #6366F1;
   --keyword-bg: #EEF2FF;
-  --code-inline-fg: #0D9488;
+  --code-inline-fg: #4338CA;
   --emphasis-fg: #B45309;
   --popover: #FFFFFF;
   --popover-foreground: #09090B;
@@ -349,7 +349,7 @@
   --ring: #60A5FA;
   --keyword: #818CF8;
   --keyword-bg: #1E1B4B;
-  --code-inline-fg: #5EEAD4;
+  --code-inline-fg: #A5B4FC;
   --emphasis-fg: #FCD34D;
   --popover: #18181B;
   --popover-foreground: #FAFAFA;
@@ -543,35 +543,32 @@ body {
   text-underline-offset: 3px;
 }
 
-/* Keyword auto-link — highlighted reference with animated gradient underline.
-   Overrides default .prose-kr a treatment. The tinted background signals
-   "internal knowledge link" while the underline reveals on hover, expanding
-   from center with tapered ends (echoing the .prose-kr hr gradient motif). */
+/* Keyword auto-link — internal reference. Color + footnote-style asterisk
+   superscript at the top-right of the keyword. No underline (clearly distinct
+   from regular blue underlined links). vertical-align: super positions the
+   marker above the baseline; line-height: 0 keeps it from inflating the
+   surrounding line height. Transform-based hover scale does not reflow text. */
 .prose-kr .keyword-link {
   color: var(--keyword);
+  font-weight: var(--weight-medium);
   text-decoration: none;
-  padding: 2px 5px;
-  margin: 0 -1px;
-  border-radius: 4px;
-  background-color: color-mix(in oklab, var(--keyword-bg) 50%, transparent);
-  background-image: linear-gradient(
-    to right,
-    transparent,
-    var(--keyword) 15%,
-    var(--keyword) 85%,
-    transparent
-  );
-  background-size: 0% 1.5px;
-  background-position: center 100%;
-  background-repeat: no-repeat;
-  transition:
-    background-color 200ms ease,
-    background-size 350ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: color 180ms ease;
 }
 
-.prose-kr .keyword-link:hover {
-  background-color: var(--keyword-bg);
-  background-size: 100% 1.5px;
+.prose-kr .keyword-link::after {
+  content: '*';
+  display: inline-block;
+  margin: 0 0.2em 0 0.08em;
+  font-size: 0.85em;
+  font-weight: var(--weight-bold);
+  color: var(--keyword);
+  vertical-align: super;
+  line-height: 0;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.prose-kr .keyword-link:hover::after {
+  transform: scale(1.25);
 }
 
 .prose-kr code:not(pre code) {
@@ -1363,12 +1360,6 @@ html[data-code-theme="floating"]
     opacity: 0;
   }
 }
-
-/* Category card tint — dark mode uses --cat-dark-tint */
-[data-theme="dark"] [data-cat-tinted] {
-  --cat-tint: var(--cat-dark-tint);
-}
-
 
 /* Clean scrollbar — sidebar overflow containers (DocShell aside columns).
    Hidden by default to match the TOC look; surfaces a subtle thumb on

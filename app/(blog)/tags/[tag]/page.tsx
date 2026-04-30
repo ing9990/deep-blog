@@ -8,10 +8,8 @@ import { DocShell } from '@/components/layout/DocShell'
 
 export function generateStaticParams(): Array<{ tag: string }> {
   const allTags = extractAllTags(getAllPosts())
-  return allTags.map(({ tag }) => ({ tag: encodeURIComponent(tag) }))
+  return allTags.map(({ tag }) => ({ tag }))
 }
-
-export const dynamicParams = false
 
 export default async function TagPage({
   params,

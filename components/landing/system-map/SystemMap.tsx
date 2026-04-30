@@ -2,15 +2,20 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 import { getAllSlugs } from '@/lib/posts'
-import { BLOG_URL } from '@/lib/cross-host-url'
+import { getCrossHostUrls } from '@/lib/cross-host-url'
 
 import { tracks } from './data/tracks'
 import { TrackCard } from './TrackCard'
 
-const BLOG_CATEGORY_URL = `${BLOG_URL}/?cat=mini-coupang-backend`
-
-export function SystemMap() {
+export async function SystemMap() {
   const existingSlugs = new Set(getAllSlugs())
+  const { blog: blogUrl } = await getCrossHostUrls()
+  const blogCategoryUrl = `${blogUrl}/?cat=mini-coupang-backend`
+
+  const tracksWithAbsoluteHrefs = tracks.map((t) => ({
+    ...t,
+    ctas: t.ctas.map((c) => ({ ...c, href: `${blogUrl}${c.href}` })),
+  }))
 
   return (
     <section aria-label="미니쿠팡에서 풀어낸 문제들" className="w-full">
@@ -20,7 +25,7 @@ export function SystemMap() {
             Building log · mini-coupang
           </div>
           <Link
-            href={BLOG_CATEGORY_URL}
+            href={blogCategoryUrl}
             className="group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-[length:var(--text-sm)] text-muted-foreground transition-colors hover:border-border-strong hover:bg-accent hover:text-foreground"
           >
             <span>전체 보기</span>
@@ -32,7 +37,7 @@ export function SystemMap() {
         </header>
 
         <div className="space-y-5">
-          {tracks.map((t) => (
+          {tracksWithAbsoluteHrefs.map((t) => (
             <TrackCard key={t.id} track={t} existingSlugs={existingSlugs} />
           ))}
         </div>

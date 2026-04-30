@@ -9,12 +9,10 @@ import {
   type ReactNode,
 } from 'react'
 import type { ClientPost } from '@/lib/client-post'
-import type { ClientBook } from '@/lib/client-book'
 import type { FlatTocItem } from '@/lib/toc'
 
 interface MobileUIState {
   posts: ClientPost[]
-  books: ClientBook[]
 
   navOpen: boolean
   tocOpen: boolean
@@ -46,11 +44,10 @@ export function useMobileUI(): MobileUIState {
 
 interface MobileUIProviderProps {
   posts: ClientPost[]
-  books: ClientBook[]
   children: ReactNode
 }
 
-export function MobileUIProvider({ posts, books, children }: MobileUIProviderProps) {
+export function MobileUIProvider({ posts, children }: MobileUIProviderProps) {
   const [navOpen, setNavOpen] = useState(false)
   const [tocOpen, setTocOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -75,7 +72,6 @@ export function MobileUIProvider({ posts, books, children }: MobileUIProviderPro
   const value = useMemo<MobileUIState>(
     () => ({
       posts,
-      books,
       navOpen,
       tocOpen,
       searchOpen,
@@ -92,7 +88,6 @@ export function MobileUIProvider({ posts, books, children }: MobileUIProviderPro
     }),
     [
       posts,
-      books,
       navOpen,
       tocOpen,
       searchOpen,
