@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: payment-server
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/payment?serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
+    username: mini
+    password: mini
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+server:
+  port: 8083
+
+# 토스 PG 호출 stub 의 모의 지연 (ms). 사용자 결제 인증은 브라우저 SDK 가 별도 처리하고
+# 백엔드 confirm 호출은 카드망 왕복 (수백 ms) 만 부담한다는 가정.
+payment:
+  pg:
+    min-latency-ms: 150
+    max-latency-ms: 400
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.deepblog: INFO
+    org.springframework.kafka: INFO

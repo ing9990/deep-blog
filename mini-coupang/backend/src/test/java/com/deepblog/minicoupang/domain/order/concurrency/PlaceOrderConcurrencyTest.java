@@ -7,8 +7,8 @@ import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
 import com.deepblog.minicoupang.domain.order.application.v1_deprecated.OrderServiceNoLock;
 import com.deepblog.minicoupang.domain.order.application.PlaceOrderCommand;
 import com.deepblog.minicoupang.domain.order.repository.OrderRepository;
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import com.deepblog.minicoupang.domain.order.support.OrderConcurrencyScenario;
 import com.deepblog.minicoupang.domain.order.support.OrderConcurrencyScenario.Prepared;
 import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
@@ -32,8 +32,8 @@ import org.springframework.test.context.ActiveProfiles;
 // 자동 주입이 아닌 @BeforeEach 수동 조립으로 사용한다. 다만 수동 new 는 Spring 프록시를
 // 거치지 않아 @Transactional 이 적용되지 않고, ProductOption.product 가 LAZY 라
 // option.getProduct() 에서 LazyInitializationException 으로 모든 요청이 깨진다.
-// 재측정이 필요하면 (a) @TestConfiguration 으로 OrderServiceNoLock 을 빈 등록하거나
-// (b) §B 처럼 TransactionTemplate 으로 직접 트랜잭션을 열어야 한다.
+// 재측정이 필요하면 @TestConfiguration 으로 OrderServiceNoLock 을 빈 등록해
+// Spring 프록시를 통해 @Transactional 이 적용되도록 해야 한다.
 @SpringBootTest
 @ActiveProfiles("test")
 @Disabled("§A 베이스라인은 자산. 수동 조립으로는 @Transactional 미적용 → LazyInit. 재측정은 위 (a) 또는 (b) 적용 후 enable")

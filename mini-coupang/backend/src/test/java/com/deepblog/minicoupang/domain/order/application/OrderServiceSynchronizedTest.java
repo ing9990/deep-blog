@@ -14,8 +14,8 @@ import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
 import com.deepblog.minicoupang.domain.order.application.v1_deprecated.OrderServiceSynchronized;
 import com.deepblog.minicoupang.domain.order.domain.Order;
 import com.deepblog.minicoupang.domain.order.repository.OrderRepository;
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import com.deepblog.minicoupang.domain.product.domain.OptionStock;
 import com.deepblog.minicoupang.domain.product.domain.Product;
 import com.deepblog.minicoupang.domain.product.domain.ProductOption;
@@ -25,8 +25,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @DisplayName("OrderServiceSynchronized 단건 주문")
@@ -44,10 +42,8 @@ class OrderServiceSynchronizedTest {
         productOptionRepository = mock(ProductOptionRepository.class);
         optionStockRepository = mock(OptionStockRepository.class);
         orderRepository = mock(OrderRepository.class);
-        PlatformTransactionManager txManager = mock(PlatformTransactionManager.class);
-        given(txManager.getTransaction(any())).willReturn(new SimpleTransactionStatus());
         service = new OrderServiceSynchronized(
-            memberRepository, productOptionRepository, optionStockRepository, orderRepository, txManager);
+            memberRepository, productOptionRepository, optionStockRepository, orderRepository);
 
         given(orderRepository.save(any(Order.class))).willAnswer(invocation -> {
             Order persisted = invocation.getArgument(0);

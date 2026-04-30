@@ -3,7 +3,7 @@ package com.deepblog.minicoupang.domain.order.controller;
 import static org.springframework.http.HttpStatus.CREATED;
 
 import com.deepblog.minicoupang.domain.auth.annotation.LoginRequired;
-import com.deepblog.minicoupang.domain.order.application.OrderService;
+import com.deepblog.minicoupang.domain.order.application.OrderFacade;
 import com.deepblog.minicoupang.domain.order.application.PlaceOrderResult;
 import com.deepblog.minicoupang.domain.order.controller.dto.PlaceOrderRequest;
 import com.deepblog.minicoupang.domain.order.controller.dto.PlaceOrderResponse;
@@ -20,14 +20,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OrderController {
 
-    private final OrderService orderService;
+    private final OrderFacade orderFacade;
 
     @PostMapping
     public ResponseEntity<PlaceOrderResponse> place(
         @LoginRequired Long accountId,
         @Valid @RequestBody PlaceOrderRequest request
     ) {
-        PlaceOrderResult result = orderService.placeOrder(accountId, request.toCommand());
+        PlaceOrderResult result = orderFacade.placeOrder(accountId, request.toCommand());
         return ResponseEntity.status(CREATED).body(PlaceOrderResponse.from(result));
     }
 }

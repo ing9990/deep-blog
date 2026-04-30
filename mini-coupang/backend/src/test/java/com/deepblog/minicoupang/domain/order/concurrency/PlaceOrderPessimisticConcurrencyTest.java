@@ -13,8 +13,8 @@ import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductOptionRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,7 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 // Unit 2 §3 (블로그 자산). OrderServicePessimistic 은 v1_deprecated 로 이동했고 @Service 등록을
 // 끊었으므로, 이 테스트에서만 @TestConfiguration 으로 빈을 등록해 @Transactional AOP 프록시를 받는다.
-// 새 §4(OrderService = Lua + Saga) 와 빈이 충돌하지 않도록 운영 등록은 하지 않는다.
+// 새 §4 (OrderFacade + Lua + Saga) 와 빈이 충돌하지 않도록 운영 등록은 하지 않는다.
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(PlaceOrderPessimisticConcurrencyTest.PessimisticTestConfig.class)

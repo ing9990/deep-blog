@@ -1,0 +1,22 @@
+// mini-coupang multi-project root.
+// 모놀리스 backend 와 새 MSA 서비스들을 한 빌드로 묶는다.
+// 각 서브프로젝트가 자체 plugins/dependencies 를 가지므로 root 는 group/version 만 통일한다.
+
+allprojects {
+    group = 'com.deepblog'
+    version = '0.0.1-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+}

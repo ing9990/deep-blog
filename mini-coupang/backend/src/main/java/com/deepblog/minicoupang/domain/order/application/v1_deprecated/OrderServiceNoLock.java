@@ -11,8 +11,8 @@ import com.deepblog.minicoupang.domain.product.domain.Product;
 import com.deepblog.minicoupang.domain.product.domain.ProductOption;
 import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductOptionRepository;
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 

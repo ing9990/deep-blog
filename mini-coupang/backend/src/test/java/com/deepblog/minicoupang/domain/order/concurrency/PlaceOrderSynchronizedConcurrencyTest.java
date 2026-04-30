@@ -13,9 +13,8 @@ import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductOptionRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
-import org.springframework.transaction.PlatformTransactionManager;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,8 +28,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
-// Unit 2 §B (asset). OrderServiceSynchronized 는 빈으로 등록하지 않으므로
-// 자동 주입이 아닌 @BeforeEach 수동 조립으로 사용한다. 재측정이 필요할 때만 enable.
+// Unit 2 §B (asset). 재측정이 필요할 때만 enable.
 @SpringBootTest
 @ActiveProfiles("test")
 @DisplayName("주문 동시성 §B synchronized (200 thread, asset)")
@@ -39,7 +37,7 @@ class PlaceOrderSynchronizedConcurrencyTest {
     private static final int THREADS = 200;
     private static final long INITIAL_STOCK = 100L;
 
-    private OrderServiceSynchronized orderService;
+    @Autowired private OrderServiceSynchronized orderService;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OptionStockRepository optionStockRepository;
     @Autowired private ProductRepository productRepository;
@@ -48,7 +46,6 @@ class PlaceOrderSynchronizedConcurrencyTest {
     @Autowired private AccountRepository accountRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private ProductOptionRepository productOptionRepository;
-    @Autowired private PlatformTransactionManager transactionManager;
 
     private OrderConcurrencyScenario scenario;
     private Prepared prepared;
@@ -60,9 +57,6 @@ class PlaceOrderSynchronizedConcurrencyTest {
             memberRepository, orderRepository, passwordEncoder);
         scenario.clearAll();
         prepared = scenario.prepare("synchronized", INITIAL_STOCK);
-        orderService = new OrderServiceSynchronized(
-            memberRepository, productOptionRepository, optionStockRepository, orderRepository,
-            transactionManager);
     }
 
     @Test

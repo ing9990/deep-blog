@@ -1,0 +1,5 @@
+flowchart LR
+    C["클라이언트"] -- "GET /api/products/search?q=&minPrice=&categoryId=&page=" --> PS["상품 서비스 :8082"]
+    PS -- "name/description LIKE '%q%' + 가격/카테고리 필터 + 페이지네이션" --> DB[("MySQL: product.products")]
+    DB --> PS
+    PS -- "{ items, totalElements }" --> C

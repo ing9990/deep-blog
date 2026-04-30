@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.deepblog.minicoupang.domain.auth.repository.AccountRepository;
 import com.deepblog.minicoupang.domain.member.repository.MemberRepository;
-import com.deepblog.minicoupang.domain.order.application.OrderService;
+import com.deepblog.minicoupang.domain.order.application.OrderFacade;
 import com.deepblog.minicoupang.domain.order.application.PlaceOrderCommand;
 import com.deepblog.minicoupang.domain.order.application.port.out.PaymentPort;
 import com.deepblog.minicoupang.domain.order.application.port.out.dto.PaymentChargeOutcome;
@@ -15,8 +15,8 @@ import com.deepblog.minicoupang.domain.product.repository.OptionStockRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductRepository;
 import com.deepblog.minicoupang.domain.product.repository.ProductStockRedisRepository;
 import com.deepblog.minicoupang.domain.seller.repository.SellerRepository;
-import com.deepblog.minicoupang.global.exception.BusinessException;
-import com.deepblog.minicoupang.global.exception.ErrorCode;
+import com.deepblog.common.exception.BusinessException;
+import com.deepblog.common.exception.ErrorCode;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -94,7 +94,7 @@ class PlaceOrderLuaSagaConcurrencyTest {
         }
     }
 
-    @Autowired private OrderService orderService;
+    @Autowired private OrderFacade orderFacade;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OptionStockRepository optionStockRepository;
     @Autowired private ProductRepository productRepository;
@@ -139,7 +139,7 @@ class PlaceOrderLuaSagaConcurrencyTest {
                     barrier.await();
                     PlaceOrderCommand command = new PlaceOrderCommand(
                         prepared.optionId(), 1L, injectFailure);
-                    orderService.placeOrder(prepared.memberAccountId(), command);
+                    orderFacade.placeOrder(prepared.memberAccountId(), command);
                     success.incrementAndGet();
                 } catch (BusinessException e) {
                     if (e.errorCode() == ErrorCode.INSUFFICIENT_AMOUNT) {

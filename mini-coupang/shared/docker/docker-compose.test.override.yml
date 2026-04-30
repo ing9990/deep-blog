@@ -1,0 +1,25 @@
+services:
+  mysql:
+    ports:
+      - "13306:3306"
+  redis:
+    ports:
+      - "16379:6379"
+  kafka:
+    ports:
+      - "19092:9092"
+  member-server:
+    ports:
+      - "18081:8081"
+  product-server:
+    ports:
+      - "18082:8082"
+  payment-server:
+    ports:
+      - "18083:8083"
+  order-server:
+    ports:
+      - "18084:8084"
+  notification-server:
+    ports:
+      - "18085:8085"
