@@ -1,7 +1,6 @@
 rootProject.name = 'mini-coupang'
 
 include 'common-modules'
-include 'backend'
 include 'member-server'
 include 'product-server'
 include 'order-server'
