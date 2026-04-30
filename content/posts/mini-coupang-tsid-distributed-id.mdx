@@ -1,0 +1,287 @@
+---
+title:
+  ko: "[미니쿠팡] 분산 환경에서 정렬 가능한 ID 만들기: TSID"
+  en: "[Mini Coupang] Sortable Distributed IDs with TSID"
+slug: "mini-coupang-tsid-distributed-id"
+date: 2026-04-30
+tags:
+  - backend
+  - distributed-systems
+  - jpa
+  - kafka
+  - tsid
+keywords:
+  - TSID
+  - Snowflake ID
+  - tsid-creator
+  - Persistable
+  - 정렬 가능한 분산 ID
+summary:
+  ko: "미니쿠팡 다섯 서비스가 도메인 PK, Outbox PK, Kafka eventId 에 ID 를 동시에 만드는데, AUTO_INCREMENT 와 UUIDv4 가 어디서 깨지고 TSID 의 64비트 timestamp+node+sequence 분배가 그 빈자리를 어떻게 메우는지 정리합니다. Order PK 외부 주입과 Persistable<Long> 으로 JPA merge() SELECT 를 차단해, Outbox relay 가 ORDER BY id 만으로 발행 순서를 보장하도록 만든 실제 코드를 공유합니다."
+  en: "How mini-coupang's five service databases produce IDs that are unique, time-sortable, and stay BIGINT. Walks through TSID's 64-bit layout, the Order PK external injection, the Persistable<Long> trick that blocks JPA's pre-insert SELECT, and how this lets the Outbox relay sort publishes by id alone."
+relatedServices:
+  - common-modules
+  - order
+  - payment
+  - member
+category: mini-coupang
+draft: false
+---
+
+미니쿠팡은 member, product, order, payment, notification 다섯 서비스가 각자 별도의 MySQL 스키마를 가지고 동작합니다. 각 서비스의 도메인 엔티티 PK, Outbox 테이블 PK, Kafka 이벤트의 `eventId` 세 자리 모두 ID 가 필요하고, 서로 다른 인스턴스가 동시에 ID 를 생성합니다. 이 ID 가 충돌하지 않으면서, <E>같은 테이블 안에서 PK 순서가 시간순과 일치</E>해야 한다는 요구가 흔히 쓰는 `AUTO_INCREMENT` 와 `UUIDv4` 양쪽 모두에서 깨졌습니다.
+
+이 글은 미니쿠팡이 그 빈자리를 <E>TSID 한 가지로 메운 결정</E>과, 외부 주입 PK 를 위해 JPA `merge()` SELECT 를 차단해야 했던 이유, 그리고 Outbox relay 가 `ORDER BY id` 만으로 발행 순서를 보장하게 된 이유를 정리한 기록입니다.
+
+- 다섯 서비스가 각각 MySQL 스키마를 가지고 있고, ID 는 서비스별 인스턴스에서 만들어집니다.
+- ID 는 BIGINT 컬럼에 그대로 저장됩니다.
+- ID 가 만족해야 할 조건: <E>충돌 없음 · 테이블 내 PK 순서 = 시간순 · BIGINT 호환 · 운영 부담 낮음</E>.
+
+## 요구사항과 제약
+
+### 기능 요구
+
+- 다섯 서비스의 도메인 엔티티(Order, Member 등) PK 를 분산 환경에서 만든다
+- 각 서비스의 `outbox_events` 테이블 PK 를 같은 방식으로 만든다
+- Kafka 이벤트의 `eventId` 를 같은 방식으로 만들고, consumer 측 `processed_events(event_id, event_type)` UNIQUE 제약의 멱등성 키로 쓴다
+
+### ID 가 만족해야 할 5 조건
+
+| 조건 | 무엇 | 출처 |
+|---|---|---|
+| 충돌 없음 | 다른 인스턴스가 같은 시점에 만들어도 동일 ID 가 안 나온다 | MSA 설계 가정 |
+| 테이블 내 시간순 정렬 | 같은 테이블 안에서 나중에 INSERT 된 행의 PK 가 항상 더 크다 (ms 단위) | Outbox relay 가 `ORDER BY id` 만으로 발행 순서를 잡으려는 요구 |
+| BIGINT 호환 | 64비트 정수 컬럼에 그대로 저장된다 | MySQL 인덱스 locality, JPA `Long` 매핑 |
+| 외부 주입 가능 | 엔티티가 만들어지는 시점에 ID 가 결정된다 (DB autoincrement 의존 X) | 도메인 팩토리에서 `Order.create(id, memberId)` 형태로 사용 |
+| 운영 부담 낮음 | worker-id 같은 외부 설정·할당 절차 없이 인스턴스 시작 즉시 동작한다 | 운영 측 가정 (관리 비용 최소화) |
+
+## 후보 비교
+
+다섯 조건을 위 표 그대로 두고, 흔히 고르는 네 후보가 각각 어디서 깨지는지 정리합니다.
+
+| 후보 | 충돌 없음 | 테이블 내 시간순 | BIGINT 호환 | 외부 주입 | 운영 부담 |
+|---|---|---|---|---|---|
+| `AUTO_INCREMENT` | 단일 DB 안에서만 보장 | 단일 DB 안에서만 | OK | 불가 (INSERT 후에 결정) | 낮음 |
+| `UUIDv4` | OK | 깨짐 (랜덤) | 깨짐 (128비트 / String) | OK | 낮음 |
+| `UUIDv7` | OK | OK | 깨짐 (128비트) | OK | 낮음 |
+| Snowflake | OK | OK | OK | OK | 높음 (worker-id 직접 할당·관리) |
+| TSID | OK | OK | OK | OK | 낮음 (라이브러리가 노드 ID 자동) |
+
+`AUTO_INCREMENT` 는 단일 DB 안에서는 좋지만, MSA 처럼 서비스별 인스턴스가 ID 를 만들어야 할 때 충돌 없음을 보장할 방법이 자연스럽게 없습니다. `UUIDv4` 는 충돌은 막지만 시간순 정렬이 깨지면서 B-tree 인덱스의 페이지 분할을 자주 일으키고, 128비트라 BIGINT 컬럼에 들어가지 않아 String 으로 저장하면 인덱스 비교 비용도 늘어납니다.
+
+`UUIDv7` 은 시간순 prefix 가 있어 정렬 측면은 좋지만 여전히 128비트입니다. Snowflake 는 BIGINT 와 시간순 두 조건은 잡지만 worker-id (혹은 datacenter-id) 를 외부에서 인스턴스마다 다르게 부여해야 합니다. 운영 부담이 있는 쪽입니다.
+
+## 미니쿠팡의 결정 근거
+
+다섯 조건과 위 비교표가 만나면 후보가 자연스럽게 좁혀집니다. 그 위에서 미니쿠팡이 TSID 를 택한 근거 네 가지입니다.
+
+1. **시간순 prefix 가 Outbox relay 의 정렬을 그대로 만든다**: `OutboxEventRepository` 의 `findTop100ByPublishedFalseOrderByIdAsc()` 가 PK 만으로 발행 순서를 잡습니다. 이 보장이 깨지면 별도 `created_at` 인덱스를 두고 `ORDER BY created_at, id` 로 정렬해야 하는데, TSID 의 timestamp prefix 가 PK 자체에 들어 있어 <E>ORDER BY id 만으로 발행 순서가 같은 의미</E>가 됩니다.
+2. **BIGINT 인덱스 locality**: TSID 는 64비트 long 이라 MySQL `BIGINT` 컬럼에 그대로 들어갑니다. UUID String 을 PK 로 쓰면 비교 비용이 4~8배 늘고 InnoDB clustered index 의 leaf 크기가 커져 fanout 이 줄어듭니다. TSID 는 `IDENTITY` 와 비슷한 인덱스 효율을 유지합니다.
+3. **노드 ID 운영을 라이브러리에 위임**: Snowflake 직접 운영은 worker-id 를 ZooKeeper/Consul 같은 곳에서 받아오거나 환경변수로 명시해야 합니다. `tsid-creator` 라이브러리는 노드 ID 를 자동 산출하기 때문에 인스턴스 시작 시점에 별도 절차가 없습니다.
+4. **공통 모듈 한 곳에 ID 생성기를 두면 다섯 서비스가 같은 형태**: `common-modules` 의 `TsidGenerator` 한 곳에 `nextId()` 메서드만 두면 전 서비스가 같은 ID 형태를 공유합니다. <E>도메인 PK · Outbox PK · Kafka eventId 가 모두 같은 64비트 long</E> 이어서 디버깅·로그 grep 도 한결 쉬워집니다.
+
+## TSID 의 64비트 구조
+
+TSID 는 Snowflake 계열의 64비트 정수입니다. 비트 분배가 정렬·충돌 방지·throughput 세 가지를 동시에 잡는 핵심입니다.
+
+| 비트 범위 | 길이 | 의미 |
+|---|---|---|
+| 0 ~ 41 | 42비트 | timestamp (ms 단위, 약 139년 표현 가능) |
+| 42 ~ 51 | 10비트 | node id (인스턴스 식별, 최대 1024개) |
+| 52 ~ 63 | 12비트 | sequence (1ms 안에서 노드당 4096개) |
+
+timestamp 가 가장 상위 비트라 ID 를 long 으로 비교하면 시간순 비교와 결과가 같습니다. node id 는 라이브러리가 호스트 정보로 산출하기 때문에 같은 호스트에서 같은 ms 에 같은 sequence 가 나오지 않는 한 충돌이 없습니다. 한 노드가 1ms 안에 4096개를 넘기면 다음 ms 까지 대기하므로 throughput 상한은 노드당 약 400만 ID/초입니다 (실제 라이브러리 동작은 명세 확인 필요).
+
+미니쿠팡에서 쓰는 진입점은 BIGINT 를 돌려주는 한 메서드입니다.
+
+```java title="TsidGenerator.java"
+@Component
+public class TsidGenerator {
+
+    public Long nextId() {
+        return TsidCreator.getTsid().toLong();        // [!code highlight]
+    }
+}
+```
+
+`nextId()` 는 도메인 엔티티 PK · Outbox PK · `BaseEvent.eventId` 세 자리 모두에서 사용되며, 결과는 항상 BIGINT 컬럼에 그대로 저장됩니다.
+
+## 코드에서 본 적용
+
+미니쿠팡 안에서 TSID 가 등장하는 자리는 크게 세 군데입니다.
+
+### Order PK 외부 주입
+
+도메인 팩토리가 ID 를 받아서 엔티티를 만들고, application service 가 ID 생성기를 보유합니다. 도메인 클래스는 자기 상태 불변식만 검증하고 ID 생성 책임은 갖지 않습니다.
+
+```java title="OrderService.java"
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private final OrderRepository orderRepository;
+    private final OutboxEventStore outboxEventStore;
+    private final TsidGenerator tsidGenerator;
+
+    @Transactional
+    public PrepareOrderResult createPendingOrder(
+        Long memberId, OptionSnapshot snapshot, Long quantity
+    ) {
+        Order order = Order.create(tsidGenerator.nextId(), memberId);   // [!code highlight]
+        order.addItem(/* ... */);
+        Order saved = orderRepository.save(order);
+        return PrepareOrderResult.of(saved, snapshot.optionId(), quantity);
+    }
+}
+```
+
+이 패턴이 가능한 이유는 `Order` 엔티티의 `@Id` 가 `@GeneratedValue` 없이 외부 주입형으로 선언되어 있기 때문입니다. <E>ID 를 외부에서 주입하는 패턴</E>은 도메인 팩토리·테스트 fixture 가 ID 를 임의로 통제할 수 있다는 부수 효과도 있습니다.
+
+### Outbox PK 동일 패턴
+
+`OutboxEventStore` 가 outbox 행을 INSERT 할 때 PK 도 TSID 로 직접 부여합니다. 같은 트랜잭션 안에서 비즈니스 변경(주문 PAID 전이) 과 outbox INSERT 가 묶이고, 두 행 모두 시간순 prefix 를 가진 PK 를 갖습니다.
+
+```java title="OutboxEventStore.java"
+@Component
+@RequiredArgsConstructor
+public class OutboxEventStore {
+
+    private final OutboxEventRepository repository;
+    private final TsidGenerator tsidGenerator;
+    private final JsonConverter jsonConverter;
+
+    public void save(String topic, String messageKey, BaseEvent<?> event) {
+        OutboxEvent record = OutboxEvent.create(
+            tsidGenerator.nextId(),                          // [!code highlight]
+            topic,
+            messageKey,
+            event.getEventId(),
+            event.getEventType(),
+            jsonConverter.toJson(event)
+        );
+        repository.save(record);
+    }
+}
+```
+
+### Kafka eventId 멱등성 키
+
+`BaseEvent` 추상 클래스가 생성될 때 `eventId` 를 TSID 로 자동 부여합니다. 이 `eventId` 가 outbox 행에도 들어가고, 발행 후 consumer 측 `processed_events(event_id, event_type)` UNIQUE 제약의 멱등성 키로 쓰입니다.
+
+```java title="BaseEvent.java"
+public abstract class BaseEvent<T> {
+    private final long eventId;
+    private final String eventType;
+    private final LocalDateTime occurredAt;
+    private final T payload;
+
+    protected BaseEvent(String eventType, T payload) {
+        this.eventId = TsidCreator.getTsid().toLong();       // [!code highlight]
+        this.eventType = eventType;
+        this.occurredAt = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        this.payload = payload;
+    }
+    // ...
+}
+```
+
+```java title="ProcessedEvent.java"
+@Entity
+@Table(
+    name = "processed_events",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_processed_events_event",
+        columnNames = {"event_id", "event_type"}                // [!code highlight]
+    )
+)
+public class ProcessedEvent {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "event_id", nullable = false)
+    private Long eventId;
+    // ...
+}
+```
+
+이 자리에서는 `event_id` 가 TSID 64비트 long 이고 `eventType` 과 함께 UNIQUE 키를 이룹니다. 같은 메시지가 두 번 들어오면 INSERT 가 `DataIntegrityViolationException` 으로 실패하고 consumer 가 그것을 catch 해서 처리를 스킵합니다.
+
+`ProcessedEvent` 자체의 PK 는 `IDENTITY` 입니다. 이 행의 PK 는 외부에 노출되지 않고 다른 서비스가 참조할 일도 없어, TSID 의 시간순 prefix 같은 속성이 필요하지 않습니다. <E>모든 PK 를 TSID 로 통일하는 결정과는 별개</E> 로, 서비스 안에서만 의미를 가지는 멱등성 키 테이블의 내부 PK 는 `IDENTITY` 가 자연스럽습니다.
+
+## Persistable 트릭과 Outbox 정렬 보장
+
+ID 를 외부에서 주입하는 순간 JPA 쪽에서 한 가지 함정이 생깁니다. `EntityManager.persist()` 가 아니라 `Spring Data JPA Repository.save()` 를 쓰는 코드는 내부에서 `entity.isNew()` 를 보고 새 행이면 `persist()`, 아니면 `merge()` 를 호출합니다. 기본 구현은 PK 가 `null` 이면 새 행이라고 판단하는데, manually-assigned PK 환경에서는 PK 가 항상 채워져 있으니 모두 `merge()` 경로로 갑니다.
+
+`merge()` 는 INSERT 직전에 SELECT 를 한 번 발행해 같은 PK 의 행이 이미 존재하는지 확인합니다. outbox 행 한 건마다 SELECT + INSERT 두 번의 쿼리가 나가는 셈입니다. 비즈니스 트랜잭션마다 outbox 가 1~2건씩 쌓이는 미니쿠팡에서는 그 누적이 무시할 수준이 아닙니다.
+
+이 함정은 `Persistable<T>` 인터페이스 구현으로 차단합니다. `isNew()` 를 직접 정의하면 Spring Data JPA 가 그 결과를 따라 `persist()` 경로로 갑니다.
+
+```java title="OutboxEvent.java"
+@Entity
+@Table(name = "outbox_events", indexes = {
+    @Index(name = "idx_outbox_unpublished", columnList = "published, outbox_event_id")
+})
+public class OutboxEvent implements Persistable<Long> {
+
+    @Id
+    @Column(name = "outbox_event_id")
+    private Long id;
+
+    // ... 다른 컬럼
+
+    @Transient
+    private boolean newEntity = true;                              // [!code highlight]
+
+    @PostLoad
+    @PostPersist
+    void markNotNew() {                                            // [!code highlight]
+        this.newEntity = false;                                    // [!code highlight]
+    }                                                              // [!code highlight]
+
+    @Override
+    public boolean isNew() {                                       // [!code highlight]
+        return newEntity;                                          // [!code highlight]
+    }
+}
+```
+
+방어 로직은 두 단계입니다. 처음 만들어진 객체는 `newEntity = true` 라 `save()` 가 `persist()` 경로로 갑니다. 일단 INSERT 가 끝나거나(`@PostPersist`) DB 에서 다시 로드되면(`@PostLoad`) `markNotNew()` 가 동작해 같은 인스턴스가 다음 번 `save()` 시점에 `merge()` 를 거치도록 둡니다 (도메인 의도상 outbox 는 다시 저장되지 않지만, 안전 장치로 둡니다).
+
+이 트릭이 의미하는 바는 다음과 같습니다.
+
+- outbox 행 INSERT 가 SELECT 없이 한 번에 끝납니다.
+- relay 가 `findTop100ByPublishedFalseOrderByIdAsc()` 로 100건을 가져올 때 PK 가 TSID 라 시간순 정렬과 결과가 같습니다. <E>ORDER BY id 만으로 발행 순서가 보장</E>되어 별도 `created_at` 인덱스가 필요 없습니다.
+- 같은 트랜잭션 안에서 INSERT 된 outbox 행과 비즈니스 행이 같은 commit 시점에 묶이므로 Outbox 패턴의 핵심 보장(원자성) 도 그대로 유지됩니다.
+
+manually-assigned PK 와 `Persistable` 두 가지가 같이 와야 비로소 위 보장이 성립합니다. ID 만 외부 주입으로 바꾸고 `Persistable` 을 빠뜨리면 outbox 처리량이 SELECT 분만큼 줄어들고, 그 영향은 부하가 높을수록 커집니다.
+
+## 트레이드오프와 적용 조건
+
+<Callout type="error" title="핵심 통찰: TSID 는 ID 형태가 아니라 운영 부담의 분배다">
+TSID 의 가치는 64비트라거나 정렬 가능이라는 것에서 끝나지 않습니다. Snowflake 직접 운영의 worker-id 할당, UUID 의 인덱스 비용, AUTO_INCREMENT 의 단일 DB 의존을 모두 라이브러리 한 곳으로 옮긴 결과물입니다. 즉 분산 ID 라는 한 자리에서 일어나는 운영 부담을 코드 한 군데에 압축한 결정입니다.
+</Callout>
+
+### 우리가 포기한 것
+
+- **사람이 읽기 쉬운 작은 숫자**: `IDENTITY` 의 1, 2, 3 같은 작은 숫자는 디버깅·시연에 편합니다. TSID 는 18자리 long 이라 눈으로 비교하기 어렵습니다. ID 를 외부에 그대로 노출해야 하는 자리에는 별도 prefix 나 별칭을 더해 보완하는 식으로 풀어야 합니다.
+- **추측 불가성**: TSID 는 timestamp prefix 가 노출되어 있어 ID 만으로 생성 시각을 역산할 수 있습니다. 결제·인증 토큰 같이 추측 불가가 보안 요구인 자리에는 별도 토큰을 둬야 합니다 (TSID 는 PK 용도, 토큰은 별도).
+- **clock skew 위험**: 노드 시계가 거꾸로 가면 같은 노드에서 정렬이 깨질 수 있습니다. 미니쿠팡에서는 docker compose 환경이라 이 위험이 작지만, 멀티 호스트 운영에서는 NTP 동기화가 전제 조건이 됩니다.
+
+### 어떤 조건이면 다른 ID 가 맞나
+
+- **단일 DB 안에서 끝나는 PK**: 외부에 노출되지 않고 다른 서비스가 참조하지도 않는 내부 테이블의 PK 는 `IDENTITY` 가 자연스럽습니다. 미니쿠팡의 `processed_events.id` 가 그 예입니다.
+- **추측 불가가 핵심 요구인 토큰**: 결제 키, 세션 토큰 같이 ID 만으로 정보가 새면 안 되는 자리는 `UUIDv4` 또는 secure random 이 맞습니다.
+- **수십~수백 노드 규모의 throughput 한계 도달**: TSID 는 노드당 1ms 에 4096 ID 가 한계입니다. 노드별 처리량이 그 한계에 닿는 시스템은 Snowflake 의 datacenter-id + worker-id 같은 더 세분된 비트 분배가 필요합니다. 미니쿠팡 규모에서는 닿을 일이 없는 한계입니다.
+
+### 남은 한계와 다음 단계
+
+현재 미니쿠팡은 docker compose 단일 호스트라 노드 ID 자동 산출이 충돌 없이 동작합니다. 멀티 호스트 환경으로 확장한다면 `tsid-creator` 의 노드 ID 산출 전략(`TSID_NODE` 환경변수 등) 을 명시적으로 설정해야 합니다. 같은 호스트에서 같은 노드 ID 가 두 개 만들어지지 않는다는 보장이 라이브러리 default 만으로는 부족하기 때문입니다.
+
+또 한 가지 남은 자리는 `Order.orderItem` 같이 Order 의 자식 엔티티의 PK 입니다. 자식 엔티티가 Order 외부에서 참조되지 않는 경우(현재 미니쿠팡이 그 경우) `IDENTITY` 가 자연스럽지만, 외부 노출이 생기는 시점에는 TSID 로 옮기는 것이 일관성 면에서 낫습니다.
+
+## 참고 자료
+
+- [tsid-creator GitHub](https://github.com/f4b6a3/tsid-creator)
+- [Twitter Snowflake (archived)](https://github.com/twitter-archive/snowflake/tree/snowflake-2010)
+- [UUIDv7 RFC 9562](https://datatracker.ietf.org/doc/rfc9562/)
+- [Spring Data JPA: Persistable interface](https://docs.spring.io/spring-data/jpa/reference/jpa/entity-persistence.html)
+- [Outbox Pattern: Microservices.io](https://microservices.io/patterns/data/transactional-outbox.html)
