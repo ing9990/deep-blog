@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Search, X } from 'lucide-react'
+import { ArrowLeft, Search, X } from 'lucide-react'
 import { useMobileUI } from '@/components/providers/MobileUIProvider'
 import { CategoryNav } from './CategoryNav'
 import { TableOfContents } from './TableOfContents'
 import { searchPosts } from '@/lib/filters'
+import { useCrossHostUrls } from '@/lib/cross-host-context'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function MobileOverlays() {
@@ -45,6 +46,7 @@ function useDialogEffect(open: boolean, onClose: () => void) {
 
 function NavDrawer() {
   const { navOpen, closeNav, posts, currentSlug } = useMobileUI()
+  const { apex } = useCrossHostUrls()
   const ref = useDialogEffect(navOpen, closeNav)
 
   return (
@@ -56,8 +58,18 @@ function NavDrawer() {
       }}
       className="fixed inset-y-0 left-0 m-0 h-[100dvh] w-[85%] max-w-80 border-0 bg-background p-0 text-foreground open:flex backdrop:bg-black/40 backdrop:backdrop-blur-sm"
     >
-      <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto px-4 pb-6 pt-20 pl-[max(env(safe-area-inset-left),1rem)]">
-        <CategoryNav posts={posts} currentSlug={currentSlug} onLinkClick={closeNav} />
+      <div className="flex h-full min-h-0 w-full flex-col px-4 pb-6 pt-20 pl-[max(env(safe-area-inset-left),1rem)]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <CategoryNav posts={posts} currentSlug={currentSlug} onLinkClick={closeNav} />
+        </div>
+        <Link
+          href={apex}
+          onClick={closeNav}
+          className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-[length:var(--text-body-sm)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          <span>랜딩 페이지로</span>
+        </Link>
       </div>
     </dialog>
   )

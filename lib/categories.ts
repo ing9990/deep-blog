@@ -43,12 +43,12 @@ export const CATEGORIES: readonly CategoryMeta[] = [
   },
   {
     id: 'redis',
-    label:       { en: 'Redis', ko: 'Redis' },
+    label:       { en: 'REDIS', ko: 'REDIS' },
     description: { en: 'Redis fundamentals, clients, patterns', ko: 'Redis 기초, 클라이언트, 패턴' },
   },
   {
     id: 'kafka',
-    label:       { en: 'Kafka', ko: 'Kafka' },
+    label:       { en: 'KAFKA', ko: 'KAFKA' },
     description: { en: 'Kafka fundamentals and operations', ko: 'Kafka 기초와 운영' },
   },
   {

@@ -18,4 +18,17 @@ export const tracks: Track[] = [
       },
     ],
   },
+  {
+    id: 'tsid-distributed-id',
+    topic: '분산 환경에서 정렬 가능한 ID 만들기: TSID',
+    status: 'in-progress',
+    ctas: [
+      {
+        kind: 'blog',
+        label: '분산 환경에서 정렬 가능한 ID 만들기: TSID',
+        href: '/posts/mini-coupang-tsid-distributed-id',
+        postSlug: 'mini-coupang-tsid-distributed-id',
+      },
+    ],
+  },
 ]
