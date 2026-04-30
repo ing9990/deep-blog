@@ -1,5 +1,6 @@
 package com.deepblog.payment.application;
 
+import com.deepblog.common.id.TsidGenerator;
 import com.deepblog.payment.application.command.PaymentConfirmCommand;
 import com.deepblog.payment.application.event.PaymentCompletedEvent;
 import com.deepblog.payment.application.port.out.PgClient;
@@ -8,7 +9,6 @@ import com.deepblog.payment.application.port.out.dto.PgConfirmResult;
 import com.deepblog.payment.application.result.PaymentConfirmResult;
 import com.deepblog.payment.domain.Payment;
 import com.deepblog.payment.repository.PaymentRepository;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -41,6 +41,7 @@ public class PaymentConfirmService {
     private final PaymentRepository paymentRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final PgClient pgClient;
+    private final TsidGenerator tsidGenerator;
 
     @Transactional
     public PaymentConfirmResult confirm(PaymentConfirmCommand command) {
@@ -58,7 +59,7 @@ public class PaymentConfirmService {
             return PaymentConfirmResult.failure(pgResult.reason());
         }
 
-        String paymentId = "PAY-" + UUID.randomUUID();
+        String paymentId = "PAY-" + tsidGenerator.nextString();
         paymentRepository.save(Payment.success(
             paymentId, command.paymentKey(), command.orderRef(), command.amount()));
         eventPublisher.publishEvent(new PaymentCompletedEvent(

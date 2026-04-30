@@ -2,6 +2,7 @@ package com.deepblog.order.application;
 
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
+import com.deepblog.common.id.TsidGenerator;
 import com.deepblog.order.application.event.OrderConfirmedEvent;
 import com.deepblog.order.application.port.out.dto.OptionSnapshot;
 import com.deepblog.order.application.result.ConfirmOrderResult;
@@ -32,6 +33,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final TsidGenerator tsidGenerator;
 
     @Transactional
     public PrepareOrderResult createPendingOrder(
@@ -39,7 +41,7 @@ public class OrderService {
         OptionSnapshot snapshot,
         Long quantity
     ) {
-        Order order = Order.create(memberId);
+        Order order = Order.create(tsidGenerator.nextId(), memberId);
         order.addItem(
             snapshot.productId(),
             snapshot.optionId(),
@@ -85,7 +87,7 @@ public class OrderService {
     }
 
     private OrderConfirmedEvent toConfirmedEvent(Order order) {
-        var item = order.getItems().get(0);
+        var item = order.getItems().getFirst();
         return new OrderConfirmedEvent(
             order.getId(),
             order.getMemberId(),
