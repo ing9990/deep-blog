@@ -20,21 +20,38 @@ public final class HttpSupport {
     }
 
     public static Result postJson(String url, String body, String sessionCookie) {
-        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url))
-            .timeout(Duration.ofSeconds(90))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body));
-        if (sessionCookie != null) {
-            b.header("Cookie", "SESSION=" + sessionCookie);
+        // JDK HttpClient HTTP/1.1 keep-alive race: 서버가 idle connection 을 닫은 사이
+        // 풀에서 재사용된 stale connection 으로 보내면 EOFException 발생. 한 번 재시도로 우회.
+        Exception last = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(90))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body));
+                if (sessionCookie != null) {
+                    b.header("Cookie", "SESSION=" + sessionCookie);
+                }
+                HttpResponse<String> response = CLIENT.send(b.build(), HttpResponse.BodyHandlers.ofString());
+                String setCookie = response.headers().firstValue("set-cookie").orElse(null);
+                String session = extractSessionCookie(setCookie);
+                return new Result(response.statusCode(), response.body(), session);
+            } catch (java.io.IOException e) {
+                last = e;
+            } catch (Exception e) {
+                last = e;
+                break;
+            }
         }
-        try {
-            HttpResponse<String> response = CLIENT.send(b.build(), HttpResponse.BodyHandlers.ofString());
-            String setCookie = response.headers().firstValue("set-cookie").orElse(null);
-            String session = extractSessionCookie(setCookie);
-            return new Result(response.statusCode(), response.body(), session);
-        } catch (Exception e) {
-            throw new RuntimeException("HTTP POST failed: " + url, e);
+        Throwable root = last;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
         }
+        throw new RuntimeException(
+            "HTTP POST failed: " + url
+                + " | " + last.getClass().getSimpleName() + ": " + last.getMessage()
+                + " | root=" + root.getClass().getSimpleName() + ": " + root.getMessage(),
+            last);
     }
 
     public static JsonNode parse(String body) {

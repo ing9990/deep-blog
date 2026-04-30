@@ -98,7 +98,8 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/payment?serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      PAYMENT_SIMULATED_LATENCY_MS: "0"
+      PAYMENT_PG_MIN_LATENCY_MS: "0"
+      PAYMENT_PG_MAX_LATENCY_MS: "10"
     depends_on:
       mysql: { condition: service_healthy }
       kafka: { condition: service_healthy }

@@ -19,9 +19,6 @@ dependencies {
     testRuntimeOnly 'com.mysql:mysql-connector-j'
     testImplementation 'com.zaxxer:HikariCP'
 
-    testImplementation 'org.testcontainers:testcontainers:1.20.4'
-    testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
-
     testImplementation 'org.awaitility:awaitility:4.2.2'
     testImplementation 'org.assertj:assertj-core'
     testImplementation 'com.fasterxml.jackson.core:jackson-databind'
