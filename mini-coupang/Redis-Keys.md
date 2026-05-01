@@ -1,12 +1,14 @@
 # Redis Keys
 
-미니 쿠팡이 Redis 에 저장하는 키와 운영 규칙을 정리한 문서입니다.
+미니쿠팡이 Redis 에 저장하는 키와 운영 규칙을 정리한 문서입니다.
 
 ## 개요
 
 - Redis 는 두 가지 책임을 동시에 맡습니다. 하나는 주문 hot path 의 **재고 1차 원장**, 다른 하나는 **세션 외부 저장소** 입니다.
 - 재고 키는 직접 정의하고 Lua 스크립트로 다룹니다. 세션 키는 Spring Session Redis (`spring-session-data-redis`) 가 자동으로 만들고 갱신합니다.
 - 두 책임 모두 동일한 Redis 인스턴스를 공유하지만, 키 prefix (`stock:` / `spring:session:`) 로 충돌하지 않습니다.
+
+---
 
 ## 네이밍 컨벤션
 
@@ -21,18 +23,22 @@
 
 세션 키는 Spring Session Redis 가 `spring.session.redis.namespace = spring:session` 설정을 따라 `spring:session:sessions:{sessionId}` 형태로 자동 생성합니다. 직접 손대지 않습니다.
 
+---
+
 ## 키 매트릭스
 
 | 키 패턴 | 타입 | TTL | 용도 | 소유 서비스 | 사용 명령 |
 |---|---|---|---|---|---|
-| [`stock:option:{optionId}`](#stockoptionoptionid) | `String` (정수) | 영구 | 옵션 잔여 재고 | 상품 서비스 | `EVAL` Lua (`GET`/`DECRBY`/`INCRBY`/`SET`) |
+| [`stock:option:{optionId}`](#stockoptionoptionid) | `String` (정수) | 영구 | 옵션 잔여 재고 | 상품 서비스 | `SET` / `EVAL` Lua (`reserveStock`, `releaseStock`) |
 | [`spring:session:sessions:{sessionId}`](#springsessionsessionssessionid) | `Hash` | 30분 sliding | Spring Session 외부 저장 | 회원 서비스 | `spring-session-data-redis` 자동 관리 |
+
+---
 
 ## 키별 상세
 
 ### `stock:option:{optionId}`
 
-옵션 SKU 단위의 잔여 재고입니다. 주문 hot path 에서 결제 호출 직전에 차감되고, 결제 실패 시 보상 경로로 다시 복구되는 Redis 의 **1차 원장** 입니다. MySQL `option_stock` 은 `order.confirmed` Kafka 이벤트를 받은 상품 서비스 컨슈머가 비동기로 수렴시키는 **보조 원장** 입니다. 동시 요청 환경에서 정합성을 보장하기 위해 모든 변경은 Lua 스크립트 안에서 원자적으로 일어납니다.
+옵션 SKU 단위의 잔여 재고입니다. 주문 hot path 에서 결제 호출 직전에 차감되고, 결제 실패 시 보상 경로로 다시 복구되는 Redis 의 **1차 원장** 입니다. MySQL `option_stocks` 는 `order.confirmed` Kafka 이벤트를 받은 상품 서비스 컨슈머가 비동기로 수렴시키는 **보조 원장** 입니다. 동시 요청 환경에서 정합성을 보장하기 위해 모든 변경은 Lua 스크립트 안에서 원자적으로 일어납니다.
 
 | 항목 | 값 |
 |---|---|
@@ -40,8 +46,23 @@
 | 값 예 | `"100"` → `"98"` → `"96"` |
 | 초기화 | 상품 등록 시 같은 트랜잭션 안에서 `setStock(optionId, initialStock)` ([UC-10](Usecase.md#uc-10-상품-등록)) |
 | 차감 | `EVAL` Lua `reserveStock` — `GET → 검증 → DECRBY` 한 명령. 반환 `-1` (키 없음) / `-2` (재고 부족) / `0 이상` (남은 재고) |
-| 복구 | `EVAL` Lua `releaseStock` — `GET → 검증 → INCRBY`. 결제 실패 보상 경로 ([UC-02](Usecase.md#uc-02-상품-주문)) |
+| 복구 | `EVAL` Lua `releaseStock` — `GET → INCRBY`. 반환 `-1` (키 없음) / `0 이상` (복구 후 재고). 결제 실패 보상 경로 ([UC-02](Usecase.md#uc-02-상품-주문)) |
 | 정합성 | Redis 가 hot path 의 1차 원장. MySQL 은 `order.confirmed` 컨슈머를 통해 수렴되는 보조 원장 |
+
+**Lua 스크립트** (`product-server/.../ProductStockRedisRepository.java`):
+
+```lua
+-- reserveStock
+local current = redis.call('GET', KEYS[1])
+if current == false then return -1 end
+if tonumber(current) < tonumber(ARGV[1]) then return -2 end
+return redis.call('DECRBY', KEYS[1], ARGV[1])
+
+-- releaseStock
+local current = redis.call('GET', KEYS[1])
+if current == false then return -1 end
+return redis.call('INCRBY', KEYS[1], ARGV[1])
+```
 
 ### `spring:session:sessions:{sessionId}`
 
@@ -54,6 +75,10 @@
 | 생성 | 로그인 시 ([UC-04](Usecase.md#uc-04-회원-로그인), [UC-05](Usecase.md#uc-05-판매자-로그인)) `request.getSession(true)` 호출과 함께 Spring Session 이 자동 생성 |
 | 갱신 | 매 요청마다 sliding 갱신. TTL 30분 (`spring.session.timeout=30m`) |
 | 무효화 | 로그아웃 시 ([UC-06](Usecase.md#uc-06-로그아웃)) `HttpSession.invalidate()` → 해당 키 `DEL` |
+
+설정 위치: `member-server/src/main/resources/application.yaml` 의 `spring.session.{store-type, redis.namespace, timeout}`.
+
+---
 
 ## 운영 / 디버깅
 
@@ -69,4 +94,7 @@ redis-cli --scan --pattern 'spring:session:sessions:*' | wc -l
 
 # 특정 옵션 재고 직접 초기화 (긴급 운영용)
 redis-cli SET stock:option:42 100
+
+# 모든 재고 키 초기화 (테스트 환경)
+redis-cli --scan --pattern 'stock:option:*' | xargs redis-cli DEL
 ```

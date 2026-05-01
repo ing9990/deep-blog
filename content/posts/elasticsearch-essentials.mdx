@@ -1,0 +1,548 @@
+---
+title:
+  ko: "Elasticsearch 입문"
+  en: "Elasticsearch Essentials"
+slug: "elasticsearch-essentials"
+date: 2026-05-02
+tags:
+  - backend
+  - search
+  - Elasticsearch
+keywords:
+  - Elasticsearch
+  - Shard
+  - Analyzer
+  - Tokenizer
+summary:
+  ko: "Elasticsearch의 핵심 용어(Index·Document·Mapping·Shard·Replica·Analyzer)와 인덱스 생성·매핑 정의·도큐먼트 CRUD·기본 검색 사용법을 한 번에 정리한 입문서입니다."
+  en: "An introduction to Elasticsearch fundamentals: core terminology (Index, Document, Mapping, Shard, Replica, Analyzer), index and mapping setup, document CRUD, and basic search."
+category: infrastructure
+draft: false
+---
+
+검색을 처음 다룰 때 가장 먼저 부딪히는 벽은 새로운 단어들입니다. Index와 Document, Mapping과 Field, Shard와 Replica, Analyzer와 Tokenizer가 한꺼번에 쏟아지고, 비슷해 보이는데 의미가 다 다릅니다. 이 글은 이 용어들을 한 번에 정리하고, 인덱스 생성부터 도큐먼트 CRUD, 기본 검색까지의 사용법을 차근차근 따라가 봅니다.
+
+<Note title="이 글의 학습 목표">
+  - Elasticsearch의 기본 용어(Index, Document, Mapping, Shard, Replica, Analyzer)를 RDBMS 모델과 매핑해 이해한다
+  - 인덱스를 생성하고 매핑을 정의하는 방법, 도큐먼트를 CRUD하는 방법을 손에 익힌다
+  - `match`, `term`, `bool` 세 가지 기본 쿼리로 어떤 검색을 어떻게 표현하는지 판단하는 기준을 얻는다
+</Note>
+
+## 왜 별도 엔진인가
+
+상품 같은 텍스트 데이터를 RDBMS에 두고 `WHERE name LIKE '%삼성 노트북%'` 으로 검색하면 두 가지 한계가 동시에 옵니다.
+
+첫째, 풀스캔이 강제됩니다. 패턴 앞에 `%`가 붙으면 B+Tree 인덱스가 무력화됩니다. 인덱스는 <E>어떤 값으로 시작하는가</E>를 따라가는 자료구조라, 중간이나 끝의 부분 일치는 도와줄 수 없습니다.
+
+둘째, <E>검색다움</E>이 빠져 있습니다. `LIKE`는 단순 부분 문자열 매치입니다. 형태소 분석(`달리기` 와 `달렸다`), 동의어(`노트북` 과 `랩탑`), 오타 허용, 가중치 점수 어느 것도 기본 제공되지 않습니다.
+
+검색 엔진은 이 두 한계를 **역색인** + **분석기**로 해결합니다. 색인 시점에 텍스트를 토큰으로 쪼개고, 토큰에서 도큐먼트 ID로 가는 역방향 매핑을 미리 만들어 둡니다. 검색 시점에는 이 매핑을 직접 찾고 BM25 같은 점수 함수로 정렬합니다.
+
+이 부분의 자세한 메커니즘은 별도 글에 정리되어 있습니다.
+
+<RelatedPost slug="lexical-vs-semantic-search" type="prerequisite" />
+
+## Elasticsearch란
+
+Elasticsearch를 한 줄로 정의하면 <E>Apache Lucene 위에 분산성·HTTP API·JSON 도큐먼트 모델을 얹은 검색 엔진</E>입니다. 각 조각을 풀어보면 다음과 같습니다.
+
+**Lucene 기반.** 실제 역색인을 만들고 토큰을 분석하고 점수를 계산하는 엔진은 Java로 쓰인 Apache Lucene입니다. Elasticsearch는 그 위에 클러스터·샤딩·복제, RESTful HTTP + JSON API, 매핑·집계·쿼리 DSL 같은 운영 친화 기능을 덧붙인 래퍼입니다. Solr도 같은 Lucene을 다른 방식으로 감싼 형제입니다.
+
+**분산 기본.** 데이터는 자동으로 여러 노드에 샤드로 쪼개져 분산되고, 각 샤드는 복제본을 가집니다. 노드가 추가되면 자동 리밸런싱, 노드가 죽으면 복제본이 승격됩니다. RDBMS의 수동 샤딩과 다른 지점이 여기입니다.
+
+**도큐먼트 스토어이자 검색 엔진.** Elasticsearch는 단순히 검색 결과 ID만 돌려주지 않습니다. 도큐먼트 원본(JSON)도 같이 저장하고 그대로 반환합니다. 그래서 <E>검색 결과로 카드 UI를 그릴 모든 정보</E>를 한 번의 요청으로 받을 수 있습니다.
+
+**인터페이스는 HTTP + JSON.** 모든 조작은 REST 엔드포인트로 합니다. `PUT /products` 로 인덱스 만들고, `POST /products/_doc` 로 문서 넣고, `GET /products/_search` 로 검색합니다. 클라이언트 라이브러리(Java, Python, Go)도 결국 이 HTTP 호출을 감싼 것입니다.
+
+검색 생태계 안에서의 위치를 정리하면 이렇습니다.
+
+| 계층 | 예시 |
+|---|---|
+| 역색인 라이브러리 | Lucene |
+| 검색 엔진 (분산 + API) | **Elasticsearch**, OpenSearch, Solr |
+| 벡터 검색 엔진 | Qdrant, Milvus, Pinecone |
+| 하이브리드 (lexical + vector) | Elasticsearch 8+, OpenSearch 2+, Vespa |
+
+## 기본 용어
+
+이 섹션이 글의 중심입니다. 새 단어가 한꺼번에 등장하지만, RDBMS 모델로 매핑해 두면 헷갈리는 빈도가 많이 줄어듭니다.
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Elasticsearch의 용어는 RDBMS와 모양이 닮아 있어 매핑해 두면 빠르게 익숙해집니다. 다만 **모양만 비슷할 뿐 동작은 다릅니다**. JOIN이 없고, 같은 필드가 동시에 여러 타입을 가질 수 있고, 도큐먼트는 사실상 불변입니다. RDBMS의 데이터 모델 위에 검색을 얹은 것이 아니라, 역색인 위에 도큐먼트 모델을 얹은 구조이기 때문에 같은 단어라도 의미하는 바가 다릅니다.
+</Callout>
+
+### 데이터 모델
+
+| Elasticsearch | RDBMS | 한 줄 요약 |
+|---|---|---|
+| **Index** | Table | 같은 종류 도큐먼트의 모음. 검색·매핑의 단위 |
+| **Document** | Row | 검색·저장의 기본 단위. JSON 객체 |
+| **Field** | Column | 도큐먼트의 한 속성. 단 타입 체계는 RDBMS와 다름 |
+| **Mapping** | Schema | 인덱스의 필드 타입·분석기 정의 |
+| **`_id`** | Primary Key | 도큐먼트의 고유 식별자 |
+| **Document Type** | (없음) | 6.x에서 deprecated, 7.x에서 제거 |
+
+RDBMS와 가장 큰 차이 세 가지를 짚어 두면 좋습니다.
+
+- **JOIN이 없습니다.** 관계 데이터는 사전 결합(denormalization)하거나 `nested` 타입으로 도큐먼트 안에 임베드합니다.
+- **같은 필드가 여러 타입을 가집니다.** 같은 문자열 필드를 검색용(`text`)과 정확 일치용(`keyword`)으로 동시에 색인하는 것이 표준 패턴입니다 (아래 multi-field).
+- **도큐먼트는 불변에 가깝습니다.** Update는 사실 <E>기존 도큐먼트 삭제 + 새 도큐먼트 작성</E>으로 동작합니다. Lucene 세그먼트가 immutable 하기 때문입니다.
+
+### 텍스트 분석 (Analyzer / Token / Term)
+
+검색 엔진 고유의 개념입니다.
+
+| 용어 | 의미 |
+|---|---|
+| **Analyzer** | 텍스트를 색인하기 전 변환하는 파이프라인. `Character filter → Tokenizer → Token filter` 3단계 |
+| **Tokenizer** | 문자열을 토큰으로 쪼개는 단계. 영어는 공백 기반, 한국어는 `nori`나 `mecab` |
+| **Token filter** | 토큰을 정규화·확장. 소문자화, stopword 제거, 동의어 확장, 어간 추출 |
+| **Token / Term** | 분석 결과 나오는 단위. 역색인의 키 |
+
+예시로 `"삼성 갤럭시 Book4"` 에 standard analyzer를 적용하면 다음 단계를 거칩니다.
+
+```text title="analyzer-pipeline"
+입력: "삼성 갤럭시 Book4"
+  → Tokenizer (공백 분리)
+  → ["삼성", "갤럭시", "Book4"]
+  → Lowercase filter
+  → ["삼성", "갤럭시", "book4"]   ← 색인에 들어가는 Term
+```
+
+같은 분석기가 **색인 시점**과 **검색 시점**에 모두 적용됩니다. 사용자가 `"book4"` 로 검색하든 `"Book4"` 로 검색하든 같은 결과가 나오는 이유입니다. 색인 시점의 Term이 `"book4"` 로 저장되어 있고, 검색어도 같은 분석기를 거쳐 `"book4"` 로 정규화되기 때문입니다. 그래서 색인과 검색의 분석기는 동일하게 두는 것이 정확도에 이점이 있습니다.
+
+### 분산 (Shard / Replica)
+
+Elasticsearch가 분산 엔진이 되는 두 단어입니다.
+
+| 용어 | 의미 |
+|---|---|
+| **Shard (샤드)** | 인덱스를 물리적으로 쪼갠 조각. 정확히는 **Lucene 인덱스 1개 = 1 샤드** |
+| **Primary Shard** | 원본 샤드. 인덱스 생성 시 개수를 정하고 **이후 변경 불가** |
+| **Replica Shard** | 프라이머리의 복제본. 읽기 부하 분산 + 장애 대비. 개수는 언제든 변경 가능 |
+
+기본값(8.x)은 primary 1개, replica 1개입니다. 도큐먼트 1만 건짜리 작은 인덱스는 그대로 쓰면 되고, 수백만 건 이상이거나 노드가 여러 대일 때 primary 개수를 늘립니다.
+
+### `text` vs `keyword`
+
+<Callout type="error" title="핵심 통찰: 같은 문자열을 두 타입으로 동시에 색인한다">
+  Elasticsearch의 문자열 처리는 두 갈래로 나뉘어 있습니다. `text` 는 분석기를 거쳐 토큰 단위로 색인되고, `keyword` 는 원문 그대로 색인됩니다. 같은 문자열이라도 어느 쪽으로 색인했느냐에 따라 가능한 쿼리·정렬·집계가 통째로 달라지기 때문에, 필드의 용도(자연어 검색인가, 정확 일치·정렬·집계인가)를 매핑 시점에 결정해 둘 필요가 있습니다.
+</Callout>
+
+| | `text` | `keyword` |
+|---|---|---|
+| 분석기 적용 | O (토큰화) | X (원문 그대로 색인) |
+| 용도 | 전문 검색 (`match`) | 정확 일치 (`term`), 정렬, 집계, 필터 |
+| 예시 | 상품명, 설명, 본문 | 카테고리 ID, 상태 코드, 태그, SKU |
+
+같은 필드를 **두 타입으로 동시에** 색인하는 multi-field 패턴이 실무 매핑의 거의 기본 형태입니다.
+
+```json title="multi-field.json"
+"name": {
+  "type": "text",
+  "fields": {
+    "keyword": { "type": "keyword" }
+  }
+}
+```
+
+이러면 `name` 으로는 토큰 검색이 되고, `name.keyword` 로는 정확 일치·정렬이 가능합니다.
+
+## 인덱스와 매핑
+
+### 가장 단순한 인덱스 생성
+
+```http title="create-index-minimal.http"
+PUT /products
+```
+
+이 한 줄이면 `products` 인덱스가 만들어집니다. 매핑을 명시하지 않았으니 기본값(primary 1, replica 1)으로 잡히고, 필드 타입은 첫 도큐먼트가 들어올 때 자동으로 추론됩니다(Dynamic Mapping). 문자열은 자동으로 위에서 본 `text + keyword` multi-field가 잡힙니다.
+
+입문 단계에서 자동 매핑은 편하지만, 운영에서는 거의 항상 명시적 매핑을 정의합니다. 자동 추론된 타입이 의도와 다르거나(예: 가격을 문자열로 색인), 분석기를 한국어로 지정해야 하기 때문입니다.
+
+### 매핑을 명시한 인덱스 생성
+
+```json title="create-index-with-mapping.json"
+PUT /products
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "analysis": {
+      "analyzer": {
+        "korean_analyzer": {
+          "type": "custom",
+          "tokenizer": "nori_tokenizer"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "name":        { "type": "text", "analyzer": "korean_analyzer",
+                       "fields": { "keyword": { "type": "keyword" } } },
+      "description": { "type": "text", "analyzer": "korean_analyzer" },
+      "price":       { "type": "integer" },
+      "category_id": { "type": "keyword" },
+      "tags":        { "type": "keyword" },
+      "stock":       { "type": "integer" },
+      "created_at":  { "type": "date" }
+    }
+  }
+}
+```
+
+읽는 방법은 다음과 같습니다.
+
+- `settings`: 인덱스 차원의 설정. 샤드 개수와 사용자 정의 분석기를 여기에 둡니다 (`nori_tokenizer` 는 한국어 형태소 분석기 플러그인).
+- `mappings.properties`: 필드별 타입 정의. RDBMS의 `CREATE TABLE` 컬럼 정의에 해당합니다.
+- `name` 필드: `text` 본체 + `keyword` 서브필드. 검색은 `name`, 정확 일치·정렬은 `name.keyword`.
+- `category_id` / `tags`: 검색이 아닌 필터링 용도라 처음부터 `keyword` 만.
+- `price` / `stock`: 숫자. ES는 `integer` / `long` / `float` / `double` / `scaled_float` 등을 구분합니다. 가격은 `scaled_float` 으로 정밀도를 강제하는 패턴도 자주 씁니다.
+- `created_at`: 날짜. ISO-8601 문자열로 들어가도 자동 파싱됩니다 (`2026-05-02T10:00:00Z`).
+
+### 자주 쓰는 필드 타입
+
+| 타입 | 용도 |
+|---|---|
+| `text` | 전문 검색 대상 텍스트 |
+| `keyword` | 정확 일치, 정렬, 집계, 필터 |
+| `integer`, `long`, `short`, `byte` | 정수 |
+| `float`, `double`, `scaled_float` | 실수. 가격은 `scaled_float` |
+| `boolean` | true/false |
+| `date` | 날짜·시각. 형식은 `format` 으로 커스텀 가능 |
+| `geo_point` | 위경도 (반경 검색용) |
+| `nested` | 배열 안의 객체를 독립 도큐먼트로 색인 |
+| `dense_vector` | 임베딩 벡터 (kNN 검색용) |
+
+### 매핑 변경 규칙
+
+기존 필드의 타입은 변경 불가능합니다. `text` 로 잡힌 필드를 `keyword` 로 바꾸려면 새 인덱스를 만들고 데이터를 옮겨야(reindex) 합니다.
+
+| 가능 | 불가능 |
+|---|---|
+| 새 필드 추가 | 기존 필드 타입 변경 |
+| 기존 필드에 multi-field 추가 | 기존 필드 분석기 변경 |
+| replica 개수 변경 | primary shard 개수 변경 |
+
+이 제약 때문에 처음 매핑을 잡을 때 신중해야 합니다. 실무에서는 인덱스 이름에 버전을 붙이고(`products_v1`, `products_v2`) **alias**로 가리켜서, 매핑 변경 시 새 인덱스에 reindex 후 alias만 스왑하는 패턴을 씁니다.
+
+```json title="alias-swap.json"
+POST /_aliases
+{
+  "actions": [
+    { "remove": { "index": "products_v1", "alias": "products" } },
+    { "add":    { "index": "products_v2", "alias": "products" } }
+  ]
+}
+```
+
+애플리케이션은 항상 `products` 라는 alias만 보고 호출합니다. 매핑 변경이 애플리케이션 코드와 분리됩니다.
+
+### 매핑 확인
+
+```http title="get-mapping.http"
+GET /products/_mapping
+```
+
+지금 어떻게 색인되고 있는지 확인할 때 가장 자주 쓰는 명령입니다.
+
+## 도큐먼트 CRUD
+
+### Create
+
+ID를 직접 지정하는 방식과 자동 생성 방식이 있습니다.
+
+```json title="index-document.json"
+PUT /products/_doc/1001
+{
+  "name": "삼성 갤럭시 Book4",
+  "price": 1590000,
+  "category_id": "laptop",
+  "tags": ["삼성", "노트북", "신상"],
+  "stock": 24,
+  "created_at": "2026-05-02T10:00:00Z"
+}
+```
+
+`_doc` 은 엔드포인트의 고정 부분이고, 그 뒤가 `_id` 입니다. ID를 ES가 자동으로 만들게 하려면 `POST /products/_doc` 으로 보내면 됩니다. 22자리 base64 ID가 부여됩니다. 응답은 다음과 같은 모양입니다.
+
+```json title="index-response.json"
+{
+  "_index": "products",
+  "_id": "VxK9pYwBxYz...",
+  "_version": 1,
+  "result": "created",
+  "_shards": { "total": 2, "successful": 2, "failed": 0 }
+}
+```
+
+| 필드 | 의미 |
+|---|---|
+| `_version` | 도큐먼트가 수정될 때마다 1씩 증가. 낙관적 동시성 제어에 사용 |
+| `result` | `created` 또는 `updated`. 같은 ID로 다시 PUT하면 `updated` |
+| `_shards.successful` | primary + replica 중 몇 개에 성공했는지 |
+
+### Read
+
+```http title="get-document.http"
+GET /products/_doc/1001
+```
+
+```json title="get-response.json"
+{
+  "_index": "products",
+  "_id": "1001",
+  "_version": 1,
+  "found": true,
+  "_source": {
+    "name": "삼성 갤럭시 Book4",
+    "price": 1590000
+  }
+}
+```
+
+원본 JSON은 `_source` 안에 그대로 들어 있습니다. 검색 결과도 같은 구조입니다. 존재 여부만 확인하려면 `HEAD /products/_doc/1001` 이 200/404로 빠르게 답합니다.
+
+### Update
+
+전체 교체는 같은 ID로 `PUT` 하면 됩니다. 부분 수정은 `_update` 를 씁니다.
+
+```json title="update-partial.json"
+POST /products/_doc/1001/_update
+{
+  "doc": {
+    "price": 1490000,
+    "stock": 20
+  }
+}
+```
+
+내부적으로 ES는 (1) 기존 도큐먼트 fetch, (2) `doc`을 머지, (3) **새 도큐먼트로 다시 색인 + 기존 것은 삭제 표시** 로 처리합니다. Lucene 세그먼트가 immutable 하기 때문입니다. 그래서 부분 수정도 비용은 거의 풀 인덱싱과 같습니다.
+
+스크립트 방식도 자주 쓰입니다. 카운터 같은 원자적 증감용입니다.
+
+```json title="update-script.json"
+POST /products/_doc/1001/_update
+{
+  "script": {
+    "source": "ctx._source.stock -= params.qty",
+    "params": { "qty": 1 }
+  }
+}
+```
+
+### Delete
+
+```http title="delete-document.http"
+DELETE /products/_doc/1001
+```
+
+조건 삭제도 가능합니다.
+
+```json title="delete-by-query.json"
+POST /products/_delete_by_query
+{
+  "query": { "term": { "category_id": "discontinued" } }
+}
+```
+
+### Bulk
+
+CRUD를 단건으로 보내면 매 요청마다 HTTP 왕복이 발생해 색인 속도가 매우 느립니다. **Bulk API** 가 사실상 필수입니다.
+
+요청 본문이 특이한 형태입니다. 줄바꿈으로 구분된 JSON(NDJSON)입니다.
+
+```json title="bulk-request.ndjson"
+POST /products/_bulk
+{ "index": { "_id": "1001" } }
+{ "name": "갤럭시 Book4", "price": 1590000 }
+{ "index": { "_id": "1002" } }
+{ "name": "맥북 Air M3", "price": 1690000 }
+{ "update": { "_id": "1001" } }
+{ "doc": { "stock": 50 } }
+{ "delete": { "_id": "1003" } }
+```
+
+홀수 줄은 메타(작업 종류 + ID), 짝수 줄은 본문. `delete` 는 본문이 없습니다. **마지막 줄도 줄바꿈으로 끝나야** 합니다. ES가 NDJSON 파서로 줄 단위 경계를 인식하기 때문에, 마지막 줄에 줄바꿈이 없으면 파싱이 끝나지 않은 것으로 보고 400을 돌려줍니다.
+
+권장 배치 크기는 5MB에서 15MB 사이입니다. 너무 크면 메모리 압력, 너무 작으면 효과가 약합니다.
+
+### Refresh
+
+방금 `PUT` 한 도큐먼트를 바로 `_search` 로 찾으면 잡히지 않을 수 있습니다.
+
+ES는 색인 직후 도큐먼트를 메모리 버퍼에만 두고, **기본 1초마다** 한 번씩 검색 가능한 세그먼트로 flush합니다 (`refresh_interval: 1s`). 그래서 색인과 검색 사이 최대 1초의 지연이 있습니다.
+
+테스트 환경이나 단건 즉시 반영이 필요할 때만 강제 refresh를 씁니다.
+
+```http title="force-refresh.http"
+PUT /products/_doc/1001?refresh=true
+```
+
+운영에서는 `refresh=true` 를 남발하면 세그먼트가 잘게 쪼개져 성능이 크게 떨어집니다. **테스트에서만** 씁니다.
+
+### 동시 수정
+
+같은 도큐먼트를 여러 요청이 동시에 수정할 때 lost update를 막는 방법입니다.
+
+```http title="optimistic-cc.http"
+PUT /products/_doc/1001?if_seq_no=42&if_primary_term=1
+```
+
+`_seq_no` 와 `_primary_term` 은 GET 응답에 포함됩니다. 내가 읽은 시점의 값과 다르면 ES가 409 Conflict를 돌려줍니다. 그러면 재시도하거나 실패 처리합니다. 재고 차감 같은 정합성 민감한 케이스에 유용합니다.
+
+## 기본 검색
+
+검색 엔드포인트는 `_search` 하나로 통일됩니다. 어떤 검색이든 본문에 **Query DSL** 이라는 JSON 쿼리 언어를 담아 보냅니다.
+
+### `match`
+
+전문 검색의 기본형입니다.
+
+```json title="match-query.json"
+POST /products/_search
+{
+  "query": {
+    "match": { "name": "삼성 노트북" }
+  }
+}
+```
+
+내부 동작은 (1) `"삼성 노트북"` 을 색인 시점과 같은 분석기로 토큰화해 `["삼성", "노트북"]` 으로 만들고, (2) 역색인에서 두 토큰을 포함한 도큐먼트 ID들을 찾고, (3) BM25로 점수 계산 후 정렬합니다.
+
+기본 동작은 **OR** 입니다. <E>삼성</E> 또는 <E>노트북</E> 중 하나라도 들어가면 매치됩니다. AND가 필요하면 다음과 같이 명시합니다.
+
+```json title="match-and.json"
+{ "match": { "name": { "query": "삼성 노트북", "operator": "and" } } }
+```
+
+### `term`
+
+분석을 거치지 않고 색인된 Term을 그대로 비교합니다. **반드시 `keyword` 필드에만** 사용합니다.
+
+```json title="term-query.json"
+POST /products/_search
+{
+  "query": {
+    "term": { "category_id": "laptop" }
+  }
+}
+```
+
+`text` 필드에 색인된 값은 분석기를 거친 토큰(`"삼성"`, `"노트북"`)이고, `term` 으로 보낸 검색어(`"삼성 노트북"`)는 분석되지 않은 원문입니다. 색인 측 형태와 검색 측 형태가 다르기 때문에 매치가 일어나지 않고 결과는 0건이 됩니다. 그래서 자연어 검색에는 분석기를 거친 비교를 하는 `match` 가, 정확 일치·정렬·집계에는 원문을 그대로 비교하는 `term` (그리고 `keyword` 필드)이 적합합니다.
+
+| 상황 | 사용할 쿼리 |
+|---|---|
+| 자연어, 형태소 검색 | `match` (text 필드) |
+| 카테고리, 태그, 상태 코드 정확 일치 | `term` (keyword 필드) |
+| 여러 값 중 하나 일치 | `terms` (배열) |
+| 범위 조건 (가격, 날짜) | `range` |
+
+### `bool`
+
+실무 검색은 거의 다 여러 조건을 조합한 `bool` 쿼리입니다.
+
+```json title="bool-query.json"
+POST /products/_search
+{
+  "query": {
+    "bool": {
+      "must":     [ { "match": { "name": "노트북" } } ],
+      "filter":   [
+        { "term":  { "category_id": "laptop" } },
+        { "range": { "price": { "gte": 500000, "lte": 2000000 } } }
+      ],
+      "should":   [ { "match": { "tags": "신상" } } ],
+      "must_not": [ { "term": { "status": "discontinued" } } ]
+    }
+  }
+}
+```
+
+네 절(clause)의 역할이 다릅니다.
+
+| 절 | 역할 | 점수 영향 |
+|---|---|---|
+| `must` | AND 조건. 반드시 매치 | 점수에 기여 |
+| `filter` | AND 조건. 반드시 매치 | **점수에 기여 안 함**, 캐시됨 |
+| `should` | OR 부스트. 매치되면 점수 가산 | 점수에 기여 |
+| `must_not` | NOT 조건 | 점수에 기여 안 함 |
+
+<Callout type="warning" title="must vs filter — 어디에 두느냐가 성능을 좌우한다">
+  검색 점수를 좌우하는 조건은 `must`, 단순히 결과를 좁히는 조건(가격대, 카테고리, 재고 있음 등)은 `filter` 에 둡니다. `filter` 는 BM25 계산을 건너뛰고 결과 캐싱까지 받기 때문에 훨씬 빠릅니다. **카테고리·가격·상태 같은 메타 조건은 항상 `filter`**.
+</Callout>
+
+### 응답 구조
+
+```json title="search-response.json"
+{
+  "took": 12,
+  "timed_out": false,
+  "_shards": { "total": 1, "successful": 1, "skipped": 0, "failed": 0 },
+  "hits": {
+    "total": { "value": 38, "relation": "eq" },
+    "max_score": 8.42,
+    "hits": [
+      {
+        "_index": "products",
+        "_id": "1001",
+        "_score": 8.42,
+        "_source": { "name": "삼성 갤럭시 Book4", "price": 1590000 }
+      }
+    ]
+  }
+}
+```
+
+| 필드 | 의미 |
+|---|---|
+| `took` | 검색에 걸린 ms |
+| `hits.total.value` | 매치된 도큐먼트 총 개수. 10000 초과 시 `gte` 표시 (`track_total_hits: true` 로 강제 가능) |
+| `hits.max_score` | 최고 점수 |
+| `hits.hits` | 실제 결과 배열. 점수 내림차순 상위 N개. 기본 N은 10 |
+
+### 페이지네이션, 정렬, 필드 선택
+
+```json title="search-pagination.json"
+{
+  "from": 20,
+  "size": 10,
+  "query": { "match": { "name": "노트북" } },
+  "sort": [ { "price": "asc" } ],
+  "_source": ["name", "price"]
+}
+```
+
+기본은 점수(`_score`) 내림차순 정렬입니다. 다른 기준이면 `sort` 를 명시합니다. `_source` 로 응답에 포함할 필드를 좁히면 네트워크 비용을 크게 줄일 수 있습니다.
+
+`from + size` 가 **10000을 초과하면 거부**됩니다 (`max_result_window` 기본값). 깊은 페이지네이션이 필요하면 `search_after` 를 사용합니다. 커서 기반 방식인데, 이번 글의 범위를 벗어나니 다음 글로 미룹니다.
+
+### 한 줄 요약
+
+| 하고 싶은 것 | 쿼리 |
+|---|---|
+| 자연어 검색 | `match` |
+| 정확 일치 (정렬·필터·집계) | `term` (keyword 필드) |
+| 여러 조건 조합 | `bool` (`must` + `filter` + `should`) |
+| 가격대·날짜 범위 | `range` |
+| 모든 도큐먼트 | `match_all` |
+| 정렬 | `sort` |
+| 결과 필드 좁히기 | `_source` |
+
+점수 함수의 본질이 궁금하다면 다음 글이 도움이 됩니다.
+
+<RelatedPost slug="bm25" type="parallel" />
+
+## 마무리
+
+Elasticsearch의 동작은 거의 다 같은 한 가지 원리로 설명됩니다. <E>같은 문자열을 어떤 타입으로 색인하느냐</E>가 가능한 검색·정렬·집계를 결정한다는 것. `text` 와 `keyword` 의 분리, multi-field 패턴, `match` 와 `term` 의 사용처가 모두 이 한 결정의 다른 얼굴입니다. 매핑을 정의할 때 필드별 용도(자연어 검색 vs 정확 일치·정렬·집계)를 분명히 해 두면, 이후 쿼리 선택은 자연스럽게 따라옵니다.
+
+용어와 사용법은 손으로 한 번 따라가 보면 빠르게 익숙해집니다. 매핑을 손수 정의하고, 도큐먼트를 몇 건 넣고, `match` 와 `term` 의 결과 차이를 직접 비교해 보는 것이 글 한 편 읽는 것보다 훨씬 효과적입니다.
+
+## 참고 자료
+
+- [Elasticsearch Guide (Elastic 공식 문서)](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html)
+- [Apache Lucene Documentation](https://lucene.apache.org/core/documentation.html)
+- [Mapping concepts across SQL and Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/_mapping_concepts_across_sql_and_elasticsearch.html)
+- [Nori — Korean Analyzer Plugin](https://www.elastic.co/guide/en/elasticsearch/plugins/current/analysis-nori.html)
