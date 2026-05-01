@@ -23,12 +23,6 @@ draft: false
 
 spring-grpc는 gRPC를 다시 구현한 프레임워크가 아니라, `grpc-java`의 `Server`와 `ManagedChannel`을 Spring Boot의 라이프사이클·설정 모델 위에 올리는 얇은 스타터입니다. 이 글에서는 어떤 보일러플레이트가 어떤 어노테이션과 설정 키로 치환되는지 따라가며, 서버와 클라이언트를 한 번 구성해 봅니다.
 
-<Note title="이 글의 학습 목표">
-  - spring-grpc가 순수 `grpc-java` 대비 무엇을 자동화하는지 이해한다
-  - `@GrpcService`, `@ImportGrpcClients`, `application.properties`로 서버와 클라이언트를 어떻게 구성하는지 따라 쓸 수 있다
-  - 인터셉터, TLS, Observability 같은 실무 기능이 Boot의 공용 인프라 위에서 어떻게 붙는지 선택 기준을 얻는다
-</Note>
-
 <RelatedPost slug="grpc-essentials" type="prerequisite" />
 
 ## spring-grpc란

@@ -24,12 +24,6 @@ draft: false
 
 Spring 애플리케이션에서 <E>주문 API 응답 시간</E>이나 <E>쿠폰 검증 소요 시간</E> 같은 지표를 남기려면 Micrometer Timer가 기본 도구입니다. 이 글은 Timer가 무엇을 기록하고, hot path에서 어떻게 동작하며, 비즈니스 코드에 얼마나 적게 자국을 남기면서 계측을 붙일 수 있는지를 개념, 문법, 실행 순서로 정리합니다.
 
-<Note title="이 글의 학습 목표">
-  - Micrometer가 facade라는 위치와 Timer가 기록하는 네 가지(count·totalTime·max·distribution)를 이해한다
-  - `timer.record`, `Timer.Sample`, `@Timed` 세 가지 측정 API의 적합한 상황을 구분할 수 있다
-  - 비즈니스 코드를 덜 더럽히는 4단계 사다리(자동 계측, @Timed, Observation, 직접 Aspect)에서 자기 상황에 맞는 단계를 선택하는 기준을 얻는다
-</Note>
-
 ## Timer란 무엇인가
 
 Micrometer는 **metrics facade**입니다. SLF4J가 로깅에서 하는 역할을 계측에서 합니다. 애플리케이션 코드는 `Counter`, `Timer`, `Gauge` 같은 Micrometer API로만 작성하고, 실제 backend(Prometheus, StatsD, Datadog, CloudWatch 등)는 구현체를 교체해 바꿉니다. Spring Boot 2.0부터는 `MeterRegistry`가 auto-configured 빈으로 제공되어 의존성만 추가하면 주입받기만 하면 됩니다.

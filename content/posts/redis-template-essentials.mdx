@@ -24,12 +24,6 @@ draft: false
 
 Redis를 쓰는 Spring 애플리케이션에서 가장 먼저 만나는 클래스가 `RedisTemplate`입니다. Redis 명령을 Java나 Kotlin 메서드 호출처럼 쓸 수 있게 감싸 둔 facade인데, 여기에 의존성, 직렬화, 자료구조별 ops 같은 작은 함정들이 입문자를 가장 많이 막습니다. 이 글은 그 함정을 한 번에 통과하기 위한 최소 지도입니다.
 
-<Note title="이 글의 학습 목표">
-  - RedisTemplate과 StringRedisTemplate이 내부에서 어떻게 다른지 이해한다
-  - Serializer 4-슬롯과 ConnectionFactory 자동 구성을 구분할 수 있다
-  - 7종 `opsForXxx` 진입점을 골라 캐시, 카운터, 프로필 같은 시나리오에 적용하는 기준을 얻는다
-</Note>
-
 ## RedisTemplate란
 
 `RedisTemplate`은 Spring Data Redis가 제공하는 Redis 연동의 표준 추상 클래스입니다. 한 문장으로 줄이면 <E>Redis 명령을 Java나 Kotlin 메서드 호출처럼 쓸 수 있게 감싸 둔 facade</E>입니다.

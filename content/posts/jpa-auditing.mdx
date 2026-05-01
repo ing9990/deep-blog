@@ -28,12 +28,6 @@ draft: false
 
 감사 필드(`created_at` / `updated_at`)는 도메인의 책임이 아니라 저장소의 책임입니다. 엔티티마다 손으로 `Instant.now()`를 박는 대신, Spring Data JPA가 제공하는 Auditing 기능이 엔티티 lifecycle 콜백 위에서 이 일을 대신해 줍니다. 이 글은 `@EnableJpaAuditing`이 무엇을 배선하는지, `@CreatedDate`와 `@LastModifiedDate`가 정확히 언제 발화하는지를 내부 동작 수준에서 따라갑니다.
 
-<Note title="이 글의 학습 목표">
-  - `@EnableJpaAuditing`과 `AuditingEntityListener`가 Spring 컨테이너와 Hibernate 사이를 어떻게 배선하는지 이해한다.
-  - `@PrePersist`와 `@PreUpdate`가 각각 언제 발화하는지, 세 가지 실행 경로(`persist` / 변경 감지 / 벌크 UPDATE)가 어떻게 다른지 구분할 수 있다.
-  - `updated_at`이 stale이 되는 실전 함정을 피하고, 시간 주입 파이프라인을 커스터마이즈하는 기준을 얻는다.
-</Note>
-
 ## 개요
 
 ### 한 문장 정의

@@ -24,12 +24,6 @@ draft: false
 
 Cache-Aside는 대부분의 백엔드가 <E>일단 캐시를 도입할 때 이걸로 시작한다</E>의 자리를 차지하는 패턴입니다. 간단해 보이는 세 줄 레시피(조회·채움·무효화) 뒤에 쓰기 경합, stale read, stampede 같은 고유 문제가 자연히 따라옵니다. 이 글에서는 왜 이 패턴이 기본값이 되었는지, 무엇을 포기해야 하는지, 그리고 언제 다른 패턴으로 옮겨가야 하는지를 살펴봅니다.
 
-<Note title="이 글의 학습 목표">
-  - Cache-Aside가 왜 다른 캐싱 패턴보다 먼저 채택되는지 그 구조적 이유를 이해한다
-  - 앱·캐시·DB 3자 상호작용의 내부 동작과 쓰기 경로의 race condition을 구분할 수 있다
-  - Read-Through, Write-Through, Write-Behind, Write-Around 중 상황에 맞는 패턴을 선택하는 기준을 얻는다
-</Note>
-
 ## Cache-Aside란
 
 Cache-Aside는 **앱이 캐시와 DB를 직접 제어하는** 캐싱 패턴입니다. Look-Aside Cache, Lazy Loading이라고도 부릅니다. 이 셋은 모두 같은 패턴의 다른 이름입니다.

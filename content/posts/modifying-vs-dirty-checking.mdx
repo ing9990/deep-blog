@@ -26,12 +26,6 @@ draft: false
 
 Spring Data JPA에서 데이터를 수정하는 코드는 외형이 거의 같아 보입니다. 그러나 `@Modifying` JPQL과 도메인 객체 변경(Dirty Checking)은 내부에서 완전히 다른 컴포넌트를 거칩니다. 이 글은 두 방법이 영속성 컨텍스트와 어떻게 다르게 상호작용하는지를 정리하면서, 1차 캐시 stale·lifecycle 우회·lost update 같은 실전 함정이 모두 같은 차이에서 비롯된다는 것을 보여줍니다.
 
-<Note title="이 글의 학습 목표">
-  - 두 업데이트 경로가 영속성 컨텍스트의 1차 캐시·스냅샷과 어떻게 다르게 상호작용하는지 이해한다
-  - `@Modifying` 후 1차 캐시 stale·lifecycle 미동작·cascading 부재가 같은 뿌리에서 온다는 것을 구분할 수 있다
-  - 단건/벌크·동시성·lifecycle 세 측면에서 어느 쪽을 선택할지의 기준을 얻는다
-</Note>
-
 ## 두 업데이트 방식
 
 Spring Data JPA에서 데이터베이스 레코드를 수정하는 두 가지 방법이 있습니다.

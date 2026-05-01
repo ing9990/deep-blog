@@ -19,12 +19,6 @@ draft: false
 
 Full Table Scan은 <E>느린 쿼리의 원인</E>으로만 알려져 있지만, 실제로는 옵티마이저가 **의도적으로 선택하는 경우**도 있습니다. 무조건 나쁜 것이 아니라, 언제 문제이고 언제 괜찮은지를 구분하는 것이 핵심입니다.
 
-<Note title="이 글의 학습 목표">
-  - Full Table Scan이 무엇이고 왜 발생하는지 이해한다
-  - Sequential I/O와 Random I/O의 차이를 구분할 수 있다
-  - Full Table Scan이 문제인 상황과 괜찮은 상황을 판단하는 기준을 얻는다
-</Note>
-
 ## Full Table Scan이란
 
 Full Table Scan(전체 테이블 스캔)은 데이터베이스가 쿼리 결과를 찾기 위해 **테이블의 모든 행을 처음부터 끝까지 하나씩 읽는 조회 방식**입니다.

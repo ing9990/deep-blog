@@ -23,12 +23,6 @@ draft: false
 
 Qdrant에 벡터 수가 쌓이면 가장 먼저 터지는 건 RAM입니다. fp32로 1024차원 벡터를 1000만 개 저장하면 그 자체로 38GB. Scalar Quantization은 이 벡터를 int8로 바꿔 메모리를 1/4로 줄이고, 부수적으로 SIMD 거리 계산까지 얻는 기법입니다. 공짜가 아닌 대신 recall을 양보하는데, 조건이 맞으면 손실은 1%p 내외로 억제됩니다. 이 글은 그 파이프라인이 내부에서 어떻게 작동하고, 각 옵션이 어느 축을 움직이는지 정리합니다.
 
-<Note title="이 글의 학습 목표">
-  - Scalar Quantization이 fp32에서 int8로 벡터를 변환하는 3단 파이프라인을 이해한다
-  - quantile, always_ram, rescore, oversampling 옵션이 메모리·QPS·recall 중 어느 축을 움직이는지 구분할 수 있다
-  - 내 데이터셋 규모와 RAM 여건에서 SQ를 켤지 말지 판단하는 기준을 얻는다
-</Note>
-
 ## Scalar Quantization이란
 
 Scalar Quantization(스칼라 양자화)은 **벡터의 각 원소(scalar)를 더 적은 비트 수로 표현**하는 압축 기법입니다. Qdrant에서는 보통 fp32를 int8로 바꾸는 것을 의미합니다.

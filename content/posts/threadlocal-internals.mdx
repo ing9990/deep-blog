@@ -23,12 +23,6 @@ draft: false
 
 `SecurityContextHolder.getContext()`나 `MDC.get("traceId")`는 어디서 호출해도 <E>지금 요청을 처리 중인 스레드</E>의 값을 돌려줍니다. 인자를 넘기지 않았는데 context가 따라옵니다. 이 마법의 정체는 하나의 구조적 결정입니다: **값을 전역에 두지 않고, 각 Thread 객체 자체가 자기 Map을 필드로 들게** 합니다. 이 글에서는 그 구조가 어떻게 동시성 비용 없는 격리를 만들고, 동시에 왜 스레드 풀에서 메모리 누수를 부르는지 추적합니다.
 
-<Note title="이 글의 학습 목표">
-  - <E>전역처럼 보이는데 스레드별로 다르다</E>가 Thread 객체 내부 Map으로 구현됨을 이해한다
-  - 키 `WeakReference`와 값 strong reference의 비대칭이 만드는 stale entry 청소 메커니즘을 구분할 수 있다
-  - 스레드 풀, Virtual Thread, 비동기 경계에서 ThreadLocal을 피하고 ScopedValue로 가야 할 기준을 얻는다
-</Note>
-
 ## ThreadLocal이란
 
 ThreadLocal은 **같은 변수를 참조해도 스레드마다 다른 값이 조회되는** 저장 메커니즘입니다. 문법만 보면 전역 변수 같지만, `set` · `get`의 결과는 호출한 스레드마다 완전히 독립적입니다. A 스레드가 `userId.set(42)`를 했고 B 스레드가 `userId.get()`을 부르면, B는 42가 아니라 자기 스레드가 이전에 넣었던 값(없으면 `initialValue()` 결과)을 받습니다.

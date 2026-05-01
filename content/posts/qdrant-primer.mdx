@@ -21,12 +21,6 @@ draft: false
 
 Qdrant는 벡터 검색 엔진 중에서도 <E>띄우고 붙이기</E>가 가장 쉬운 축입니다. Docker 한 줄로 서버가 뜨고, Python client 몇 줄이면 collection을 만들고 검색까지 이어집니다. 이 글은 그 흐름을 처음부터 끝까지 따라가며, 입문 단계에 가장 자주 걸리는 몇 가지 함정을 함께 짚습니다.
 
-<Note title="이 글의 학습 목표">
-  - 로컬에 Qdrant 서버를 띄우고 Python client로 붙이는 방법을 이해한다
-  - Collection을 차원과 거리 메트릭으로 설계하는 감각을 얻는다
-  - 벡터 검색에 payload 필터를 결합하는 방법과 주의점을 구분할 수 있다
-</Note>
-
 ## Qdrant란
 
 Qdrant는 Rust로 쓰인 오픈소스 벡터 검색 엔진입니다. 고차원 실수 벡터(예: OpenAI `text-embedding-3-small`의 1536차원)를 저장하고, 쿼리 벡터와 가장 가까운 이웃(ANN, Approximate Nearest Neighbor)을 빠르게 찾아주는 전용 DB입니다. 벡터 DB가 왜 필요한지, HNSW 같은 ANN 인덱스가 내부적으로 어떻게 동작하는지는 별도 글에서 이미 다뤘으니, 이 글에서는 Qdrant 자체의 특징과 사용법에만 집중합니다.

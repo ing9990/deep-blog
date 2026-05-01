@@ -24,12 +24,6 @@ draft: false
 
 Cache Stampede는 구현 버그가 아닙니다. TTL 만료 시점에 동일 키로 몰린 동시 요청이 모두 캐시 미스를 겪으면서, 같은 무거운 쿼리를 N번 동시에 DB로 던지는 현상입니다. 이 글에서는 왜 <E>TTL을 길게 잡으면 된다</E>가 해법이 아닌지, 그리고 4가지 방어 패턴이 같은 문제에 대한 어떤 다른 조정 전략인지 살펴봅니다.
 
-<Note title="이 글의 학습 목표">
-  - Cache Stampede가 어떻게 DB 장애를 일으키는지 이해한다
-  - 4가지 방어 패턴(Mutex Lock, Single Flight, PER, SWR)의 구조적 차이를 구분할 수 있다
-  - 자신의 시스템에 맞는 방어 전략을 선택하는 기준을 얻는다
-</Note>
-
 ## Cache Stampede
 
 Cache Stampede는 캐시 만료 직후 동일 키로 몰린 동시 요청이 모두 캐시 미스를 겪고, 그 N개 요청이 동일한 무거운 쿼리를 동시에 DB로 던지는 현상입니다. 별칭으로 Dog-piling, Thundering Herd(TTL 동기화 변형), Cache Avalanche(다수 키 동시 만료) 등이 있으며 모두 같은 메커니즘의 변형입니다.

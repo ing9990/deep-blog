@@ -22,12 +22,6 @@ draft: false
 
 검색을 처음 다룰 때 가장 먼저 부딪히는 벽은 새로운 단어들입니다. Index와 Document, Mapping과 Field, Shard와 Replica, Analyzer와 Tokenizer가 한꺼번에 쏟아지고, 비슷해 보이는데 의미가 다 다릅니다. 이 글은 이 용어들을 한 번에 정리하고, 인덱스 생성부터 도큐먼트 CRUD, 기본 검색까지의 사용법을 차근차근 따라가 봅니다.
 
-<Note title="이 글의 학습 목표">
-  - Elasticsearch의 기본 용어(Index, Document, Mapping, Shard, Replica, Analyzer)를 RDBMS 모델과 매핑해 이해한다
-  - 인덱스를 생성하고 매핑을 정의하는 방법, 도큐먼트를 CRUD하는 방법을 손에 익힌다
-  - `match`, `term`, `bool` 세 가지 기본 쿼리로 어떤 검색을 어떻게 표현하는지 판단하는 기준을 얻는다
-</Note>
-
 ## 왜 별도 엔진인가
 
 상품 같은 텍스트 데이터를 RDBMS에 두고 `WHERE name LIKE '%삼성 노트북%'` 으로 검색하면 두 가지 한계가 동시에 옵니다.

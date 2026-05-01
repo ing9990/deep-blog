@@ -26,12 +26,6 @@ draft: false
 
 검색 엔진이 <E>관련 있는 문서</E>를 뽑아주는 방식은 겉보기에 하나의 문제처럼 보이지만, 실제로는 서로 다른 두 축에서 풀립니다. 하나는 쿼리 토큰이 문서에 글자 그대로 등장하는지 보는 Lexical, 다른 하나는 쿼리와 문서를 벡터로 바꿔 의미적 거리를 재는 Semantic입니다. 이 글은 두 축의 내부 메커니즘과 한계, 그리고 둘을 결합할 때 왜 RRF가 기본 선택지가 되는지 정리합니다.
 
-<Note title="이 글의 학습 목표">
-  - Lexical과 Semantic이 '관련성'을 서로 다르게 정의한다는 것을 이해한다
-  - 두 파이프라인의 내부 단계(inverted index + BM25 vs embedding + ANN)를 구분할 수 있다
-  - 질의 성격에 따라 Lexical, Semantic, Hybrid 중 어느 쪽을 선택할지 판단 기준을 얻는다
-</Note>
-
 ## 두 축의 정의
 
 Lexical search는 쿼리 토큰이 문서 안에 **문자 단위로** 등장하는지를 기준으로 관련성을 계산합니다. <E>결제</E>라는 토큰이 문서에 몇 번 나오는지(Term Frequency), 그 단어가 전체 코퍼스에서 얼마나 드문지(Inverse Document Frequency), 문서 길이가 평균보다 얼마나 긴지 같은 **표면 형태의 통계**로 점수를 매깁니다. Elasticsearch, OpenSearch, Lucene, Solr, PostgreSQL `tsvector`가 모두 이 계열이고, 표준 스코어링 함수는 [BM25](/posts/bm25)입니다.
