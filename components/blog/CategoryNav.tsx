@@ -31,7 +31,7 @@ export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProp
             open={category.id === activeCategoryId}
             className="group/cat border-b border-border/60 pb-1 last:border-b-0"
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-[length:var(--text-nav-header)] font-semibold uppercase tracking-[var(--tracking-wide)] text-foreground transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-[length:var(--text-nav-header)] font-semibold uppercase tracking-[var(--tracking-wide)] text-foreground transition-colors hover:bg-muted/60 focus:outline-none focus-visible:outline-none [&::-webkit-details-marker]:hidden">
               <span className="flex items-center gap-1.5">
                 <span>{category.label[lang]}</span>
                 <span className="tabular-nums text-[length:var(--text-meta)] font-normal text-muted-foreground">
