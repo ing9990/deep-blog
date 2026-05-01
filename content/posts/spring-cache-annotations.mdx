@@ -1,0 +1,585 @@
+---
+title:
+  ko: "Spring Cache 어노테이션 정리"
+  en: "Spring Cache Annotations Guide"
+slug: "spring-cache-annotations"
+date: 2026-05-02
+tags:
+  - Backend
+  - Spring
+  - Cache
+  - Redis
+keywords:
+  - "Spring Cache"
+  - "@Cacheable"
+  - "@CachePut"
+  - "@CacheEvict"
+  - "@Caching"
+  - "@CacheConfig"
+  - "@EnableCaching"
+  - "RedisCacheManager"
+summary:
+  ko: "Spring Cache가 제공하는 어노테이션으로 메서드 결과를 선언적으로 캐싱하는 방법을 정리합니다. @EnableCaching, @Cacheable, @CachePut, @CacheEvict, @Caching, @CacheConfig 6가지와 RedisCacheManager로 cache name별 TTL을 다르게 두는 방법을 Kotlin·Java 예시와 함께 살펴봅니다."
+  en: "Walk through the Spring Cache annotations that turn imperative cache-aside code into declarative method-level caching. Covers @EnableCaching, @Cacheable, @CachePut, @CacheEvict, @Caching, @CacheConfig, and per-cache TTL configuration via RedisCacheManager with Kotlin and Java examples."
+category: spring-boot
+draft: false
+---
+
+Cache-Aside 패턴을 직접 코드로 짜면 캐시 조회 → miss 분기 → DB 호출 → 캐시 저장 → 반환을 메서드마다 반복합니다. Spring Cache는 이 흐름을 어노테이션 한 줄 뒤에 숨겨 메서드 본문에는 비즈니스 로직만 남기게 합니다. 이 글은 현업에서 자주 쓰는 6가지 어노테이션의 사용법과 옵션을 Kotlin·Java 예시로 정리하고, Redis를 백엔드로 쓸 때 cache name별 TTL을 다르게 두는 방법까지 살펴봅니다.
+
+<RelatedPost slug="cache-aside-pattern" type="prerequisite" />
+
+## 의존성과 활성화
+
+Spring Boot 3.2 기준, `spring-boot-starter-cache`와 Redis를 백엔드로 쓰는 경우 `spring-boot-starter-data-redis`만 있으면 됩니다.
+
+```kotlin title="build.gradle.kts"
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+}
+```
+
+`application.yml`에 캐시 타입과 Redis 접속 정보를 둡니다.
+
+```yaml title="application.yml"
+spring:
+  cache:
+    type: redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+```
+
+### `@EnableCaching`
+
+어노테이션 기반 캐싱을 활성화하는 진입점입니다. 설정 클래스에 부착하면 Spring이 `CacheInterceptor`를 만들고, 캐싱 어노테이션이 붙은 빈을 AOP 프록시로 감쌉니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="CacheConfig.kt"
+    @EnableCaching
+    @Configuration
+    class CacheConfig
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="CacheConfig.java"
+    @EnableCaching
+    @Configuration
+    public class CacheConfig {
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`@EnableCaching`을 붙이지 않으면 어노테이션이 그저 메타데이터로 무시되어 캐싱이 동작하지 않습니다. Spring Boot의 `CacheAutoConfiguration`은 `CacheManager` 빈은 자동으로 만들어 주지만, `@EnableCaching` 자체는 명시적으로 부착해야 합니다.
+
+## `@Cacheable`
+
+가장 중심에 있는 어노테이션입니다. 메서드에 부착하면 호출 시점에 캐시 hit이면 메서드 실행을 건너뛰고 캐시 값을 반환하고, miss면 메서드를 실행한 뒤 결과를 캐시에 저장합니다.
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Spring Cache의 어노테이션은 그 자체로 캐시를 읽고 쓰지 않습니다. `@EnableCaching`이 만든 AOP 프록시가 메서드 호출을 가로채 `CacheInterceptor`로 보내고, 인터셉터가 등록된 `CacheManager`에 위임합니다. 어노테이션은 <E>어떤 메서드의 결과를 어떤 cache name·key로 다룰지</E>를 선언하는 메타데이터입니다.
+</Callout>
+
+### 기본 사용
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ProductService.kt"
+    @Service
+    class ProductService(
+        private val productRepository: ProductRepository,
+    ) {
+
+        @Cacheable(value = ["products"], key = "#productId")
+        fun findById(productId: Long): Product {
+            return productRepository.findById(productId)
+                .orElseThrow { BusinessException(ErrorCode.PRODUCT_NOT_FOUND) }
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ProductService.java"
+    @Service
+    public class ProductService {
+
+        private final ProductRepository productRepository;
+
+        public ProductService(ProductRepository productRepository) {
+            this.productRepository = productRepository;
+        }
+
+        @Cacheable(value = "products", key = "#productId")
+        public Product findById(Long productId) {
+            return productRepository.findById(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+이 메서드를 호출하면 Spring은 `products::1` 형태의 키로 캐시를 조회하고, 값이 있으면 `Product`를 그대로 돌려줍니다. 없으면 `productRepository.findById(...)`를 실행해 받은 결과를 같은 키로 캐시에 저장한 뒤 반환합니다.
+
+### 자주 쓰는 옵션
+
+| 옵션 | 의미 |
+|---|---|
+| `value` / `cacheNames` | 사용할 캐시 이름. 같은 이름의 `Cache` 빈이 `CacheManager`에서 조회됨 |
+| `key` | SpEL로 키를 명시. 미지정 시 `SimpleKeyGenerator`가 모든 인자 조합으로 키 생성 |
+| `keyGenerator` | 커스텀 `KeyGenerator` 빈 이름. `key`와 동시 사용 불가 |
+| `condition` | SpEL. 메서드 진입 전 평가 → false면 캐싱 자체를 건너뜀 |
+| `unless` | SpEL. 메서드 실행 후 평가 → true면 결과를 캐시에 저장하지 않음. `#result` 접근 가능 |
+| `sync` | true면 같은 키 동시 호출 시 메서드를 한 번만 실행 (단일 JVM 한정) |
+| `cacheManager` | 사용할 `CacheManager` 빈 이름. 멀티 캐시 매니저 환경에서 명시 |
+
+### `key` — SpEL로 키 지정
+
+`key`를 생략하면 `SimpleKeyGenerator`가 메서드 인자 전체로 키를 만듭니다. 인자가 1개면 그 값 자체가, 여러 개면 `SimpleKey(arg1, arg2, ...)`가 키가 됩니다. 의도와 다른 키 충돌을 피하려면 SpEL로 명시하는 편이 안전합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="KeyExpressions.kt"
+    // 단일 인자
+    @Cacheable(value = ["users"], key = "#userId")
+    fun findUser(userId: Long): User { /* ... */ }
+
+    // 객체의 필드
+    @Cacheable(value = ["orders"], key = "#order.id")
+    fun enrich(order: Order): EnrichedOrder { /* ... */ }
+
+    // 여러 인자 조합
+    @Cacheable(value = ["search"], key = "#category + ':' + #page")
+    fun search(category: String, page: Int): List<Product> { /* ... */ }
+
+    // 메서드명·클래스 등 메타데이터
+    @Cacheable(value = ["meta"], key = "#root.methodName + ':' + #id")
+    fun findMeta(id: Long): Meta { /* ... */ }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="KeyExpressions.java"
+    @Cacheable(value = "users", key = "#userId")
+    public User findUser(Long userId) { /* ... */ }
+
+    @Cacheable(value = "orders", key = "#order.id")
+    public EnrichedOrder enrich(Order order) { /* ... */ }
+
+    @Cacheable(value = "search", key = "#category + ':' + #page")
+    public List<Product> search(String category, int page) { /* ... */ }
+
+    @Cacheable(value = "meta", key = "#root.methodName + ':' + #id")
+    public Meta findMeta(Long id) { /* ... */ }
+    ```
+  </Tab>
+</Tabs>
+
+### `condition` vs `unless`
+
+둘 다 캐싱을 건너뛰는 SpEL 식인데, 평가 시점이 다릅니다.
+
+- `condition`: **메서드 진입 전** 평가. false면 메서드는 그냥 실행되고 결과는 캐시에 저장되지 않습니다. 인자 값으로만 판단할 때 사용.
+- `unless`: **메서드 실행 후** 평가. `#result`로 반환값에 접근 가능. 반환값이 비어 있거나 null이면 캐시에 저장하지 않을 때 사용.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ConditionUnless.kt"
+    // 작은 페이지만 캐싱 (인자 기반)
+    @Cacheable(value = ["search"], key = "#page", condition = "#page < 10")
+    fun search(page: Int): List<Product> { /* ... */ }
+
+    // 빈 결과는 캐싱하지 않음 (반환값 기반)
+    @Cacheable(value = ["users"], key = "#userId", unless = "#result == null")
+    fun findUser(userId: Long): User? { /* ... */ }
+
+    // 둘 다 사용 가능
+    @Cacheable(
+        value = ["products"],
+        key = "#productId",
+        condition = "#productId > 0",
+        unless = "#result.stock == 0",
+    )
+    fun findProduct(productId: Long): Product { /* ... */ }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ConditionUnless.java"
+    @Cacheable(value = "search", key = "#page", condition = "#page < 10")
+    public List<Product> search(int page) { /* ... */ }
+
+    @Cacheable(value = "users", key = "#userId", unless = "#result == null")
+    public User findUser(Long userId) { /* ... */ }
+
+    @Cacheable(
+        value = "products",
+        key = "#productId",
+        condition = "#productId > 0",
+        unless = "#result.stock == 0"
+    )
+    public Product findProduct(Long productId) { /* ... */ }
+    ```
+  </Tab>
+</Tabs>
+
+### `sync = true`
+
+같은 키로 동시에 N개의 요청이 와서 캐시 miss를 동시에 만나면, 기본 동작은 N개의 메서드 호출이 모두 실행됩니다. `sync = true`를 주면 Spring이 캐시 단위로 락을 걸어 첫 호출만 메서드를 실행하고 나머지는 그 결과를 기다리게 합니다.
+
+```kotlin title="SyncCacheable.kt"
+@Cacheable(value = ["products"], key = "#productId", sync = true)
+fun findById(productId: Long): Product { /* ... */ }
+```
+
+이 락은 <E>같은 JVM 내부의 동시 호출</E>에만 유효합니다. 분산 환경에서 여러 인스턴스가 동시에 같은 키를 miss하는 시나리오에는 효과가 없으므로, 분산 캐시 stampede 방어에는 별도의 분산 락(예: Redisson `RLock`, Lua 스크립트 기반 단일 실행)을 더해야 합니다.
+
+<RelatedPost slug="cache-stampede" type="parallel" />
+
+## `@CachePut`
+
+메서드를 **항상 실행**하고, 결과를 캐시에 저장(덮어쓰기)합니다. `@Cacheable`이 "있으면 쓰고 없으면 채운다"라면, `@CachePut`은 "실행하고 그 결과로 갱신한다"입니다. 주로 update 시나리오에서 사용합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ProductUpdateService.kt"
+    @Service
+    class ProductUpdateService(
+        private val productRepository: ProductRepository,
+    ) {
+
+        @CachePut(value = ["products"], key = "#result.id")
+        fun updatePrice(productId: Long, price: Long): Product {
+            val product = productRepository.findById(productId)
+                .orElseThrow { BusinessException(ErrorCode.PRODUCT_NOT_FOUND) }
+            product.changePrice(price)
+            return product
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ProductUpdateService.java"
+    @Service
+    public class ProductUpdateService {
+
+        private final ProductRepository productRepository;
+
+        public ProductUpdateService(ProductRepository productRepository) {
+            this.productRepository = productRepository;
+        }
+
+        @CachePut(value = "products", key = "#result.id")
+        public Product updatePrice(Long productId, long price) {
+            Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+            product.changePrice(price);
+            return product;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`#result`로 반환값에 접근할 수 있어, "DB에 저장된 최신 객체를 그대로 캐시 키로도 쓴다"는 패턴을 깔끔하게 표현합니다. 옵션은 `@Cacheable`과 거의 동일하지만 `sync`만 없습니다.
+
+## `@CacheEvict`
+
+캐시에서 엔트리를 제거합니다. 도메인 데이터가 변경되어 캐시를 무효화해야 할 때 사용합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="EvictExamples.kt"
+    // 단일 키 제거
+    @CacheEvict(value = ["products"], key = "#productId")
+    fun delete(productId: Long) { /* ... */ }
+
+    // cache name 전체 비우기
+    @CacheEvict(value = ["products"], allEntries = true)
+    fun reloadAll() { /* ... */ }
+
+    // 메서드 실행 전에 제거 (예외가 나도 제거됨)
+    @CacheEvict(value = ["products"], key = "#productId", beforeInvocation = true)
+    fun deleteRisky(productId: Long) { /* ... */ }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="EvictExamples.java"
+    @CacheEvict(value = "products", key = "#productId")
+    public void delete(Long productId) { /* ... */ }
+
+    @CacheEvict(value = "products", allEntries = true)
+    public void reloadAll() { /* ... */ }
+
+    @CacheEvict(value = "products", key = "#productId", beforeInvocation = true)
+    public void deleteRisky(Long productId) { /* ... */ }
+    ```
+  </Tab>
+</Tabs>
+
+자주 쓰는 옵션입니다.
+
+| 옵션 | 의미 |
+|---|---|
+| `key` | 제거할 키의 SpEL. `allEntries = true`이면 무시됨 |
+| `allEntries` | true면 해당 cache name의 모든 엔트리 제거 |
+| `beforeInvocation` | true면 메서드 실행 **전** 제거. 기본값 false (성공 후 제거) |
+| `condition` | SpEL. false면 제거 자체를 건너뜀 |
+
+`beforeInvocation`의 기본값이 false라는 점이 중요합니다. 기본 동작은 "메서드가 정상 종료된 뒤" 캐시를 비우므로, 메서드가 예외를 던지면 캐시는 그대로 남습니다. DB 트랜잭션이 실패한 상황에서 캐시를 미리 비워 정합성이 깨지는 사고를 막아 주는 안전한 기본값입니다. 반대로 메서드 실패 여부와 무관하게 무조건 캐시를 비워야 한다면 `beforeInvocation = true`를 명시합니다.
+
+## `@Caching`
+
+같은 메서드에 여러 캐싱 동작을 동시에 적용해야 할 때 사용합니다. `@Cacheable`·`@CachePut`·`@CacheEvict`를 배열로 묶어 한 번에 선언합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="CachingCombo.kt"
+    @Service
+    class ProductCommandService(
+        private val productRepository: ProductRepository,
+    ) {
+
+        @Caching(
+            put = [CachePut(value = ["products"], key = "#result.id")],
+            evict = [
+                CacheEvict(value = ["products-by-category"], key = "#result.categoryId"),
+                CacheEvict(value = ["products-search"], allEntries = true),
+            ],
+        )
+        fun update(productId: Long, command: UpdateProductCommand): Product {
+            val product = productRepository.findById(productId)
+                .orElseThrow { BusinessException(ErrorCode.PRODUCT_NOT_FOUND) }
+            product.update(command)
+            return product
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="CachingCombo.java"
+    @Service
+    public class ProductCommandService {
+
+        private final ProductRepository productRepository;
+
+        public ProductCommandService(ProductRepository productRepository) {
+            this.productRepository = productRepository;
+        }
+
+        @Caching(
+            put = { @CachePut(value = "products", key = "#result.id") },
+            evict = {
+                @CacheEvict(value = "products-by-category", key = "#result.categoryId"),
+                @CacheEvict(value = "products-search", allEntries = true)
+            }
+        )
+        public Product update(Long productId, UpdateProductCommand command) {
+            Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+            product.update(command);
+            return product;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+상품 수정 한 번에 단건 캐시는 갱신하고, 카테고리·검색 캐시는 무효화하는 흐름이 한 어노테이션 안에 묶여 의도를 그대로 드러냅니다.
+
+## `@CacheConfig`
+
+같은 클래스의 모든 캐싱 메서드가 공유하는 옵션을 클래스 레벨에서 한 번에 지정합니다. `cacheNames`·`keyGenerator`·`cacheManager`·`cacheResolver`를 끌어올릴 수 있습니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="CacheConfigExample.kt"
+    @Service
+    @CacheConfig(cacheNames = ["products"])
+    class ProductService(
+        private val productRepository: ProductRepository,
+    ) {
+
+        @Cacheable(key = "#productId")
+        fun findById(productId: Long): Product { /* ... */ }
+
+        @CachePut(key = "#result.id")
+        fun update(productId: Long, command: UpdateProductCommand): Product { /* ... */ }
+
+        @CacheEvict(key = "#productId")
+        fun delete(productId: Long) { /* ... */ }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="CacheConfigExample.java"
+    @Service
+    @CacheConfig(cacheNames = "products")
+    public class ProductService {
+
+        private final ProductRepository productRepository;
+
+        public ProductService(ProductRepository productRepository) {
+            this.productRepository = productRepository;
+        }
+
+        @Cacheable(key = "#productId")
+        public Product findById(Long productId) { /* ... */ }
+
+        @CachePut(key = "#result.id")
+        public Product update(Long productId, UpdateProductCommand command) { /* ... */ }
+
+        @CacheEvict(key = "#productId")
+        public void delete(Long productId) { /* ... */ }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+각 메서드의 `value`/`cacheNames` 반복이 사라져 `key` 같은 메서드별 차이만 남습니다. 같은 클래스 안에서 여러 cache name을 섞어 써야 하면 메서드 레벨에서 `value`를 명시해 클래스 기본값을 덮어쓰면 됩니다.
+
+## TTL 설정 — `RedisCacheManager`
+
+Spring Cache 추상화 자체에는 TTL 개념이 없습니다. 만료 정책은 `CacheManager` 구현체가 결정하며, Redis를 백엔드로 쓸 때는 `RedisCacheManager`와 `RedisCacheConfiguration`으로 설정합니다.
+
+### 단일 TTL — 모든 캐시에 동일 적용
+
+가장 단순한 형태입니다. `application.yml` 한 줄로 끝납니다.
+
+```yaml title="application.yml"
+spring:
+  cache:
+    type: redis
+    redis:
+      time-to-live: 10m
+      cache-null-values: false
+      key-prefix: "deep:"
+      use-key-prefix: true
+```
+
+- `time-to-live`: 모든 캐시 엔트리의 TTL
+- `cache-null-values`: null 값을 캐시에 저장할지 여부. true면 `@Cacheable`이 null도 저장해 같은 키 재호출 시 DB 부하를 줄여 주지만, 도메인에 따라 잘못된 부재 캐싱이 될 수 있음
+- `key-prefix`: 모든 키 앞에 붙는 prefix. 환경별 격리에 유용
+- `use-key-prefix`: cache name을 prefix로 자동 부착할지 여부 (기본 true)
+
+### cache name별 TTL — 자주 쓰는 패턴
+
+상품 상세는 10분, 카테고리 목록은 1시간, 사용자 프로필은 5분처럼 캐시별로 TTL을 달리해야 하는 경우가 많습니다. 이때는 `RedisCacheManagerBuilder`로 cache name마다 서로 다른 `RedisCacheConfiguration`을 등록합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="RedisCacheConfig.kt"
+    @EnableCaching
+    @Configuration
+    class RedisCacheConfig {
+
+        @Bean
+        fun cacheManager(connectionFactory: RedisConnectionFactory): CacheManager {
+            val defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(10))
+                .disableCachingNullValues()
+                .serializeKeysWith(
+                    RedisSerializationContext.SerializationPair.fromSerializer(StringRedisSerializer()),
+                )
+                .serializeValuesWith(
+                    RedisSerializationContext.SerializationPair.fromSerializer(GenericJackson2JsonRedisSerializer()),
+                )
+
+            val perCacheConfigs = mapOf(
+                "products" to defaultConfig.entryTtl(Duration.ofMinutes(10)),
+                "products-by-category" to defaultConfig.entryTtl(Duration.ofHours(1)),
+                "users" to defaultConfig.entryTtl(Duration.ofMinutes(5)),
+                "products-search" to defaultConfig.entryTtl(Duration.ofSeconds(30)),
+            )
+
+            return RedisCacheManager.builder(connectionFactory)
+                .cacheDefaults(defaultConfig)
+                .withInitialCacheConfigurations(perCacheConfigs)
+                .build()
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="RedisCacheConfig.java"
+    @EnableCaching
+    @Configuration
+    public class RedisCacheConfig {
+
+        @Bean
+        public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+            RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(10))
+                .disableCachingNullValues()
+                .serializeKeysWith(
+                    RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer())
+                )
+                .serializeValuesWith(
+                    RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer())
+                );
+
+            Map<String, RedisCacheConfiguration> perCacheConfigs = Map.of(
+                "products", defaultConfig.entryTtl(Duration.ofMinutes(10)),
+                "products-by-category", defaultConfig.entryTtl(Duration.ofHours(1)),
+                "users", defaultConfig.entryTtl(Duration.ofMinutes(5)),
+                "products-search", defaultConfig.entryTtl(Duration.ofSeconds(30))
+            );
+
+            return RedisCacheManager.builder(connectionFactory)
+                .cacheDefaults(defaultConfig)
+                .withInitialCacheConfigurations(perCacheConfigs)
+                .build();
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+여기서 중요한 결정 포인트입니다.
+
+| 결정 | 권장 값 | 이유 |
+|---|---|---|
+| 키 직렬화 | `StringRedisSerializer` | `redis-cli`로 키를 사람이 읽을 수 있어 운영·디버깅 편의 |
+| 값 직렬화 | `GenericJackson2JsonRedisSerializer` | 타입 정보를 JSON에 포함해 역직렬화 시 클래스 매핑이 자동. JDK Serialization은 호환성·보안 이유로 비권장 |
+| null 캐싱 | 끄기 | "없는 데이터"의 부재 캐싱이 도메인 의도와 어긋날 위험. 필요하면 도메인 단위로 명시적으로 켜기 |
+| 기본 TTL | 도메인 데이터 변경 빈도보다 짧게 | 너무 길면 stale, 너무 짧으면 캐시 효과가 사라짐. 변경 빈도와 hit ratio를 함께 보고 결정 |
+
+`@Cacheable(value = ["products"])`로 등록한 캐시는 `withInitialCacheConfigurations`에 `"products"` 키가 있으면 그 설정을, 없으면 `cacheDefaults`의 설정을 따릅니다. 새 cache name을 `@Cacheable`에 추가했는데 TTL이 의도와 다르다면 이 맵에서 누락된 경우가 대부분입니다.
+
+<RelatedPost slug="redis-template-essentials" type="parallel" />
+
+## 동작 원리 (짧게)
+
+여기까지 어노테이션의 사용법을 봤습니다. 실제로 캐시가 동작하는 구조는 한 줄 요약이 가능합니다.
+
+<Callout type="error" title="핵심 통찰: 어노테이션은 트리거, CacheManager가 저장소">
+  Spring Cache는 추상화일 뿐입니다. 어노테이션은 메서드 호출을 가로채는 트리거를 선언하고, 실제 저장·만료·직렬화는 `CacheManager` 구현체(Redis, Caffeine, EhCache 등)가 결정합니다. 같은 어노테이션이 백엔드만 바꾸면 다른 저장소로 그대로 이동할 수 있는 이유입니다.
+</Callout>
+
+흐름은 다음과 같습니다.
+
+1. `@EnableCaching`이 `CachingConfigurationSelector`를 통해 `ProxyCachingConfiguration`을 등록합니다.
+2. 캐싱 어노테이션이 붙은 빈은 Spring AOP 프록시로 감싸집니다.
+3. 메서드 호출이 프록시를 거치며 `CacheInterceptor`가 가로챕니다.
+4. 인터셉터는 어노테이션 메타데이터를 읽어 `CacheManager`에 `getCache(name).get/put/evict(...)`를 호출합니다.
+5. Redis 백엔드라면 `RedisCacheManager`가 `RedisTemplate`을 통해 실제 Redis 명령을 실행합니다.
+
+이 구조 때문에 두 가지 함수형 한계를 기억하면 좋습니다.
+
+- **자기 호출은 캐싱되지 않습니다**. 같은 클래스 내부에서 `this.findById(...)`로 호출하면 프록시를 거치지 않아 어노테이션이 무시됩니다. 캐싱이 필요한 메서드는 다른 빈에서 호출하거나, 자기 자신을 빈으로 주입받아 호출해야 합니다.
+- **`final` 메서드와 `private` 메서드는 프록시되지 않습니다**. JDK Dynamic Proxy든 CGLIB든 가로챌 수 없는 형태이므로 어노테이션이 실행 시점에 동작하지 않습니다.
+
+## 마무리
+
+Spring Cache의 어노테이션은 결국 두 가지 일을 합니다. 하나는 `@EnableCaching`·`@Cacheable`·`@CachePut`·`@CacheEvict`·`@Caching`으로 <E>어떤 메서드의 결과를 어떤 cache name·key로 다룰지</E>를 선언하는 것이고, 다른 하나는 `@CacheConfig`로 클래스 레벨 공통 설정을 끌어올리는 것입니다. 거기에 `RedisCacheManager`로 cache name별 TTL과 직렬화를 정해 두면, 비즈니스 코드는 어노테이션 한두 줄만 남고 운영 정책은 설정 클래스 한 곳에 모입니다.
+
+본문에서 본 코드들이 동작하는 이유는, 이 어노테이션들이 모두 `@EnableCaching`이 만든 AOP 프록시와 `CacheInterceptor`를 거쳐 `CacheManager`로 위임되기 때문입니다. 어노테이션이 곧 캐시는 아니지만, 어노테이션을 어떻게 조합하느냐가 캐시의 동작을 결정합니다.
+
+## 참고 자료
+
+- [Spring Framework Reference — Cache Abstraction](https://docs.spring.io/spring-framework/reference/integration/cache.html)
+- [Spring Framework Reference — Declarative Annotation-based Caching](https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html)
+- [Spring Boot Reference — Caching](https://docs.spring.io/spring-boot/reference/io/caching.html)
+- [Spring Data Redis — RedisCacheManager](https://docs.spring.io/spring-data/redis/reference/redis/redis-cache.html)

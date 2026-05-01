@@ -22,12 +22,6 @@ draft: false
 
 백엔드에서 같은 성격의 호출이 짧은 시간 안에 여러 개 몰려들 때가 있습니다. 추천 모델 추론, 임베딩 계산, 외부 API 조회, DB 쓰기. 한 건씩 처리하면 호출당 오버헤드에 매번 세금을 냅니다. MicroBatcher는 이 호출들을 몇 밀리초만 모아 한 번에 처리하도록 중간에 끼워 넣는 얇은 레이어입니다. 이 글은 `asyncio` 기반 최소 구현으로 사용법을 익히고, 왜 필요한지와 언제 쓰지 말아야 하는지까지 정리합니다.
 
-<Note title="이 글의 학습 목표">
-  - MicroBatcher가 무엇이고 size/time 이중 flush가 어떻게 동작하는지 이해한다
-  - `asyncio.Future`를 활용한 Python 최소 구현과 호출자 API를 익힌다
-  - 지연 시간 증가와 복잡도 부담을 감안해 언제 도입할지의 기준을 얻는다
-</Note>
-
 ## 개요
 
 MicroBatcher는 **짧은 시간 창 안에 도착한 개별 비동기 호출을 모아 한 번에 처리하고, 각 호출자에게 자기 결과만 돌려주는 패턴**입니다.
@@ -85,7 +79,6 @@ from typing import Awaitable, Callable, Generic, TypeVar
 
 T = TypeVar("T")
 R = TypeVar("R")
-
 
 class MicroBatcher(Generic[T, R]):
     def __init__(
@@ -155,13 +148,11 @@ async def embed_many(texts: list[str]) -> list[list[float]]:
     # 모델은 배치로 받도록 설계된 API
     return await model.encode_async(texts)
 
-
 batcher = MicroBatcher(
     handler=embed_many,
     max_batch_size=32,
     max_wait_ms=10,
 )
-
 
 async def handle_request(text: str) -> list[float]:
     # 호출자는 배치의 존재를 모른다

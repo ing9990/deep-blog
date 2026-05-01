@@ -26,12 +26,6 @@ draft: false
 
 Redis는 단일 명령에 대해서는 이미 원자적입니다. 문제는 여러 명령을 묶어 하나의 논리 연산으로 처리할 때 생깁니다. 분산 락 해제, rate limiter, compare-and-set 같은 패턴은 클라이언트와 Redis 사이를 여러 번 왕복하면 그 사이에 다른 클라이언트가 끼어들 수 있고, 그 race condition이 곧 데이터 사고로 이어집니다. Luascript는 이 문제를 <E>한 덩어리로 실행되는 코드</E>로 풉니다. 이 글에서는 Luascript가 단일 스레드 모델 위에서 어떻게 원자성을 얻는지, 그리고 그 대가가 무엇인지 정리합니다.
 
-<Note title="이 글의 학습 목표">
-  - Redis Luascript가 단일 스레드 이벤트 루프 위에서 어떻게 원자성을 보장하는지 이해한다
-  - `EVAL`과 `EVALSHA`의 캐시 흐름, `KEYS`/`ARGV` 분리가 Cluster 라우팅에 강제되는 이유를 구분할 수 있다
-  - 블로킹, 비결정성, Cluster 제약을 고려해 Luascript와 다른 대안(MULTI/EXEC, Redis Functions, 분산 락) 사이에서 선택하는 기준을 얻는다
-</Note>
-
 ## Redis Lua란
 
 Redis Lua 스크립팅은 **Redis 서버 프로세스 안에서 임베디드 Lua 인터프리터로 실행되는 스크립트**입니다. 클라이언트가 `EVAL` 명령으로 스크립트 본문을 보내면, Redis는 그 스크립트가 끝날 때까지 다른 명령을 일절 처리하지 않고 한 번에 실행합니다.

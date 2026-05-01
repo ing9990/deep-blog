@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ['192.168.50.4'],
   webpack: (config) => {
     config.plugins.push(new VeliteWebpackPlugin())
     return config

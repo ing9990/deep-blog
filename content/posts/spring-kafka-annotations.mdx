@@ -27,12 +27,6 @@ draft: false
 
 Kafka 컨슈머를 직접 구현하면 `KafkaConsumer.poll()` 루프, 예외 처리, 오프셋 커밋, 스레드 모델까지 전부 손으로 짜야 합니다. Spring Kafka는 이 모든 것을 어노테이션 뒤에 숨겨 메서드 하나에 토픽과 처리 로직만 적도록 합니다. 이 글은 현업에서 자주 쓰는 8가지 어노테이션의 기능과 사용법을 Kotlin과 Java 예시로 정리합니다.
 
-<Note title="이 글의 학습 목표">
-  - `@EnableKafka`·`@KafkaListener`·`@KafkaHandler`가 컨슈머를 어떻게 등록하는지 이해한다
-  - `@Payload`·`@Header`·`@Headers`로 메시지 본문과 메타데이터를 분리해서 받는 방법을 구분할 수 있다
-  - `@RetryableTopic`·`@DltHandler`로 재시도와 DLT를 선언적으로 구성하는 기준을 얻는다
-</Note>
-
 <RelatedPost slug="kafka-essentials" type="prerequisite" />
 
 ## 왜 어노테이션인가

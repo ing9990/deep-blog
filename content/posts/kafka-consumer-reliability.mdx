@@ -24,12 +24,6 @@ draft: false
 
 면접에서 <E>Kafka Consumer는 어떻게 동작하나요?</E> 라는 질문을 받으면 대부분 <E>poll로 메시지를 가져와 처리합니다</E> 정도로 답합니다. 그런데 그 다음 질문이 무섭습니다. <E>처리는 됐는데 Kafka에 응답이 안 갔다면요?</E> 이 글은 Consumer가 메시지를 처리한다는 게 실제로 어떤 3단계인지, 그 사이에 어떤 보장이 깨지고 그래서 왜 멱등성이 강제되는지를 따라갑니다.
 
-<Note title="이 글의 학습 목표">
-  - Consumer의 poll → 처리 → commit 3단계가 각각 무엇을 의미하고 어디서 실패할 수 있는지 이해한다
-  - at-least-once 표준이 왜 어쩔 수 없는 선택인지, 그래서 왜 멱등성 설계가 Consumer 측 책임이 되는지 구분할 수 있다
-  - 처리 후 commit 실패, DB-Kafka 동시 쓰기 문제, 재시도와 DLT 같은 실전 함정에서 적절한 도구를 선택하는 기준을 얻는다
-</Note>
-
 <RelatedPost slug="kafka-essentials" type="prerequisite" />
 
 ## Consumer가 하는 일

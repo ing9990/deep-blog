@@ -25,12 +25,6 @@ draft: false
 
 시간은 프로그래밍에서 가장 쉬워 보이지만 가장 미묘한 주제 중 하나입니다. Java 8은 `Date` 하나가 담당하던 역할을 `Instant` / `LocalDateTime` / `ZonedDateTime` / `OffsetDateTime` 네 개로 쪼갰고, 각 타입이 Hibernate와 MySQL을 거쳐 저장될 때 **독립적인 타임존 해석**을 겪습니다. 이 글은 네 타입이 모델링하는 것, 저장 경로의 세 층, 그리고 실제로 어느 타입을 언제 써야 하는지를 따라갑니다.
 
-<Note title="이 글의 학습 목표">
-  - `Instant` / `LocalDateTime` / `ZonedDateTime` / `OffsetDateTime`이 각각 무엇을 모델링하는지 이해한다.
-  - Java 타입이 Hibernate → JDBC 드라이버 → MySQL 컬럼으로 내려가는 세 층의 타임존 해석을 구분할 수 있다.
-  - 감사 필드·예약 시각·국제 일정 같은 상황에서 어느 타입을 고를지 기준을 얻는다.
-</Note>
-
 ## 네 가지 시간 타입
 
 ### Instant

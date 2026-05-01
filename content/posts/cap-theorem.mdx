@@ -22,12 +22,6 @@ draft: true
 
 분산 시스템을 설계할 때 가장 먼저 부딪히는 벽은 CAP 이론입니다. <E>3개 중 2개</E>라는 유명한 요약은 정작 정리의 본질을 왜곡합니다. 실제 내용은 훨씬 단순하면서도 훨씬 제약적입니다. 네트워크 파티션이 발생한 순간 Consistency와 Availability 중 하나를 반드시 포기해야 한다는 것입니다. 이 글에서는 그 제약이 왜 필연인지, 실전 시스템이 이를 어떻게 받아들이고 설계되는지를 정리합니다.
 
-<Note title="이 글의 학습 목표">
-  - 네트워크 파티션 발생 시 C와 A 중 하나를 포기해야 하는 근본 이유를 이해한다
-  - CP 시스템과 AP 시스템의 내부 동작 차이를 구분할 수 있다
-  - PACELC 확장과 도메인별 판단 기준으로 실전에서 CP/AP를 선택하는 기준을 얻는다
-</Note>
-
 ## CAP 이론이란
 
 CAP 이론은 UC Berkeley의 Eric Brewer가 2000년 PODC 컨퍼런스에서 제안하고, 2002년 MIT의 Seth Gilbert와 Nancy Lynch가 정식으로 증명한 분산 시스템 정리입니다. 한 줄로 요약하면 다음과 같습니다. <E>네트워크로 연결된 분산 시스템은 Consistency, Availability, Partition Tolerance 세 속성을 동시에 만족할 수 없다.</E>
