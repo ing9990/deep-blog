@@ -1,0 +1,446 @@
+---
+title:
+  ko: "MySQL JOIN 총 정리"
+  en: "MySQL JOIN Cheatsheet"
+slug: "mysql-join-guide"
+date: 2026-04-22
+tags:
+  - database
+  - backend
+  - MySQL
+keywords:
+  - JOIN
+  - MySQL JOIN
+  - INNER JOIN
+  - LEFT JOIN
+  - RIGHT JOIN
+  - OUTER JOIN
+summary:
+  ko: "MySQL의 INNER · LEFT · RIGHT · FULL · CROSS · SELF JOIN과 ON · USING · NATURAL의 차이를 회원과 주문 두 테이블의 결과로 한눈에 구분할 수 있습니다."
+  en: "A side-by-side cheatsheet of every MySQL JOIN type (INNER, LEFT, RIGHT, FULL, CROSS, SELF) plus ON, USING, and NATURAL, illustrated with two consistent tables: members and orders."
+category: database
+draft: false
+---
+
+JOIN은 SQL에서 가장 많이 쓰는 문법이지만, 종류가 많아 헷갈리기 쉽습니다. `INNER`/`LEFT`/`RIGHT`/`OUTER`/`CROSS`/`SELF`는 각각 어떤 행이 결과에 포함되는지의 규칙이 다를 뿐입니다. 이 글은 회원과 주문 두 테이블을 끝까지 동일하게 두고, 같은 JOIN을 같은 데이터에 던졌을 때 결과가 어떻게 달라지는지 비교합니다.
+
+## 예시 테이블
+
+글 전체에서 동일한 두 테이블을 사용합니다.
+
+### `members` (회원)
+
+| id | name | grade |
+|---|---|---|
+| 1 | 김민수 | `GOLD` |
+| 2 | 이서연 | `SILVER` |
+| 3 | 박지훈 | `GOLD` |
+| 4 | 최유진 | `BRONZE` |
+| 5 | 정도현 | `SILVER` |
+
+`id`는 PK입니다. 5번 회원은 가입만 했고 아직 주문 이력이 없습니다.
+
+### `orders` (주문)
+
+| id | member_id | product | amount |
+|---|---|---|---|
+| 101 | 1 | 키보드 | 89,000 |
+| 102 | 1 | 마우스 | 35,000 |
+| 103 | 2 | 모니터 | 320,000 |
+| 104 | 3 | 의자 | 180,000 |
+| 105 | 7 | 책상 | 240,000 |
+
+`id`는 PK, `member_id`는 회원 FK입니다. 105번 주문의 `member_id = 7`은 `members` 테이블에 없는 값입니다(회원이 탈퇴한 상황을 가정). 이 한 행이 `LEFT`/`RIGHT` JOIN의 차이를 가장 명확하게 드러냅니다.
+
+```sql title="setup.sql"
+CREATE TABLE members (
+  id    INT PRIMARY KEY,
+  name  VARCHAR(20),
+  grade VARCHAR(10)
+);
+
+CREATE TABLE orders (
+  id        INT PRIMARY KEY,
+  member_id INT,
+  product   VARCHAR(20),
+  amount    INT
+);
+
+INSERT INTO members VALUES
+  (1, '김민수', 'GOLD'),
+  (2, '이서연', 'SILVER'),
+  (3, '박지훈', 'GOLD'),
+  (4, '최유진', 'BRONZE'),
+  (5, '정도현', 'SILVER');
+
+INSERT INTO orders VALUES
+  (101, 1, '키보드', 89000),
+  (102, 1, '마우스', 35000),
+  (103, 2, '모니터', 320000),
+  (104, 3, '의자',   180000),
+  (105, 7, '책상',   240000);
+```
+
+## JOIN의 기본 문법
+
+JOIN은 두 테이블을 어떤 조건으로 묶을지 명시하는 문법입니다.
+
+```sql title="join-basic.sql"
+SELECT 컬럼들
+FROM 왼쪽_테이블
+[INNER | LEFT | RIGHT | CROSS] JOIN 오른쪽_테이블
+  ON 왼쪽_테이블.컬럼 = 오른쪽_테이블.컬럼;
+```
+
+핵심은 세 부분입니다.
+
+- `JOIN`의 **종류**: `INNER` / `LEFT` / `RIGHT` / `CROSS` 등. 어떤 행이 결과에 포함될지 결정합니다.
+- `ON` **절**: 두 테이블을 어떻게 매칭할지의 조건. 보통 PK = FK 형태입니다.
+- 결과 **컬럼 선택**: `SELECT` 절에서 양쪽 테이블의 컬럼을 자유롭게 가져옵니다. 이름이 겹치면 `테이블.컬럼`으로 구분합니다.
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  JOIN 종류별 차이는 결국 <E>"매칭되지 않는 행을 결과에 포함할 것인가"</E> 한 가지 질문으로 정리됩니다. 매칭된 행만 → `INNER`, 왼쪽 전부 → `LEFT`, 오른쪽 전부 → `RIGHT`, 양쪽 전부 → `FULL OUTER`.
+</Callout>
+
+## INNER JOIN
+
+`INNER JOIN`은 `ON` 조건을 만족하는 행만 결과에 남깁니다. 양쪽 테이블의 교집합이라고 생각하면 됩니다.
+
+<Diagram caption="INNER JOIN: 교집합 (M ∩ O) 만 결과에 포함">{`venn-beta
+set M["M (회원)"]
+set O["O (주문)"]
+union M,O
+style M fill:#fef3c7,fill-opacity:0.45,stroke:#f59e0b,stroke-width:2px
+style O fill:#fef3c7,fill-opacity:0.45,stroke:#f59e0b,stroke-width:2px
+`}</Diagram>
+
+```sql title="inner-join.sql"
+SELECT m.id, m.name, o.product, o.amount
+FROM members m
+INNER JOIN orders o
+  ON m.id = o.member_id;
+```
+
+결과:
+
+| m.id | m.name | o.product | o.amount |
+|---|---|---|---|
+| 1 | 김민수 | 키보드 | 89,000 |
+| 1 | 김민수 | 마우스 | 35,000 |
+| 2 | 이서연 | 모니터 | 320,000 |
+| 3 | 박지훈 | 의자 | 180,000 |
+
+행은 4개입니다. 회원 4번(주문 없음), 회원 5번(주문 없음), 그리고 주문 105번(`member_id = 7`, 회원 없음)은 모두 짝이 없으므로 결과에서 빠집니다. 김민수는 주문이 두 건이므로 두 행으로 펼쳐집니다.
+
+`INNER` 키워드는 생략 가능합니다. 그냥 `JOIN`이라고 쓰면 `INNER JOIN`입니다.
+
+```sql title="inner-join-omitted.sql"
+SELECT m.id, m.name, o.product, o.amount
+FROM members m
+JOIN orders o ON m.id = o.member_id;
+```
+
+## LEFT JOIN
+
+`LEFT JOIN`(또는 `LEFT OUTER JOIN`)은 왼쪽 테이블의 모든 행을 결과에 남기고, 오른쪽에서 매칭되는 행을 옆에 붙입니다. 매칭이 없으면 오른쪽 컬럼들은 `NULL`이 됩니다.
+
+<Diagram caption="LEFT JOIN: 왼쪽 원 (M) 전체 = 왼쪽 합집합">{`venn-beta
+set M["M (회원)"]
+set O["O (주문)"]
+union M,O
+style M fill:#fef3c7,stroke:#f59e0b,stroke-width:3px
+style O fill:transparent,stroke:#9ca3af,stroke-dasharray:4 4
+`}</Diagram>
+
+```sql title="left-join.sql"
+SELECT m.id, m.name, o.product, o.amount
+FROM members m
+LEFT JOIN orders o
+  ON m.id = o.member_id;
+```
+
+결과:
+
+| m.id | m.name | o.product | o.amount |
+|---|---|---|---|
+| 1 | 김민수 | 키보드 | 89,000 |
+| 1 | 김민수 | 마우스 | 35,000 |
+| 2 | 이서연 | 모니터 | 320,000 |
+| 3 | 박지훈 | 의자 | 180,000 |
+| 4 | 최유진 | `NULL` | `NULL` |
+| 5 | 정도현 | `NULL` | `NULL` |
+
+행은 6개입니다. 회원 4번과 5번은 주문이 없지만 결과에 남아 있고, 오른쪽 컬럼에 `NULL`이 채워졌습니다. 반면 주문 105번(member_id = 7)은 왼쪽 기준이 아니므로 사라졌습니다.
+
+`OUTER` 키워드는 생략 가능합니다. `LEFT JOIN`과 `LEFT OUTER JOIN`은 같은 의미입니다.
+
+### 주문 없는 회원만 찾기
+
+`LEFT JOIN` 뒤에 `WHERE 오른쪽컬럼 IS NULL`을 붙이면 "왼쪽에는 있지만 오른쪽에 매칭이 없는 행"만 골라낼 수 있습니다. 자주 쓰이는 패턴입니다.
+
+<Diagram caption="LEFT 차집합: M − O (왼쪽에서 교집합 제외)">{`venn-beta
+set M["M (회원)"]
+set O["O (주문)"]
+union M,O
+style M fill:#fee2e2,stroke:#dc2626,stroke-width:3px
+style O fill:transparent,stroke:#9ca3af,stroke-dasharray:4 4
+`}</Diagram>
+
+```sql title="left-anti-join.sql"
+SELECT m.id, m.name
+FROM members m
+LEFT JOIN orders o
+  ON m.id = o.member_id
+WHERE o.id IS NULL;
+```
+
+결과:
+
+| m.id | m.name |
+|---|---|
+| 4 | 최유진 |
+| 5 | 정도현 |
+
+## RIGHT JOIN
+
+`RIGHT JOIN`(또는 `RIGHT OUTER JOIN`)은 `LEFT JOIN`을 좌우 대칭으로 뒤집은 것입니다. 오른쪽 테이블의 모든 행이 결과에 남고, 왼쪽에서 매칭이 없으면 `NULL`이 됩니다.
+
+<Diagram caption="RIGHT JOIN: 오른쪽 원 (O) 전체 = 오른쪽 합집합">{`venn-beta
+set M["M (회원)"]
+set O["O (주문)"]
+union M,O
+style M fill:transparent,stroke:#9ca3af,stroke-dasharray:4 4
+style O fill:#fef3c7,stroke:#f59e0b,stroke-width:3px
+`}</Diagram>
+
+```sql title="right-join.sql"
+SELECT m.id, m.name, o.product, o.amount
+FROM members m
+RIGHT JOIN orders o
+  ON m.id = o.member_id;
+```
+
+결과:
+
+| m.id | m.name | o.product | o.amount |
+|---|---|---|---|
+| 1 | 김민수 | 키보드 | 89,000 |
+| 1 | 김민수 | 마우스 | 35,000 |
+| 2 | 이서연 | 모니터 | 320,000 |
+| 3 | 박지훈 | 의자 | 180,000 |
+| `NULL` | `NULL` | 책상 | 240,000 |
+
+행은 5개입니다. 주문 105번은 회원 매칭이 없지만 오른쪽 기준이라 결과에 남아 있고, 회원 컬럼이 `NULL`로 채워졌습니다. 반면 주문이 없는 회원 4번과 5번은 오른쪽에 없으므로 사라졌습니다.
+
+<Callout type="error" title="핵심 통찰: LEFT와 RIGHT의 차이는 한 줄이다">
+  같은 두 테이블, 같은 `ON` 조건이어도 `LEFT JOIN`과 `RIGHT JOIN`은 결과 행 수가 다릅니다. 차이는 단 한 가지, <E>"어느 쪽 테이블의 행을 모두 보존할 것인가"</E>입니다. 실무에서는 `RIGHT JOIN` 대신 테이블 순서를 바꾼 `LEFT JOIN`으로 쓰는 편이 가독성에 유리합니다.
+</Callout>
+
+```sql title="right-as-left.sql"
+-- RIGHT JOIN을 LEFT JOIN으로 바꿔 쓰기 (결과 동일)
+SELECT m.id, m.name, o.product, o.amount
+FROM orders o
+LEFT JOIN members m
+  ON m.id = o.member_id;
+```
+
+## FULL OUTER JOIN
+
+`FULL OUTER JOIN`은 양쪽 테이블의 모든 행을 결과에 남깁니다. 매칭되지 않는 쪽은 `NULL`로 채워집니다.
+
+<Diagram caption="FULL OUTER JOIN: M ∪ O (양쪽 합집합 전체)">{`venn-beta
+set M["M (회원)"]
+set O["O (주문)"]
+union M,O
+style M fill:#fef3c7,stroke:#f59e0b,stroke-width:3px
+style O fill:#fef3c7,stroke:#f59e0b,stroke-width:3px
+`}</Diagram>
+
+<Callout type="info" title="MySQL은 FULL OUTER JOIN 미지원">
+  `FULL OUTER JOIN`은 표준 SQL 키워드이지만, MySQL은 이를 지원하지 않습니다(PostgreSQL, Oracle, SQL Server는 지원). MySQL에서는 `LEFT JOIN`과 `RIGHT JOIN`을 `UNION`으로 합쳐 같은 결과를 만듭니다.
+</Callout>
+
+```sql title="full-outer-mysql.sql"
+SELECT m.id, m.name, o.product, o.amount
+FROM members m
+LEFT JOIN orders o ON m.id = o.member_id
+
+UNION
+
+SELECT m.id, m.name, o.product, o.amount
+FROM members m
+RIGHT JOIN orders o ON m.id = o.member_id;
+```
+
+결과:
+
+| m.id | m.name | o.product | o.amount |
+|---|---|---|---|
+| 1 | 김민수 | 키보드 | 89,000 |
+| 1 | 김민수 | 마우스 | 35,000 |
+| 2 | 이서연 | 모니터 | 320,000 |
+| 3 | 박지훈 | 의자 | 180,000 |
+| 4 | 최유진 | `NULL` | `NULL` |
+| 5 | 정도현 | `NULL` | `NULL` |
+| `NULL` | `NULL` | 책상 | 240,000 |
+
+행은 7개입니다. `INNER` 결과(4행)에 `LEFT`만 가진 행 2개와 `RIGHT`만 가진 행 1개가 더해진 모양입니다. `UNION`은 중복을 제거하기 때문에 양쪽 모두에 등장하는 매칭된 4행은 한 번만 남습니다(중복까지 살리려면 `UNION ALL`).
+
+## CROSS JOIN
+
+`CROSS JOIN`은 조건 없이 양쪽 테이블의 모든 행 조합을 만듭니다. `members` 5행 × `orders` 5행 = 25행입니다.
+
+```sql title="cross-join.sql"
+SELECT m.name, o.product
+FROM members m
+CROSS JOIN orders o;
+```
+
+결과(앞부분만):
+
+| m.name | o.product |
+|---|---|
+| 김민수 | 키보드 |
+| 김민수 | 마우스 |
+| 김민수 | 모니터 |
+| 김민수 | 의자 |
+| 김민수 | 책상 |
+| 이서연 | 키보드 |
+| ... | ... |
+
+`ON` 절이 없는 점이 특징입니다. 보통 회원 × 쿠폰 같은 모든 조합 생성, 좌석 × 시간대 같은 매트릭스 만들 때 사용합니다.
+
+`CROSS JOIN`은 `,` 콤마 표기와 동치입니다. 단, 콤마 표기는 의도가 잘 드러나지 않으므로 명시적으로 `CROSS JOIN`을 쓰는 편이 좋습니다.
+
+```sql title="cross-join-comma.sql"
+-- 같은 의미
+SELECT m.name, o.product FROM members m, orders o;
+```
+
+## SELF JOIN
+
+`SELF JOIN`은 별도의 키워드가 아니라, **같은 테이블에 두 개의 별칭을 붙여 JOIN하는 패턴**입니다. 부모-자식 관계, 추천인 관계, 같은 등급의 회원끼리 비교 같은 상황에서 씁니다.
+
+`members` 테이블에서 같은 등급의 회원 쌍을 모두 찾아봅니다.
+
+```sql title="self-join.sql"
+SELECT a.name AS member1, b.name AS member2, a.grade
+FROM members a
+INNER JOIN members b
+  ON a.grade = b.grade
+  AND a.id < b.id;
+```
+
+결과:
+
+| member1 | member2 | grade |
+|---|---|---|
+| 김민수 | 박지훈 | `GOLD` |
+| 이서연 | 정도현 | `SILVER` |
+
+`a.id < b.id` 조건으로 같은 쌍이 두 번 나오는 것을 막고, 자기 자신과의 매칭(`a.id = b.id`)도 제외합니다. `<` 대신 `<>`를 쓰면 두 방향 모두 결과에 포함됩니다.
+
+## NATURAL JOIN
+
+`NATURAL JOIN`은 두 테이블에서 **이름이 같은 컬럼**을 찾아 자동으로 `ON` 조건을 만들어 줍니다. `ON`을 따로 쓸 필요가 없습니다.
+
+```sql title="natural-join.sql"
+-- 두 테이블에 모두 'id' 컬럼이 있으므로 그 컬럼으로 매칭
+SELECT m.name, o.product
+FROM members m
+NATURAL JOIN orders o;
+```
+
+문제는 매칭 컬럼이 **컬럼 이름만으로** 결정된다는 점입니다. 예시 데이터에서는 `members.id`(회원 PK)와 `orders.id`(주문 PK)가 같은 이름이지만 의미는 전혀 다릅니다. 의도와 다르게 PK = PK로 매칭되어 결과가 거의 비어버립니다.
+
+<Callout type="success" title="실무 팁: NATURAL JOIN은 권장하지 않음">
+  컬럼 이름이 같다는 이유만으로 매칭이 만들어지므로, 테이블 구조가 바뀌면 쿼리 의미가 조용히 달라집니다. 실무에서는 `JOIN ... ON` 또는 `JOIN ... USING`으로 매칭 컬럼을 명시하는 편이 안전합니다.
+</Callout>
+
+## ON과 USING
+
+JOIN 조건을 쓰는 방법은 두 가지입니다.
+
+```sql title="on-vs-using.sql"
+-- ON: 양쪽 컬럼을 명시적으로 적는다
+SELECT *
+FROM members m
+JOIN orders o ON m.id = o.member_id;
+
+-- USING: 양쪽에 똑같은 이름의 컬럼이 있을 때만 사용
+SELECT *
+FROM members m
+JOIN orders o USING (id);   -- members.id = orders.id 라는 의미
+```
+
+차이는 두 가지입니다.
+
+- `ON`은 임의 조건을 쓸 수 있습니다(`>`, `<`, `BETWEEN`, 복합 조건 등). `USING`은 등호 매칭만 가능합니다.
+- `USING (col)`은 결과에서 `col`을 한 번만 표시합니다. `ON m.id = o.id`는 `m.id`와 `o.id`를 둘 다 표시합니다.
+
+예시 데이터에서는 회원 PK와 주문의 FK 이름이 다르므로(`id` vs `member_id`) `USING`을 쓸 수 없고 `ON`을 써야 합니다.
+
+## 다중 JOIN
+
+JOIN을 연달아 쓰면 3개 이상의 테이블을 하나의 결과로 묶을 수 있습니다. 회원 등급별 할인율을 담은 `discounts` 테이블이 있다고 가정합니다.
+
+```sql title="discounts-table.sql"
+CREATE TABLE discounts (
+  grade      VARCHAR(10) PRIMARY KEY,
+  rate_pct   INT
+);
+
+INSERT INTO discounts VALUES
+  ('GOLD',   10),
+  ('SILVER',  5),
+  ('BRONZE',  2);
+```
+
+회원 → 주문 → 등급 할인율을 한 번에 가져오기:
+
+```sql title="multi-join.sql"
+SELECT
+  m.name,
+  o.product,
+  o.amount,
+  d.rate_pct,
+  o.amount * (100 - d.rate_pct) / 100 AS discounted
+FROM members m
+INNER JOIN orders    o ON m.id    = o.member_id
+INNER JOIN discounts d ON m.grade = d.grade;
+```
+
+결과:
+
+| name | product | amount | rate_pct | discounted |
+|---|---|---|---|---|
+| 김민수 | 키보드 | 89,000 | 10 | 80,100 |
+| 김민수 | 마우스 | 35,000 | 10 | 31,500 |
+| 이서연 | 모니터 | 320,000 | 5 | 304,000 |
+| 박지훈 | 의자 | 180,000 | 10 | 162,000 |
+
+JOIN은 **위에서 아래로 순차적으로 누적**됩니다. 첫 JOIN이 `members`와 `orders`를 합쳐 4행을 만들고, 두 번째 JOIN이 그 결과에 `discounts`를 다시 매칭합니다. 종류를 섞어 쓸 수도 있어, 첫 단계는 `LEFT JOIN`, 두 번째 단계는 `INNER JOIN`처럼 조합 가능합니다.
+
+## JOIN 종류 비교표
+
+같은 두 테이블(`members` 5행, `orders` 5행)에 같은 `ON m.id = o.member_id` 조건을 걸었을 때의 결과 행 수와 의미를 한 표에 모아 둡니다.
+
+| JOIN 종류 | 결과 행 수 | 양쪽 매칭만 | 왼쪽 단독 | 오른쪽 단독 | 동의어 |
+|---|---|---|---|---|---|
+| `INNER JOIN` | 4 | ✓ | | | `JOIN` |
+| `LEFT JOIN` | 6 | ✓ | ✓ | | `LEFT OUTER JOIN` |
+| `RIGHT JOIN` | 5 | ✓ | | ✓ | `RIGHT OUTER JOIN` |
+| `FULL OUTER JOIN` | 7 | ✓ | ✓ | ✓ | (MySQL 미지원, `UNION`으로 흉내) |
+| `CROSS JOIN` | 25 | (조건 없음, 5×5) | | | `,` 콤마 표기 |
+
+## 마무리
+
+JOIN은 종류가 많아 보이지만, 차이는 결국 **결과에 어떤 행이 남는가** 한 가지로 정리됩니다.
+
+- `INNER`: 양쪽 매칭만
+- `LEFT` / `RIGHT`: 한쪽 전체 + 매칭되는 반대편
+- `FULL OUTER`: 양쪽 전체(MySQL은 `UNION`)
+- `CROSS`: 모든 조합
+- `SELF`: 키워드가 아니라 같은 테이블에 별칭 두 개를 붙이는 패턴
+
+JOIN 종류가 헷갈릴 때는 `members`와 `orders` 같은 작은 예시 두 테이블을 머릿속에 두고, "이 행이 결과에 들어가야 하나?"를 행마다 묻는 방식으로 빠르게 분류할 수 있습니다.
