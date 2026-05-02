@@ -54,23 +54,28 @@ public class NotificationEventConsumer {
             EventMessage eventMessage = jsonConverter.fromJson(message, EventMessage.class);
             eventId = eventMessage.eventId();
 
-            if (EventTopic.MEMBER_SIGNED_UP.getName().equals(topic)) {
-                MemberSignedUpPayload p = jsonConverter.treeToValue(eventMessage.payload(), MemberSignedUpPayload.class);
-                processor.notifyMemberSignedUp(eventId, p);
-            } else if (EventTopic.SELLER_SIGNED_UP.getName().equals(topic)) {
-                SellerSignedUpPayload p = jsonConverter.treeToValue(eventMessage.payload(), SellerSignedUpPayload.class);
-                processor.notifySellerSignedUp(eventId, p);
-            } else if (EventTopic.ORDER_CONFIRMED.getName().equals(topic)) {
-                OrderConfirmedPayload p = jsonConverter.treeToValue(eventMessage.payload(), OrderConfirmedPayload.class);
-                processor.notifyOrderConfirmed(eventId, p);
-            } else if (EventTopic.ORDER_PAYMENT_FAILED.getName().equals(topic)) {
-                OrderPaymentFailedPayload p = jsonConverter.treeToValue(eventMessage.payload(), OrderPaymentFailedPayload.class);
-                processor.notifyOrderPaymentFailed(eventId, p);
-            } else if (EventTopic.PAYMENT_COMPLETED.getName().equals(topic)) {
-                PaymentCompletedPayload p = jsonConverter.treeToValue(eventMessage.payload(), PaymentCompletedPayload.class);
-                processor.notifyPaymentCompleted(eventId, p);
-            } else {
-                log.warn("Unknown topic: {}", topic);
+            switch (EventTopic.fromName(topic)) {
+                case MEMBER_SIGNED_UP -> {
+                    MemberSignedUpPayload p = jsonConverter.treeToValue(eventMessage.payload(), MemberSignedUpPayload.class);
+                    processor.notifyMemberSignedUp(eventId, p);
+                }
+                case SELLER_SIGNED_UP -> {
+                    SellerSignedUpPayload p = jsonConverter.treeToValue(eventMessage.payload(), SellerSignedUpPayload.class);
+                    processor.notifySellerSignedUp(eventId, p);
+                }
+                case ORDER_CONFIRMED -> {
+                    OrderConfirmedPayload p = jsonConverter.treeToValue(eventMessage.payload(), OrderConfirmedPayload.class);
+                    processor.notifyOrderConfirmed(eventId, p);
+                }
+                case ORDER_PAYMENT_FAILED -> {
+                    OrderPaymentFailedPayload p = jsonConverter.treeToValue(eventMessage.payload(), OrderPaymentFailedPayload.class);
+                    processor.notifyOrderPaymentFailed(eventId, p);
+                }
+                case PAYMENT_COMPLETED -> {
+                    PaymentCompletedPayload p = jsonConverter.treeToValue(eventMessage.payload(), PaymentCompletedPayload.class);
+                    processor.notifyPaymentCompleted(eventId, p);
+                }
+                case null, default -> log.warn("Unknown topic: {}", topic);
             }
         } catch (DataIntegrityViolationException e) {
             log.info("Duplicate event skipped. eventId={}, topic={}", eventId, topic);

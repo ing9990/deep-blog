@@ -30,7 +30,7 @@ draft: false
 
 미니쿠팡은 member, product, order, payment, notification 다섯 서비스가 각자 별도의 MySQL 스키마를 가지고 동작합니다. 각 서비스의 도메인 엔티티 PK, Outbox 테이블 PK, Kafka 이벤트의 `eventId` 세 자리 모두 ID 가 필요하고, 서로 다른 인스턴스가 동시에 ID 를 생성합니다. 이 ID 가 충돌하지 않으면서, <E>같은 테이블 안에서 PK 순서가 시간순과 일치</E>해야 한다는 요구가 흔히 쓰는 `AUTO_INCREMENT` 와 `UUIDv4` 양쪽 모두에서 깨졌습니다.
 
-이 글은 미니쿠팡이 그 빈자리를 <E>TSID 한 가지로 메운 결정</E>과, 외부 주입 PK 를 위해 JPA `merge()` SELECT 를 차단해야 했던 이유, 그리고 Outbox relay 가 `ORDER BY id` 만으로 발행 순서를 보장하게 된 이유를 정리한 기록입니다.
+이 글은 미니쿠팡이 그 빈자리를 <E>TSID 한 가지로 메운 결정</E>과, 외부 주입 PK 를 위해 JPA `merge()` `SELECT` 를 차단해야 했던 이유, 그리고 Outbox relay 가 `ORDER BY id` 만으로 발행 순서를 보장하게 된 이유를 정리한 기록입니다.
 
 - 다섯 서비스가 각각 MySQL 스키마를 가지고 있고, ID 는 서비스별 인스턴스에서 만들어집니다.
 - ID 는 BIGINT 컬럼에 그대로 저장됩니다.
@@ -49,7 +49,7 @@ draft: false
 | 조건 | 무엇 | 출처 |
 |---|---|---|
 | 충돌 없음 | 다른 인스턴스가 같은 시점에 만들어도 동일 ID 가 안 나온다 | MSA 설계 가정 |
-| 테이블 내 시간순 정렬 | 같은 테이블 안에서 나중에 INSERT 된 행의 PK 가 항상 더 크다 (ms 단위) | Outbox relay 가 `ORDER BY id` 만으로 발행 순서를 잡으려는 요구 |
+| 테이블 내 시간순 정렬 | 같은 테이블 안에서 나중에 `INSERT` 된 행의 PK 가 항상 더 크다 (ms 단위) | Outbox relay 가 `ORDER BY id` 만으로 발행 순서를 잡으려는 요구 |
 | BIGINT 호환 | 64비트 정수 컬럼에 그대로 저장된다 | MySQL 인덱스 locality, JPA `Long` 매핑 |
 | 외부 주입 가능 | 엔티티가 만들어지는 시점에 ID 가 결정된다 (DB autoincrement 의존 X) | 도메인 팩토리에서 `Order.create(id, memberId)` 형태로 사용 |
 | 운영 부담 낮음 | worker-id 같은 외부 설정·할당 절차 없이 인스턴스 시작 즉시 동작한다 | 운영 측 가정 (관리 비용 최소화) |
@@ -60,7 +60,7 @@ draft: false
 
 | 후보 | 충돌 없음 | 테이블 내 시간순 | BIGINT 호환 | 외부 주입 | 운영 부담 |
 |---|---|---|---|---|---|
-| `AUTO_INCREMENT` | 단일 DB 안에서만 보장 | 단일 DB 안에서만 | OK | 불가 (INSERT 후에 결정) | 낮음 |
+| `AUTO_INCREMENT` | 단일 DB 안에서만 보장 | 단일 DB 안에서만 | OK | 불가 (`INSERT` 후에 결정) | 낮음 |
 | `UUIDv4` | OK | 깨짐 (랜덤) | 깨짐 (128비트 / String) | OK | 낮음 |
 | `UUIDv7` | OK | OK | 깨짐 (128비트) | OK | 낮음 |
 | Snowflake | OK | OK | OK | OK | 높음 (worker-id 직접 할당·관리) |
@@ -138,7 +138,7 @@ public class OrderService {
 
 ### Outbox PK 동일 패턴
 
-`OutboxEventStore` 가 outbox 행을 INSERT 할 때 PK 도 TSID 로 직접 부여합니다. 같은 트랜잭션 안에서 비즈니스 변경(주문 PAID 전이) 과 outbox INSERT 가 묶이고, 두 행 모두 시간순 prefix 를 가진 PK 를 갖습니다.
+`OutboxEventStore` 가 outbox 행을 `INSERT` 할 때 PK 도 TSID 로 직접 부여합니다. 같은 트랜잭션 안에서 비즈니스 변경(주문 `PAID` 전이) 과 outbox `INSERT` 가 묶이고, 두 행 모두 시간순 prefix 를 가진 PK 를 갖습니다.
 
 ```java title="OutboxEventStore.java"
 @Component
@@ -203,17 +203,17 @@ public class ProcessedEvent {
 }
 ```
 
-이 자리에서는 `event_id` 가 TSID 64비트 long 이고 `eventType` 과 함께 UNIQUE 키를 이룹니다. 같은 메시지가 두 번 들어오면 INSERT 가 `DataIntegrityViolationException` 으로 실패하고 consumer 가 그것을 catch 해서 처리를 스킵합니다.
+이 자리에서는 `event_id` 가 TSID 64비트 long 이고 `eventType` 과 함께 UNIQUE 키를 이룹니다. 같은 메시지가 두 번 들어오면 `INSERT` 가 `DataIntegrityViolationException` 으로 실패하고 consumer 가 그것을 catch 해서 처리를 스킵합니다.
 
 `ProcessedEvent` 자체의 PK 는 `IDENTITY` 입니다. 이 행의 PK 는 외부에 노출되지 않고 다른 서비스가 참조할 일도 없어, TSID 의 시간순 prefix 같은 속성이 필요하지 않습니다. <E>모든 PK 를 TSID 로 통일하는 결정과는 별개</E> 로, 서비스 안에서만 의미를 가지는 멱등성 키 테이블의 내부 PK 는 `IDENTITY` 가 자연스럽습니다.
 
 ## Persistable 트릭과 Outbox 정렬 보장
 
-ID 를 외부에서 주입하는 순간 JPA 쪽에서 한 가지 함정이 생깁니다. `EntityManager.persist()` 가 아니라 `Spring Data JPA Repository.save()` 를 쓰는 코드는 내부에서 `entity.isNew()` 를 보고 새 행이면 `persist()`, 아니면 `merge()` 를 호출합니다. 기본 구현은 PK 가 `null` 이면 새 행이라고 판단하는데, manually-assigned PK 환경에서는 PK 가 항상 채워져 있으니 모두 `merge()` 경로로 갑니다.
+ID 를 외부에서 주입하면 JPA 쪽에서 추가로 손볼 부분이 하나 생깁니다. `EntityManager.persist()` 가 아니라 `Spring Data JPA Repository.save()` 를 쓰는 코드는 내부에서 `entity.isNew()` 를 보고 새 행이면 `persist()`, 아니면 `merge()` 를 호출합니다. 기본 구현은 PK 가 `null` 이면 새 행이라고 판단하는데, 외부 주입 PK 환경에서는 PK 가 항상 채워져 있으니 `save()` 가 모두 `merge()` 경로로 갑니다.
 
-`merge()` 는 INSERT 직전에 SELECT 를 한 번 발행해 같은 PK 의 행이 이미 존재하는지 확인합니다. outbox 행 한 건마다 SELECT + INSERT 두 번의 쿼리가 나가는 셈입니다. 비즈니스 트랜잭션마다 outbox 가 1~2건씩 쌓이는 미니쿠팡에서는 그 누적이 무시할 수준이 아닙니다.
+`merge()` 는 `INSERT` 직전에 `SELECT` 를 한 번 발행해 같은 PK 의 행이 이미 존재하는지 확인합니다. outbox 행 한 건마다 `SELECT` + `INSERT` 두 번의 쿼리가 나가는 셈입니다. 비즈니스 트랜잭션마다 outbox 가 1~2건씩 쌓이는 미니쿠팡에서는 그 누적이 무시할 수준이 아닙니다.
 
-이 함정은 `Persistable<T>` 인터페이스 구현으로 차단합니다. `isNew()` 를 직접 정의하면 Spring Data JPA 가 그 결과를 따라 `persist()` 경로로 갑니다.
+이 동작은 `Persistable<T>` 인터페이스 구현으로 끊습니다. `isNew()` 를 직접 정의하면 Spring Data JPA 가 그 결과를 따라 `persist()` 경로로 갑니다.
 
 ```java title="OutboxEvent.java"
 @Entity
@@ -244,15 +244,15 @@ public class OutboxEvent implements Persistable<Long> {
 }
 ```
 
-방어 로직은 두 단계입니다. 처음 만들어진 객체는 `newEntity = true` 라 `save()` 가 `persist()` 경로로 갑니다. 일단 INSERT 가 끝나거나(`@PostPersist`) DB 에서 다시 로드되면(`@PostLoad`) `markNotNew()` 가 동작해 같은 인스턴스가 다음 번 `save()` 시점에 `merge()` 를 거치도록 둡니다 (도메인 의도상 outbox 는 다시 저장되지 않지만, 안전 장치로 둡니다).
+방어 로직은 두 단계입니다. 처음 만들어진 객체는 `newEntity = true` 라 `save()` 가 `persist()` 경로로 갑니다. 일단 `INSERT` 가 끝나거나(`@PostPersist`) DB 에서 다시 로드되면(`@PostLoad`) `markNotNew()` 가 동작해 같은 인스턴스가 다음 번 `save()` 시점에 `merge()` 를 거치도록 둡니다 (도메인 의도상 outbox 는 다시 저장되지 않지만, 안전 장치로 둡니다).
 
 이 트릭이 의미하는 바는 다음과 같습니다.
 
-- outbox 행 INSERT 가 SELECT 없이 한 번에 끝납니다.
+- outbox 행 `INSERT` 가 `SELECT` 없이 한 번에 끝납니다.
 - relay 가 `findTop100ByPublishedFalseOrderByIdAsc()` 로 100건을 가져올 때 PK 가 TSID 라 시간순 정렬과 결과가 같습니다. <E>ORDER BY id 만으로 발행 순서가 보장</E>되어 별도 `created_at` 인덱스가 필요 없습니다.
-- 같은 트랜잭션 안에서 INSERT 된 outbox 행과 비즈니스 행이 같은 commit 시점에 묶이므로 Outbox 패턴의 핵심 보장(원자성) 도 그대로 유지됩니다.
+- 같은 트랜잭션 안에서 `INSERT` 된 outbox 행과 비즈니스 행이 같은 commit 시점에 묶이므로 Outbox 패턴의 핵심 보장(원자성) 도 그대로 유지됩니다.
 
-manually-assigned PK 와 `Persistable` 두 가지가 같이 와야 비로소 위 보장이 성립합니다. ID 만 외부 주입으로 바꾸고 `Persistable` 을 빠뜨리면 outbox 처리량이 SELECT 분만큼 줄어들고, 그 영향은 부하가 높을수록 커집니다.
+manually-assigned PK 와 `Persistable` 두 가지가 같이 와야 비로소 위 보장이 성립합니다. ID 만 외부 주입으로 바꾸고 `Persistable` 을 빠뜨리면 outbox 처리량이 `SELECT` 분만큼 줄어들고, 그 영향은 부하가 높을수록 커집니다.
 
 ## 트레이드오프와 적용 조건
 

@@ -1,5 +1,7 @@
 package com.deepblog.common.event;
 
+import java.util.Arrays;
+
 /**
  * Kafka 토픽 enum. 카탈로그의 단일 출처는 {@code mini-coupang/Kafka-Topics.md}.
  * 새 토픽은 이 enum 갱신 + 카탈로그 갱신 + CONVENTIONS.md §9.7 갱신을 같이 한다.
@@ -21,5 +23,12 @@ public enum EventTopic {
 
     public String getName() {
         return name;
+    }
+
+    public static EventTopic fromName(String name) {
+        return Arrays.stream(values())
+            .filter(t -> t.name.equals(name))
+            .findFirst()
+            .orElse(null);
     }
 }

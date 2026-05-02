@@ -1,14 +1,11 @@
 package com.deepblog.product.event.consumer;
 
-import static com.deepblog.common.event.EventTopic.ORDER_CONFIRMED;
-import static com.deepblog.common.event.EventTopic.ORDER_PAYMENT_FAILED;
-
 import com.deepblog.common.event.EventMessage;
+import com.deepblog.common.event.EventTopic;
 import com.deepblog.common.util.JsonConverter;
 import com.deepblog.product.application.OrderEventProcessor;
 import com.deepblog.product.event.payload.OrderConfirmedPayload;
 import com.deepblog.product.event.payload.OrderPaymentFailedPayload;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -49,16 +46,18 @@ public class OrderEventConsumer {
             EventMessage eventMessage = jsonConverter.fromJson(message, EventMessage.class);
             eventId = eventMessage.eventId();
 
-            if (Objects.equals(ORDER_CONFIRMED.getName(), topic)) {
-                OrderConfirmedPayload p = jsonConverter.treeToValue(
-                    eventMessage.payload(), OrderConfirmedPayload.class);
-                processor.processOrderConfirmed(eventId, p);
-            } else if (Objects.equals(ORDER_PAYMENT_FAILED.getName(), topic)) {
-                OrderPaymentFailedPayload p = jsonConverter.treeToValue(
-                    eventMessage.payload(), OrderPaymentFailedPayload.class);
-                processor.processPaymentFailed(eventId, p);
-            } else {
-                log.warn("Unknown topic: {}", topic);
+            switch (EventTopic.fromName(topic)) {
+                case ORDER_CONFIRMED -> {
+                    OrderConfirmedPayload p = jsonConverter.treeToValue(
+                        eventMessage.payload(), OrderConfirmedPayload.class);
+                    processor.processOrderConfirmed(eventId, p);
+                }
+                case ORDER_PAYMENT_FAILED -> {
+                    OrderPaymentFailedPayload p = jsonConverter.treeToValue(
+                        eventMessage.payload(), OrderPaymentFailedPayload.class);
+                    processor.processPaymentFailed(eventId, p);
+                }
+                case null, default -> log.warn("Unknown topic: {}", topic);
             }
         } catch (DataIntegrityViolationException e) {
             log.info("Duplicate event skipped. eventId={}, topic={}", eventId, topic);

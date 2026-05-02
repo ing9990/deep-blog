@@ -36,15 +36,15 @@ draft: false
 
 기능 요구사항은 세 가지입니다.
 
-1. 사용자는 prepare 단계에서 주문을 만들고, confirm 단계에서 결제를 마칩니다.
-2. confirm이 외부 PG 거절, 타임아웃, 사용자 취소로 실패하면 잡혀 있던 재고가 가용 상태로 복구되어야 합니다.
+1. 사용자는 `prepare` 단계에서 주문을 만들고, `confirm` 단계에서 결제를 마칩니다.
+2. `confirm`이 외부 PG 거절, 타임아웃, 사용자 취소로 실패하면 잡혀 있던 재고가 가용 상태로 복구되어야 합니다.
 3. 보상 처리는 사용자 응답 시간을 늘리지 않아야 합니다. 사용자는 실패 응답을 즉시 받습니다.
 
 결제 실패는 PG 거절, 사용자가 결제 창을 닫는 경우, 카드 한도 초과 등으로 평시에도 일정 비율 발생합니다. 핫딜 윈도에서는 동시 보상이 누적될 수 있으므로 보상 처리량은 평시 주문 처리량에 비례해 설계해야 합니다.
 
 ## 트랜잭션 경계
 
-`@Transactional`은 같은 데이터베이스 안에서 여러 SQL을 한 단위로 묶을 때만 동작합니다. 주문 서비스의 MySQL에 Order 행을 CANCELED로 바꾸고, 같은 메서드 안에서 상품 서비스의 Redis 재고를 INCRBY로 복구하면, 주문 서비스 트랜잭션이 롤백되어도 Redis 호출은 이미 나갔기 때문에 두 저장소 상태가 어긋납니다.
+`@Transactional`은 같은 데이터베이스 안에서 여러 SQL을 한 단위로 묶을 때만 동작합니다. 주문 서비스의 MySQL에 Order 행을 `CANCELED`로 바꾸고, 같은 메서드 안에서 상품 서비스의 Redis 재고를 `INCRBY`로 복구하면, 주문 서비스 트랜잭션이 롤백되어도 Redis 호출은 이미 나갔기 때문에 두 저장소 상태가 어긋납니다.
 
 원인은 두 가지입니다.
 
@@ -65,7 +65,7 @@ draft: false
 | 잠금 보유 시간 | prepare 단계 동안 모든 참여자가 잠금 보유 | 단계별 로컬 잠금만, 짧음 |
 | 실패 시 동작 | 코디네이터가 abort 신호로 모두 롤백 | 이미 끝난 단계는 보상 액션으로 되돌림 |
 
-미니쿠팡에서 결제는 외부 PG로 나가는 HTTP 호출입니다. PG 사업자가 XA 인터페이스를 제공하지 않는 한 2PC 코디네이터에 묶을 수 없습니다. 또 결제 PG가 응답하기까지 수백 ms에서 수 초가 걸리는데, 그 시간 동안 주문, 상품, 결제 모든 서비스가 prepare 잠금을 들고 기다려야 한다면 동시 처리량이 급격히 떨어집니다.
+미니쿠팡에서 결제는 외부 PG로 나가는 HTTP 호출입니다. PG 사업자가 XA 인터페이스를 제공하지 않는 한 2PC 코디네이터에 묶을 수 없습니다. 또 결제 PG가 응답하기까지 수백 ms에서 수 초가 걸리는데, 그 시간 동안 주문, 상품, 결제 모든 서비스가 `prepare` 잠금을 들고 기다려야 한다면 동시 처리량이 급격히 떨어집니다.
 
 그래서 미니쿠팡은 Saga를 택했습니다. 결제는 외부 호출이라 강한 일관성 자체가 현실적이지 않고, <E>실패 시 잡아둔 재고를 풀어주는 보상 액션</E>이 비즈니스적으로 자연스럽기 때문입니다.
 
@@ -122,13 +122,13 @@ Saga는 보상 단계를 어떻게 조율하느냐에 따라 다시 두 가지�
 
 미니쿠팡은 Choreography를 택했습니다. 근거는 세 가지입니다.
 
-1. <E>흐름이 선형</E>입니다. 결제 실패 보상 시나리오는 "주문 CANCELED → 상품 재고 복구" 한 단계입니다. 분기가 없고 단계도 짧아 오케스트레이터의 가치를 받기 어렵습니다.
+1. <E>흐름이 선형</E>입니다. 결제 실패 보상 시나리오는 "주문 `CANCELED` → 상품 재고 복구" 한 단계입니다. 분기가 없고 단계도 짧아 오케스트레이터의 가치를 받기 어렵습니다.
 2. <E>참여 서비스가 적습니다</E>. 보상에 관여하는 서비스는 주문과 상품 둘뿐입니다. 새 서비스를 하나 더 추가해서 운영 부담을 늘릴 이유가 없습니다.
 3. <E>이미 Kafka가 있습니다</E>. 주문 확정 이벤트를 위해 Kafka가 도입되어 있어, 보상 이벤트도 같은 인프라 위에서 발행하면 됩니다.
 
 Orchestrator가 더 나았을 조건은 단계가 5개 이상이거나 단계 사이에 분기와 재시도 정책이 정교하게 필요한 경우입니다. 미니쿠팡의 결제 실패 보상은 그 조건을 만족하지 않습니다.
 
-confirm 단계에서 PG가 거절하면 주문 서비스는 한 트랜잭션 안에서 두 가지를 합니다. Order 상태를 CANCELED로 전이하고, 같은 트랜잭션 안에서 `order.payment-failed` 이벤트를 outbox 테이블에 INSERT합니다. 상태 변경과 발행 메시지가 같이 commit되거나 같이 롤백됩니다.
+`confirm` 단계에서 PG가 거절하면 주문 서비스는 한 트랜잭션 안에서 두 가지를 합니다. Order 상태를 `CANCELED`로 전이하고, 같은 트랜잭션 안에서 `order.payment-failed` 이벤트를 outbox 테이블에 `INSERT`합니다. 상태 변경과 발행 메시지가 같이 commit되거나 같이 롤백됩니다.
 
 ```java title="OrderService.java"
 @Transactional
@@ -150,9 +150,9 @@ public void cancelOrder(Long orderId, Long memberId, String reason) {
 }
 ```
 
-발행 신뢰성은 outbox 테이블과 relay 조합으로 확보했습니다. 비즈니스 쓰기와 발행 메시지를 같은 트랜잭션 안에서 한 번에 INSERT하기 때문에 Order는 CANCELED로 바뀌었는데 발행 메시지는 사라진 어긋남이 만들어지지 않습니다. relay가 별도 스레드에서 outbox를 폴링해 Kafka로 보냅니다.
+발행 신뢰성은 outbox 테이블과 relay 조합으로 확보했습니다. 비즈니스 쓰기와 발행 메시지를 같은 트랜잭션 안에서 한 번에 `INSERT`하기 때문에 Order는 `CANCELED`로 바뀌었는데 발행 메시지는 사라진 어긋남이 만들어지지 않습니다. relay가 별도 스레드에서 outbox를 폴링해 Kafka로 보냅니다.
 
-상품 서비스는 `order.payment-failed`를 수신해 자체 결정으로 Redis 재고를 INCRBY로 복구합니다. 이 결정은 주문 서비스가 명령한 것이 아니라 <E>상품 서비스가 이벤트만 보고 자기 책임을 수행한 결과</E>입니다. 이 점이 Choreography의 핵심입니다.
+상품 서비스는 `order.payment-failed`를 수신해 자체 결정으로 Redis 재고를 `INCRBY`로 복구합니다. 이 결정은 주문 서비스가 명령한 것이 아니라 <E>상품 서비스가 이벤트만 보고 자기 책임을 수행한 결과</E>입니다. 이 점이 Choreography의 핵심입니다.
 
 ```java title="OrderEventProcessor.java"
 @Transactional
@@ -183,10 +183,10 @@ public void processPaymentFailed(long eventId, OrderPaymentFailedPayload payload
 
 | 시나리오 | 가정 | 정합성 결과 |
 |---|---|---|
-| 재고 100, 동시 50 | 모두 결제 성공 | PAID 50, 재고 50 |
-| 재고 100, 동시 100 | 모두 결제 성공 | PAID 100, 재고 0 |
-| 재고 100, 동시 101 | 한 명은 INSUFFICIENT | PAID 100, 거절 1, 재고 0 |
-| 재고 100, 결제 실패 1건 | 보상 발생 | PAID 0, CANCELED 1, <E>재고 100으로 복구</E> |
+| 재고 100, 동시 50 | 모두 결제 성공 | `PAID` 50, 재고 50 |
+| 재고 100, 동시 100 | 모두 결제 성공 | `PAID` 100, 재고 0 |
+| 재고 100, 동시 101 | 한 명은 `INSUFFICIENT` | `PAID` 100, 거절 1, 재고 0 |
+| 재고 100, 결제 실패 1건 | 보상 발생 | `PAID` 0, `CANCELED` 1, <E>재고 100으로 복구</E> |
 
 마지막 시나리오가 이 글의 보상 흐름을 직접 검증합니다. Kafka UI의 Topics 화면에서 토픽별 메시지 발행 현황을 볼 수 있는데, 여기서 `order.payment-failed` 토픽에 메시지가 발행된 것을 간단히 확인할 수 있습니다.
 
@@ -196,7 +196,7 @@ public void processPaymentFailed(long eventId, OrderPaymentFailedPayload payload
 
 ![order.payment-failed 토픽의 메시지 상세, eventType과 payload가 그대로 노출된다](/images/posts/mini-coupang-choreography-saga/order-payment-failed-detail.png)
 
-`eventType: ORDER_PAYMENT_FAILED`, `payload.reason: SIMULATED_FAILURE`로 통합 테스트가 의도적으로 발생시킨 결제 실패가 그대로 메시지에 실려 나갔습니다. 결제 실패 메시지가 발행되고 컨슈머가 받아 Redis에 INCR 요청을 하는 동안 다른 사용자들은 차감된 재고를 보게 되는 트레이드오프가 있습니다.
+`eventType: ORDER_PAYMENT_FAILED`, `payload.reason: SIMULATED_FAILURE`로 통합 테스트가 의도적으로 발생시킨 결제 실패가 그대로 메시지에 실려 나갔습니다. 결제 실패 메시지가 발행되고 컨슈머가 받아 Redis에 `INCR` 요청을 하는 동안 다른 사용자들은 차감된 재고를 보게 되는 트레이드오프가 있습니다.
 
 ## 남은 한계와 다음 단계
 
