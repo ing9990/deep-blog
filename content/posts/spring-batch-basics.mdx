@@ -1,0 +1,644 @@
+---
+title:
+  ko: "Spring Batch 기본 개념 정리"
+  en: "Spring Batch Fundamentals"
+slug: "spring-batch-basics"
+date: 2026-04-25
+tags:
+  - Backend
+  - Spring
+  - Spring Batch
+keywords:
+  - "Spring Batch"
+  - "스프링 배치"
+  - "JobRepository"
+  - "ItemReader"
+  - "ItemProcessor"
+  - "ItemWriter"
+  - "Tasklet"
+  - "Chunk Oriented Processing"
+summary:
+  ko: "Spring Batch가 왜 필요한지부터 Job·Step·Chunk 같은 핵심 개념과 빌더 API를 살펴보고, Tasklet 한 개짜리 Hello World부터 ItemReader-Processor-Writer 기반 Job, JobParameters로 입력 받는 Job, 실패 후 재실행까지 코드로 단계적으로 구성할 수 있게 됩니다."
+  en: "Walk through why Spring Batch exists, the core concepts (Job, Step, Chunk, Reader-Processor-Writer, JobRepository), and the builder APIs, then build a Job step by step in code: a Hello World Tasklet, a chunk-oriented Reader-Processor-Writer, parameterized Jobs, and failure-restart behavior."
+category: spring-boot
+draft: false
+---
+
+Spring Batch는 <E>스케줄러로 메서드 한 번 호출하면 끝</E>인 단순 배치를 넘어, 대량 데이터를 **재시작 가능하고 진행 상태가 추적되는** 단위로 묶어 주는 프레임워크입니다. 이 글은 Spring Batch를 처음 만져 보는 분을 위해 왜 필요한지부터 시작해 핵심 개념과 빌더 API를 살펴보고, 가장 단순한 `Tasklet` Job에서 시작해 `ItemReader`-`Processor`-`Writer`로 발전시킨 뒤 `JobParameters`까지 받는 Job을 단계적으로 만들어 봅니다.
+
+<Callout type="info" title="버전 기준">
+  이 글은 **Spring Boot 3 + Spring Batch 5** 기준입니다. Spring Batch 4 시절의 `JobBuilderFactory` / `StepBuilderFactory`는 폐기되었고, 빌더를 직접 생성하는 방식으로 바뀌었습니다.
+</Callout>
+
+## Spring Batch란
+
+Spring Batch는 **대량 데이터 처리를 표준화된 구조로 묶어 주는** Spring 생태계의 배치 프레임워크입니다. <E>데이터를 읽어서, 가공해서, 어딘가에 쓴다</E>는 흐름을 `Job` → `Step` → `ItemReader` / `ItemProcessor` / `ItemWriter` 라는 3단 모델로 표현하고, 모든 실행 상태를 `JobRepository`라는 메타 저장소에 영속화합니다.
+
+핵심 약속은 단순합니다. <E>어떤 Job이 어떤 입력으로 언제 시작했고, 어디까지 처리했고, 어떤 상태로 끝났는지를 DB에 남겨 둔다.</E> 이 약속 하나에서 재시작, 중복 실행 차단, 진행 상태 추적, 실패 지점 파악 같은 운영 기능이 자연스럽게 따라옵니다.
+
+## 왜 필요한가
+
+대부분의 배치 작업은 처음에 이런 모양으로 시작합니다. 스케줄러가 메서드를 호출하고, 그 안에서 데이터를 끌어와 반복 처리합니다.
+
+<Tabs>
+  <Tab label="Java">
+    ```java title="DailySettlementJob.java"
+    @Component
+    @RequiredArgsConstructor
+    public class DailySettlementJob {
+
+        private final OrderRepository orderRepository;
+        private final SettlementService settlementService;
+
+        @Scheduled(cron = "0 0 4 * * *")
+        public void run() {
+            List<Order> orders = orderRepository.findAllByStatus(COMPLETED);
+            for (Order order : orders) {
+                settlementService.settle(order); // [!code highlight]
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="DailySettlementJob.kt"
+    @Component
+    class DailySettlementJob(
+        private val orderRepository: OrderRepository,
+        private val settlementService: SettlementService,
+    ) {
+
+        @Scheduled(cron = "0 0 4 * * *")
+        fun run() {
+            val orders = orderRepository.findAllByStatus(COMPLETED)
+            orders.forEach { order ->
+                settlementService.settle(order) // [!code highlight]
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+이 코드는 데이터가 1만 건 이하이고, 한 번 실패하면 다음 날 다시 돌리면 되는 환경에서는 멀쩡히 동작합니다. 그런데 실제 운영에서는 다음 같은 요구가 하나둘 추가됩니다.
+
+- 100만 건짜리 정산을 한 트랜잭션으로 묶으면 OOM이 나거나 락이 길어지니 일정 단위(예: 1000건)로 끊어서 처리하고 싶다
+- 중간에 죽었을 때 처음부터 다시 돌리면 이미 처리한 건이 중복 정산되니, **마지막으로 처리한 지점부터 이어서** 실행하고 싶다
+- 동일한 날짜로 두 번 실행되면 한쪽은 거부되도록 보장하고 싶다
+- 어제 4시 Job이 몇 건을 처리했고 평균 얼마나 걸렸는지 화면이나 로그에서 보고 싶다
+
+이 요구를 직접 코딩하려면 처리 위치(offset)를 어딘가에 저장하고, 락을 잡고, 통계를 쌓고, 실패하면 어디까지 처리했는지 복원하는 코드를 일일이 짜야 합니다. Spring Batch는 이 운영 코드를 표준화해서, 개발자가 <E>데이터를 어떻게 읽고, 어떻게 가공하고, 어떻게 쓰는가</E>라는 비즈니스 로직만 집중해 작성할 수 있게 해 줍니다.
+
+## 기본 개념
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Spring Batch는 `Job` → `Step` → `ItemReader` / `ItemProcessor` / `ItemWriter`라는 3단 도메인 모델 위에서 동작하며, 모든 실행 상태는 `JobRepository`가 메타 테이블에 영속화합니다. 이 모델만 머리에 넣으면 빌더 API와 어노테이션은 단지 그것을 표현하는 문법일 뿐입니다.
+</Callout>
+
+### Job과 Step
+
+`Job`은 <E>한 번의 배치 실행</E>이 가지는 논리 단위입니다. 예를 들어 <E>일일 정산 Job</E>은 <E>결제 데이터를 읽어 정산 테이블에 쓴다</E>는 목적의 단위입니다. 한 `Job`은 1개 이상의 `Step`으로 구성되고, `Step`이 실제 처리를 담당합니다.
+
+가령 일일 정산 Job이라면 다음 두 `Step`으로 나눌 수 있습니다.
+
+1. 결제 데이터를 정산 테이블로 옮기는 `Step`
+2. 정산 결과를 요약 통계 테이블에 기록하는 `Step`
+
+두 `Step`을 순차로 실행할지, 조건부로 분기시킬지, 병렬로 실행할지는 Job 정의에서 결정합니다.
+
+### Tasklet과 Chunk-oriented
+
+`Step`은 두 가지 처리 방식 중 하나를 택합니다.
+
+- **Tasklet**: `execute()` 메서드를 한 번 호출하고 끝나는 단순 작업. 디렉토리 정리, 외부 API 단발 호출, 통계 한 줄 업데이트처럼 <E>흐름이 없는</E> 작업에 적합합니다.
+- **Chunk-oriented**: `read()` → `process()` → `write()`를 chunk 크기 단위로 반복합니다. 예를 들어 chunk 크기가 1000이면, 1000건을 읽어 1000건을 가공해 1000건을 한 번에 쓰고 트랜잭션을 커밋한 뒤 다음 1000건으로 넘어갑니다. 대량 데이터 처리의 표준 모드입니다.
+
+| 항목 | Tasklet | Chunk-oriented |
+|---|---|---|
+| 처리 단위 | 호출 1회 | chunk 크기마다 read → process → write 반복 |
+| 트랜잭션 경계 | Step 전체 1개 | chunk 1개당 1개 |
+| 적합한 작업 | 단발성 작업, 정리, 단일 호출 | 대량 데이터의 흐름 처리 |
+| 재시작 단위 | Step 전체 재시작 | 마지막 커밋된 chunk 다음부터 |
+
+### Reader · Processor · Writer
+
+Chunk-oriented Step의 세 부품입니다.
+
+- `ItemReader<T>`: `read()`가 호출될 때마다 `T` 한 건을 돌려줍니다. 더 이상 읽을 게 없으면 `null`을 반환해 입력 종료를 알립니다.
+- `ItemProcessor<I, O>`: `process(I)`로 들어온 한 건을 가공해 `O` 한 건으로 변환합니다. `null`을 돌려주면 그 건은 Writer로 넘어가지 않고 버려집니다(필터링 용도).
+- `ItemWriter<O>`: `write(Chunk<? extends O>)`로 chunk 단위 묶음을 한 번에 받아 한꺼번에 씁니다. JDBC라면 batch insert, JPA라면 `flush`까지 묶어 처리할 수 있습니다.
+
+흐름은 아래와 같습니다. Reader가 한 건씩 읽어 chunk 크기만큼 누적하고, Processor를 거친 결과를 Writer가 한 번에 받아 처리한 뒤 트랜잭션을 커밋합니다.
+
+<Diagram caption="Chunk-oriented Step: chunk 크기만큼 read·process를 반복한 뒤 write 한 번과 트랜잭션 커밋이 따라옵니다">{`sequenceDiagram
+    participant S as Step
+    participant R as ItemReader
+    participant P as ItemProcessor
+    participant W as ItemWriter
+    participant TX as Transaction
+
+    S->>TX: begin
+    loop chunk 크기만큼 (예: 3회)
+        S->>R: read()
+        R-->>S: item
+        S->>P: process(item)
+        P-->>S: processed
+    end
+    S->>W: write(chunk)
+    W-->>S: ok
+    S->>TX: commit
+    Note over S,TX: 다음 chunk 처리 시작
+`}</Diagram>
+
+### JobRepository와 메타 테이블
+
+`JobRepository`는 모든 실행 상태를 RDB에 저장합니다. Spring Batch가 자동으로 만드는 테이블은 다음 6개입니다.
+
+| 테이블 | 무엇을 저장하는가 |
+|---|---|
+| `BATCH_JOB_INSTANCE` | <E>이 Job 이름 + 이 JobParameters</E> 조합. 동일 조합은 항상 같은 instance |
+| `BATCH_JOB_EXECUTION` | 그 instance를 실제로 실행한 시도. 시작/종료 시각, 상태 저장 |
+| `BATCH_JOB_EXECUTION_PARAMS` | 해당 실행에 넘긴 JobParameters 값 |
+| `BATCH_STEP_EXECUTION` | Step 단위 실행 결과. 읽은 건수, 쓴 건수, 커밋 횟수 등 |
+| `BATCH_JOB_EXECUTION_CONTEXT` | Job 단위로 보존하고 싶은 상태(JSON) |
+| `BATCH_STEP_EXECUTION_CONTEXT` | Step 단위로 보존하고 싶은 상태. 재시작 시 Reader가 마지막 위치를 복원하는 데 사용 |
+
+<Callout type="error" title="핵심 통찰: Spring Batch의 모든 기능은 이 한 가지 약속에서 파생된다">
+  Spring Batch가 제공하는 재시작·중복 실행 차단·진행률 추적·실패 지점 파악은 모두 <E>`JobRepository`가 모든 실행 상태를 메타 테이블에 영속화한다</E>는 단 하나의 약속에서 나옵니다. 메모리에 들고 있던 상태가 아니라 DB에 남은 흔적이기 때문에, 프로세스가 죽어도 다음 실행이 그 흔적을 읽어 이어 갈 수 있습니다.
+</Callout>
+
+### JobInstance vs JobExecution
+
+자주 헷갈리는 개념입니다.
+
+- `JobInstance`: <E>Job 이름 + JobParameters 조합</E>이 만드는 논리적 instance. 같은 조합으로 여러 번 실행해도 instance는 하나입니다.
+- `JobExecution`: 그 `JobInstance`를 실제로 실행한 시도. 한 instance가 처음 실행에서 `FAILED`로 끝났다면, 같은 파라미터로 다시 실행할 때 `JobExecution`이 새로 하나 더 만들어지고 `JobInstance`는 그대로 재사용됩니다.
+
+비유하자면 `JobInstance`는 시험의 <E>회차</E>고, `JobExecution`은 그 회차에 응시한 <E>시도</E>입니다. `COMPLETED`로 끝난 instance는 같은 파라미터로 다시 실행할 수 없습니다(`JobInstanceAlreadyCompleteException`).
+
+## 핵심 클래스 살펴보기
+
+기본 개념을 코드로 표현하는 구체 API들입니다. Spring Batch 5에서 클래스 시그니처가 바뀐 부분을 함께 정리합니다.
+
+### 자동 구성과 의존성
+
+Spring Boot 3 + Spring Batch 5 환경이라면 의존성만 추가해도 자동 구성이 활성화됩니다. `@EnableBatchProcessing` 명시는 더 이상 필수가 아니며, 오히려 같이 선언하면 자동 구성이 꺼지는 동작이 있어 보통은 생략합니다.
+
+<Tabs>
+  <Tab label="Java (build.gradle)">
+    ```groovy title="build.gradle"
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-batch")
+        implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+        runtimeOnly("com.mysql:mysql-connector-j")
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin (build.gradle.kts)">
+    ```kotlin title="build.gradle.kts"
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-batch")
+        implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+        runtimeOnly("com.mysql:mysql-connector-j")
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`application.yml`에서 메타 테이블 자동 생성을 켜 두면 첫 실행 시 6개 테이블이 만들어집니다. 운영 환경에서는 `never`로 두고 마이그레이션 스크립트로 관리하는 편이 안전합니다.
+
+```yaml title="application.yml"
+spring:
+  batch:
+    jdbc:
+      initialize-schema: always   # 로컬·테스트
+      # initialize-schema: never  # 운영
+    job:
+      enabled: false              # 앱 시작 시 자동 실행 끄기 (수동 트리거 권장)
+```
+
+### JobBuilder와 StepBuilder
+
+Spring Batch 5에서 빌더는 직접 생성합니다. 생성자에 Job/Step 이름과 `JobRepository`가 들어갑니다.
+
+<Tabs>
+  <Tab label="Java">
+    ```java title="HelloJobConfig.java"
+    @Bean
+    public Job helloJob(JobRepository jobRepository, Step helloStep) {
+        return new JobBuilder("helloJob", jobRepository)  // [!code highlight]
+            .start(helloStep)
+            .build();
+    }
+
+    @Bean
+    public Step helloStep(JobRepository jobRepository, PlatformTransactionManager tx) {
+        return new StepBuilder("helloStep", jobRepository)  // [!code highlight]
+            .tasklet((contribution, chunkContext) -> RepeatStatus.FINISHED, tx)
+            .build();
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="HelloJobConfig.kt"
+    @Bean
+    fun helloJob(jobRepository: JobRepository, helloStep: Step): Job =
+        JobBuilder("helloJob", jobRepository)  // [!code highlight]
+            .start(helloStep)
+            .build()
+
+    @Bean
+    fun helloStep(jobRepository: JobRepository, tx: PlatformTransactionManager): Step =
+        StepBuilder("helloStep", jobRepository)  // [!code highlight]
+            .tasklet({ _, _ -> RepeatStatus.FINISHED }, tx)
+            .build()
+    ```
+  </Tab>
+</Tabs>
+
+Chunk-oriented Step은 `chunk(size, transactionManager)`를 호출한 뒤 reader/processor/writer를 연결합니다.
+
+<Tabs>
+  <Tab label="Java">
+    ```java title="ChunkStepBuilder.java"
+    return new StepBuilder("memberStep", jobRepository)
+        .<Member, NotificationTarget>chunk(1000, tx)  // [!code highlight]
+        .reader(memberReader)
+        .processor(memberProcessor)
+        .writer(notificationWriter)
+        .build();
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="ChunkStepBuilder.kt"
+    return StepBuilder("memberStep", jobRepository)
+        .chunk<Member, NotificationTarget>(1000, tx)  // [!code highlight]
+        .reader(memberReader)
+        .processor(memberProcessor)
+        .writer(notificationWriter)
+        .build()
+    ```
+  </Tab>
+</Tabs>
+
+### JobLauncher와 JobParameters
+
+`JobLauncher`는 Job을 실행하는 진입점입니다. `JobParameters`는 <E>이번 실행이 어떤 입력으로 돌아가는가</E>를 표현하는 키-값 묶음이고, 동시에 `JobInstance` 식별자의 일부가 됩니다.
+
+<Tabs>
+  <Tab label="Java">
+    ```java title="JobRunner.java"
+    @Component
+    @RequiredArgsConstructor
+    public class JobRunner {
+
+        private final JobLauncher jobLauncher;
+        private final Job memberNotificationJob;
+
+        public void run(LocalDate target) throws Exception {
+            JobParameters params = new JobParametersBuilder()
+                .addString("target", target.toString())
+                .addLong("ts", System.currentTimeMillis()) // 매번 다른 instance가 필요하면
+                .toJobParameters();
+
+            jobLauncher.run(memberNotificationJob, params);
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="JobRunner.kt"
+    @Component
+    class JobRunner(
+        private val jobLauncher: JobLauncher,
+        private val memberNotificationJob: Job,
+    ) {
+        fun run(target: LocalDate) {
+            val params = JobParametersBuilder()
+                .addString("target", target.toString())
+                .addLong("ts", System.currentTimeMillis()) // 매번 다른 instance가 필요하면
+                .toJobParameters()
+
+            jobLauncher.run(memberNotificationJob, params)
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`addLong("ts", ...)`는 같은 `target` 날짜로도 instance를 매번 새로 만들고 싶을 때 쓰는 흔한 패턴입니다. 반대로 `target` 키만 넣으면 같은 날짜로는 한 번만 실행되고, 두 번째 시도는 거부됩니다(이 동작은 §재실행에서 확인합니다).
+
+## 점진적으로 Job 만들기
+
+지금까지의 개념을 코드로 단계적으로 쌓아 봅니다. 회원 목록을 읽어 활성 회원에게만 알림을 보내는 Job을 4단계로 만들어 갑니다.
+
+### 1단계: Hello World Tasklet
+
+가장 단순한 형태부터 시작합니다. Step 1개, 그 안에 `Tasklet` 1개. 콘솔에 `Hello, Spring Batch`만 찍고 끝납니다.
+
+<Tabs>
+  <Tab label="Java">
+    ```java title="HelloJobConfig.java"
+    @Configuration
+    @RequiredArgsConstructor
+    public class HelloJobConfig {
+
+        @Bean
+        public Job helloJob(JobRepository jobRepository, Step helloStep) {
+            return new JobBuilder("helloJob", jobRepository)
+                .start(helloStep)
+                .build();
+        }
+
+        @Bean
+        public Step helloStep(JobRepository jobRepository, PlatformTransactionManager tx) {
+            return new StepBuilder("helloStep", jobRepository)
+                .tasklet((contribution, chunkContext) -> {
+                    System.out.println("Hello, Spring Batch"); // [!code highlight]
+                    return RepeatStatus.FINISHED;              // [!code highlight]
+                }, tx)
+                .build();
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="HelloJobConfig.kt"
+    @Configuration
+    class HelloJobConfig {
+
+        @Bean
+        fun helloJob(jobRepository: JobRepository, helloStep: Step): Job =
+            JobBuilder("helloJob", jobRepository)
+                .start(helloStep)
+                .build()
+
+        @Bean
+        fun helloStep(jobRepository: JobRepository, tx: PlatformTransactionManager): Step =
+            StepBuilder("helloStep", jobRepository)
+                .tasklet({ _, _ ->
+                    println("Hello, Spring Batch")  // [!code highlight]
+                    RepeatStatus.FINISHED            // [!code highlight]
+                }, tx)
+                .build()
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`RepeatStatus.FINISHED`는 <E>이 `Tasklet`은 더 호출하지 마라</E>는 신호입니다. `RepeatStatus.CONTINUABLE`을 돌려주면 같은 `Tasklet`이 계속 호출되므로, 외부 큐에서 메시지를 비울 때까지 반복하는 식의 패턴에 쓸 수 있습니다.
+
+이 Job 하나만 정의해 두고 `JobLauncher.run(helloJob, new JobParameters())`를 호출하면 콘솔에 한 줄이 찍히고, `BATCH_JOB_EXECUTION` 테이블에 `STATUS=COMPLETED` 한 행이 남습니다.
+
+### 2단계: Chunk 기반 Reader · Processor · Writer
+
+이번에는 데이터 흐름을 가진 Job으로 발전시킵니다. 회원 리스트를 읽어 활성 회원만 통과시키고, 콘솔에 알림 대상으로 찍습니다.
+
+<Tabs>
+  <Tab label="Java">
+    ```java title="MemberNotificationJobConfig.java"
+    @Configuration
+    @RequiredArgsConstructor
+    public class MemberNotificationJobConfig {
+
+        @Bean
+        public Job memberNotificationJob(JobRepository jobRepository, Step notifyStep) {
+            return new JobBuilder("memberNotificationJob", jobRepository)
+                .start(notifyStep)
+                .build();
+        }
+
+        @Bean
+        public Step notifyStep(
+            JobRepository jobRepository,
+            PlatformTransactionManager tx,
+            ItemReader<Member> memberReader,
+            ItemProcessor<Member, NotificationTarget> memberProcessor,
+            ItemWriter<NotificationTarget> notificationWriter
+        ) {
+            return new StepBuilder("notifyStep", jobRepository)
+                .<Member, NotificationTarget>chunk(3, tx)  // [!code highlight]
+                .reader(memberReader)
+                .processor(memberProcessor)
+                .writer(notificationWriter)
+                .build();
+        }
+
+        @Bean
+        public ItemReader<Member> memberReader() {
+            List<Member> members = List.of(
+                new Member(1L, "alice", true),
+                new Member(2L, "bob",   false),
+                new Member(3L, "carol", true),
+                new Member(4L, "dave",  true),
+                new Member(5L, "eve",   false)
+            );
+            return new ListItemReader<>(members);  // [!code highlight]
+        }
+
+        @Bean
+        public ItemProcessor<Member, NotificationTarget> memberProcessor() {
+            return member -> member.active()
+                ? new NotificationTarget(member.id(), member.name())
+                : null;  // null이면 Writer로 넘어가지 않음 // [!code highlight]
+        }
+
+        @Bean
+        public ItemWriter<NotificationTarget> notificationWriter() {
+            return chunk -> chunk.forEach(t ->
+                System.out.printf("notify: id=%d name=%s%n", t.id(), t.name()));
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="MemberNotificationJobConfig.kt"
+    @Configuration
+    class MemberNotificationJobConfig {
+
+        @Bean
+        fun memberNotificationJob(jobRepository: JobRepository, notifyStep: Step): Job =
+            JobBuilder("memberNotificationJob", jobRepository)
+                .start(notifyStep)
+                .build()
+
+        @Bean
+        fun notifyStep(
+            jobRepository: JobRepository,
+            tx: PlatformTransactionManager,
+            memberReader: ItemReader<Member>,
+            memberProcessor: ItemProcessor<Member, NotificationTarget>,
+            notificationWriter: ItemWriter<NotificationTarget>,
+        ): Step = StepBuilder("notifyStep", jobRepository)
+            .chunk<Member, NotificationTarget>(3, tx)  // [!code highlight]
+            .reader(memberReader)
+            .processor(memberProcessor)
+            .writer(notificationWriter)
+            .build()
+
+        @Bean
+        fun memberReader(): ItemReader<Member> {
+            val members = listOf(
+                Member(1L, "alice", true),
+                Member(2L, "bob",   false),
+                Member(3L, "carol", true),
+                Member(4L, "dave",  true),
+                Member(5L, "eve",   false),
+            )
+            return ListItemReader(members)  // [!code highlight]
+        }
+
+        @Bean
+        fun memberProcessor(): ItemProcessor<Member, NotificationTarget> =
+            ItemProcessor { member ->
+                if (member.active) NotificationTarget(member.id, member.name) else null
+                // null이면 Writer로 넘어가지 않음 // [!code highlight]
+            }
+
+        @Bean
+        fun notificationWriter(): ItemWriter<NotificationTarget> =
+            ItemWriter { chunk ->
+                chunk.forEach { println("notify: id=${it.id} name=${it.name}") }
+            }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+chunk 크기가 3이므로 동작은 다음과 같습니다.
+
+1. `read()`로 alice, bob, carol을 한 건씩 읽어 chunk를 채운다
+2. 각각을 `process()`로 통과시킨다 → alice·carol만 살아남고 bob은 `null`로 버려진다
+3. `write()`가 alice·carol 묶음을 한 번에 받는다 → 콘솔에 두 줄
+4. 트랜잭션 커밋 → 다음 chunk로 (dave, eve를 읽어 같은 흐름 반복)
+
+`BATCH_STEP_EXECUTION` 테이블에는 `READ_COUNT=5`, `FILTER_COUNT=2`, `WRITE_COUNT=3`, `COMMIT_COUNT=2` 같은 값이 남습니다. <E>몇 건 읽어서 몇 건 걸러내고 몇 건 썼는가</E>가 자동으로 집계됩니다.
+
+### 3단계: JobParameters로 입력 받기
+
+지금까지의 Job은 입력이 코드에 박혀 있었습니다. 실제로는 <E>어떤 날짜의 회원</E>인지를 실행 시점에 받고 싶습니다. `@StepScope`와 `@Value("#{jobParameters['target']}")`를 사용하면 빈이 매 Step 실행마다 새로 만들어지면서 `JobParameters` 값이 주입됩니다.
+
+<Tabs>
+  <Tab label="Java">
+    ```java title="MemberReaderConfig.java"
+    @Configuration
+    @RequiredArgsConstructor
+    public class MemberReaderConfig {
+
+        private final MemberRepository memberRepository;
+
+        @Bean
+        @StepScope  // [!code highlight]
+        public ItemReader<Member> memberReader(
+            @Value("#{jobParameters['target']}") String target  // [!code highlight]
+        ) {
+            LocalDate date = LocalDate.parse(target);
+            List<Member> members = memberRepository.findRegisteredOn(date);
+            return new ListItemReader<>(members);
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="MemberReaderConfig.kt"
+    @Configuration
+    class MemberReaderConfig(
+        private val memberRepository: MemberRepository,
+    ) {
+
+        @Bean
+        @StepScope  // [!code highlight]
+        fun memberReader(
+            @Value("#{jobParameters['target']}") target: String,  // [!code highlight]
+        ): ItemReader<Member> {
+            val date = LocalDate.parse(target)
+            val members = memberRepository.findRegisteredOn(date)
+            return ListItemReader(members)
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+이 Reader는 Step이 시작될 때 비로소 만들어지므로, 그 시점의 `target` 값에 맞춰 회원을 다시 조회합니다. 같은 Job을 다른 날짜로 호출하면 다른 결과가 나옵니다.
+
+실행 쪽 코드는 다음과 같습니다.
+
+<Tabs>
+  <Tab label="Java">
+    ```java title="JobRunner.java"
+    JobParameters params = new JobParametersBuilder()
+        .addString("target", "2026-04-25")  // [!code highlight]
+        .toJobParameters();
+
+    jobLauncher.run(memberNotificationJob, params);
+    ```
+  </Tab>
+  <Tab label="Kotlin">
+    ```kotlin title="JobRunner.kt"
+    val params = JobParametersBuilder()
+        .addString("target", "2026-04-25")  // [!code highlight]
+        .toJobParameters()
+
+    jobLauncher.run(memberNotificationJob, params)
+    ```
+  </Tab>
+</Tabs>
+
+### 4단계: 실패와 재실행
+
+마지막으로 재실행 동작을 확인합니다. Writer가 5번째 chunk에서 예외를 던지도록 만들어 보면 다음 일이 일어납니다.
+
+1. 그 chunk의 트랜잭션이 롤백된다 (이전 chunk들은 이미 커밋되어 안전)
+2. `BATCH_JOB_EXECUTION.STATUS = FAILED`로 기록되고 Job이 끝난다
+3. `JobInstance`는 그대로 남아 있다
+
+같은 `JobParameters`로 다시 실행하면 Spring Batch가 메타 테이블을 보고 두 가지 분기를 합니다.
+
+- 직전 `JobExecution`이 `COMPLETED`면 → `JobInstanceAlreadyCompleteException`. 같은 instance를 다시 실행할 수 없습니다.
+- 직전 `JobExecution`이 `FAILED`면 → 새 `JobExecution`이 만들어지고, Reader가 `BATCH_STEP_EXECUTION_CONTEXT`에 저장된 마지막 위치를 복원해 그 자리부터 이어서 처리합니다.
+
+콘솔 출력으로 정리하면 다음과 같습니다.
+
+```text title="첫 실행 (실패)"
+notify: id=1 name=alice
+notify: id=3 name=carol
+notify: id=4 name=dave
+java.lang.RuntimeException: write failed at chunk 5
+Job: [SimpleJob: [name=memberNotificationJob]] completed with status=FAILED
+```
+
+```text title="같은 파라미터로 재실행"
+# Reader가 step execution context를 읽어 마지막 위치부터 재개
+notify: id=6 name=frank
+notify: id=7 name=grace
+Job: [SimpleJob: [name=memberNotificationJob]] completed with status=COMPLETED
+```
+
+여기서 직접 보존해야 했을 <E>어디까지 처리했나</E>를 Spring Batch가 메타 테이블에 자동으로 남겨 두었기 때문에, 재실행은 그 흔적을 읽어 오는 것만으로 충분합니다. 앞서 봤던 핵심 통찰이 실제로 어떻게 동작하는지 확인할 수 있는 지점입니다.
+
+## 다음 단계
+
+이 글에서 다룬 것은 단일 인스턴스에서 단일 스레드로 도는 가장 단순한 형태입니다. 실 운영에서는 다음 주제가 차례로 등장합니다.
+
+- `JpaPagingItemReader` / `JdbcCursorItemReader` / `FlatFileItemReader` 같은 표준 Reader들
+- 멀티 스레드 Step과 partitioning으로 한 Job을 여러 worker가 나눠 처리하기
+- `ItemReader` / `ItemWriter`의 트랜잭션 동작과 `skip` / `retry` 정책
+- `Spring Batch + Spring Cloud Data Flow`로 Job을 외부에서 제어하기
+
+각 주제는 별도 글에서 다룰 예정입니다. 이 글의 도메인 모델(`Job`/`Step`/`Chunk`/`Reader`-`Processor`-`Writer`/`JobRepository`)이 머리에 들어와 있으면, 그 위에 어떤 옵션이 더 붙는지의 형태로 자연스럽게 확장할 수 있습니다.
+
+## 마무리
+
+Spring Batch는 어렵고 큰 프레임워크처럼 보이지만, 본질은 한 줄로 요약됩니다. <E>어떤 Job이 어떤 입력으로 어디까지 처리했는지를 `JobRepository`에 남긴다.</E> 이 약속을 이해하고 나면 `Tasklet`, chunk-oriented Step, `JobParameters`, 재실행 같은 기능들은 그 약속을 다른 각도로 활용한 결과일 뿐입니다.
+
+처음 만들 Job은 이번 글의 1단계처럼 `Tasklet` 한 개로 시작해도 충분합니다. 데이터가 늘어나 흐름 처리가 필요해지는 시점에 chunk-oriented로 옮기고, 입력을 외부에서 받고 싶어지면 `JobParameters`로 빼내는 식으로 단계적으로 키워 가는 것이 가장 무난한 출발점입니다.
+
+<RelatedPost slug="spring-cache-annotations" type="parallel" />
+<RelatedPost slug="spring-kafka-annotations" type="parallel" />
+
+## 참고 자료
+
+- [Spring Batch Reference Documentation (5.x)](https://docs.spring.io/spring-batch/reference/index.html)
+- [Spring Batch GitHub Repository](https://github.com/spring-projects/spring-batch)
+- [Spring Boot Batch Auto-configuration](https://docs.spring.io/spring-boot/reference/data/batch.html)
