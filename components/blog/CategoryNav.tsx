@@ -16,7 +16,7 @@ interface CategoryNavProps {
 export function CategoryNav({ posts, currentSlug, onLinkClick }: CategoryNavProps) {
   const { lang } = useTranslation()
   if (!Array.isArray(posts) || posts.length === 0) return null
-  const groups = groupPostsByCategory(posts, lang)
+  const groups = groupPostsByCategory(posts, lang, 'title')
 
   const activeCategoryId = currentSlug
     ? (posts.find((p) => p.slug === currentSlug)?.category ?? null)

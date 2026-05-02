@@ -86,6 +86,7 @@ export interface CategoryGroup<T> {
 export function groupPostsByCategory<T extends { category: CategoryId; date: string; title: { ko: string; en: string } }>(
   posts: readonly T[],
   lang: Language,
+  sortBy: 'date' | 'title' = 'date',
 ): CategoryGroup<T>[] {
   const buckets = new Map<CategoryId, T[]>()
   for (const post of posts) {
@@ -100,6 +101,9 @@ export function groupPostsByCategory<T extends { category: CategoryId; date: str
     const list = buckets.get(category.id)
     if (!list || list.length === 0) return []
     const sorted = list.slice().sort((a, b) => {
+      if (sortBy === 'title') {
+        return collator.compare(a.title[lang], b.title[lang])
+      }
       if (a.date !== b.date) return a.date < b.date ? 1 : -1
       return collator.compare(a.title[lang], b.title[lang])
     })
