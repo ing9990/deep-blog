@@ -115,3 +115,72 @@ docker compose up -d
 
 헬스체크: `curl http://localhost:8081/actuator/health` (각 포트 동일 패턴).
 대시보드: Grafana `http://localhost:3000` (admin/admin), Prometheus `http://localhost:9090`.
+
+---
+
+## 통합 테스트 실행
+
+`integration-test` 모듈은 모든 서비스(member / product / payment / order / notification)와 인프라(MySQL × 5 schemas, Redis, Kafka)를 단일 docker compose 로 띄운 뒤 시나리오 테스트를 돌립니다. 재고 정합성·결제 실패 보상·컨슈머 멱등성 같은 멀티 서비스 흐름을 검증할 때 사용합니다.
+
+### compose 파일
+
+| 파일 | 역할 |
+|---|---|
+| `shared/docker/docker-integration-test.yml` | MySQL · Redis · Kafka · 5개 서비스 정의 (이미지 빌드 포함, healthcheck 포함) |
+| `shared/docker/docker-integration-test.override.yml` | 호스트 포트 매핑 (mysql `13306`, redis `16379`, kafka `19092`, 서비스 `1808x`). 로컬 디버깅·k6·테스트 코드의 host 접근용 |
+
+### 기동
+
+```bash
+cd mini-coupang/shared/docker
+
+# 백그라운드 기동 (이미지 빌드 + 헬스체크 통과까지 기다림)
+docker compose \
+  -f docker-integration-test.yml \
+  -f docker-integration-test.override.yml \
+  up -d
+
+# 모든 서비스 healthy 인지 확인
+docker compose \
+  -f docker-integration-test.yml \
+  -f docker-integration-test.override.yml \
+  ps
+```
+
+`order-server` 까지 모두 `healthy` 가 되면 준비 완료입니다.
+
+### 테스트 실행
+
+```bash
+cd mini-coupang
+./gradlew :integration-test:test
+```
+
+테스트 코드는 호스트 매핑 포트(`localhost:18084` 등)로 접근하므로 override 파일이 같이 떠 있어야 합니다.
+
+### 종료
+
+```bash
+cd mini-coupang/shared/docker
+docker compose \
+  -f docker-integration-test.yml \
+  -f docker-integration-test.override.yml \
+  down -v
+```
+
+`-v` 로 볼륨까지 삭제하면 다음 기동에서 MySQL 초기화 스크립트(`mysql-init/`)가 다시 적용됩니다.
+
+### 관찰 도구 추가 (선택)
+
+Kafka UI 와 RedisInsight 를 같이 띄우려면 `docker-compose.observability.yml` 도 함께 사용합니다.
+
+```bash
+docker compose \
+  -f docker-integration-test.yml \
+  -f docker-integration-test.override.yml \
+  -f docker-compose.observability.yml \
+  up -d
+```
+
+- Kafka UI: `http://localhost:18099`
+- RedisInsight: `http://localhost:15540`

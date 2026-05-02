@@ -89,7 +89,7 @@ public PlaceOrderResult placeOrder(Long accountId, PlaceOrderCommand command) {
 }
 ```
 
-JPA dirty checking이 만드는 UPDATE는 `SET quantity = 99` 같은 계산된 값이지, `SET quantity = quantity - 1`의 DB-side 차감이 아니라는 점이 핵심입니다.
+JPA dirty checking이 만드는 `UPDATE`는 `SET quantity = 99` 같은 계산된 값이지, `SET quantity = quantity - 1`의 DB-side 차감이 아니라는 점이 핵심입니다.
 
 ### 테스트 코드 및 결과
 
@@ -145,7 +145,7 @@ void place_200concurrent_sameSku_stock100_only100succeed() throws Exception {
 | 남은 재고 | 0 | **56** |
 | 저장된 주문 | 100 | **200** |
 
-읽기. 200 트랜잭션이 모두 재고 100을 본 채 검사를 통과해 재고 부족 거절이 0건이 됐습니다. 차감은 200번 시도되었으나 DB에 반영된 것은 `100 - 56 = 44회`, 56회분 차감이 lost update입니다. 주문 200건은 모두 INSERT되어 저장된 주문 수가 두 배로 부풀었습니다.
+읽기. 200 트랜잭션이 모두 재고 100을 본 채 검사를 통과해 재고 부족 거절이 0건이 됐습니다. 차감은 200번 시도되었으나 DB에 반영된 것은 `100 - 56 = 44회`, 56회분 차감이 lost update입니다. 주문 200건은 모두 `INSERT`되어 저장된 주문 수가 두 배로 부풀었습니다.
 
 ### 한계
 
@@ -153,7 +153,7 @@ void place_200concurrent_sameSku_stock100_only100succeed() throws Exception {
 
 이 문제는 조회·검사·차감을 한 임계 영역으로 묶는 `synchronized`로 해결할 수 있습니다.
 
-## 2. synchronized
+## 2. `synchronized`
 
 ### 개요
 
@@ -351,7 +351,7 @@ public class OrderService {
 
 | 비용 | 무엇이 묶이나 | 영향 |
 |---|---|---|
-| 락 보유 시간 = 트랜잭션 길이 | 재고 차감 외에 결제, Order INSERT 까지 한 트랜잭션 | 결제가 약 10초 걸리면 락도 그 시간만큼 유지 |
+| 락 보유 시간 = 트랜잭션 길이 | 재고 차감 외에 결제, Order `INSERT` 까지 한 트랜잭션 | 결제가 약 10초 걸리면 락도 그 시간만큼 유지 |
 | DB 커넥션 점유 | 락 보유 동안 커넥션 함께 점유 | HikariCP 풀(기본 10)과 충돌, 빠른 커넥션 고갈 |
 | 핫 row 직렬화 | 인기 옵션 1개에 트래픽 집중 | 처리량이 1행 × 1 커넥션 × 결제 응답 시간으로 묶임 |
 
@@ -364,7 +364,7 @@ public class OrderService {
 | 단계 | 잠금 주체 | 주문 성공 | 재고 부족 거절 | 남은 재고 |
 |---|---|---|---|---|
 | 1단계 락 없음 | 없음 | 200 | 0 | 56 |
-| 2단계 synchronized | JVM 모니터 | 100 | 100 | 0 |
+| 2단계 `synchronized` | JVM 모니터 | 100 | 100 | 0 |
 | 3단계 비관적 락 | DB 행 락 | 100 | 100 | 0 |
 
 1단계는 lost update로 56건이 사라졌고, 2~3단계는 같은 옵션 행에 대한 동시 차감을 하나씩 직렬화해 정합성을 회복했습니다.
@@ -374,7 +374,7 @@ public class OrderService {
 | 단계 | 단일 JVM | 단일 DB 인스턴스 | 다중 인스턴스 |
 |---|---|---|---|
 | 1단계 락 없음 | 깨짐 | 깨짐 | 깨짐 |
-| 2단계 synchronized | OK | OK | 깨짐 (락 풀이 JVM 안에 갇힘) |
+| 2단계 `synchronized` | OK | OK | 깨짐 (락 풀이 JVM 안에 갇힘) |
 | 3단계 비관적 락 | OK | OK | OK (DB 레벨 직렬화) |
 
 <Callout type="info" title="잠금 위치는 정합성 범위와 같이 움직인다">
