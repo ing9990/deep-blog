@@ -1,0 +1,246 @@
+---
+title:
+  ko: "멀티 인스턴스 재고 선점과 Luascript"
+  en: "Multi-instance Stock Reservation with Lua Scripts"
+slug: "mini-coupang-redis-lua-stock-reserve"
+date: 2026-05-02
+tags:
+  - Backend
+  - redis
+  - concurrency
+  - lua
+keywords:
+  - Luascript
+  - Redis EVAL
+  - DECRBY
+  - Redis 원자성
+  - 재고 선점
+  - Race Condition
+summary:
+  ko: "주문 서버가 두 대 이상이면 앞 글의 ConcurrentHashMap 락은 무력해지고 비관적 락은 결제 응답 시간만큼 행을 점유합니다. 미니쿠팡이 재고 선점을 Redis로 옮기되, GET-검증-DECRBY를 Luascript 한 명령으로 묶어야 했던 이유와 통합 테스트 결과를 정리합니다."
+  en: "Once order servers scale beyond one instance, the in-JVM lock breaks and pessimistic locks hold the row through the entire payment latency. This post explains why mini-coupang moved stock reservation to Redis and had to wrap GET-check-DECRBY in a single Lua script, with test results."
+relatedServices:
+  - product
+  - order
+category: mini-coupang
+draft: false
+---
+
+주문 서버가 한 대일 때는 [앞 글](/posts/mini-coupang-order-concurrency-locks)에서 옵션 SKU별 `ConcurrentHashMap<Long, ReentrantLock>`이나 `SELECT ... FOR UPDATE` 비관적 락으로 동시 차감을 직렬화했습니다. 그런데 결제는 외부 PG 호출이라 한 트랜잭션이 수백 ms에서 수 초까지 늘어나기 쉽고, 비관적 락은 그 시간 내내 행 X 락을 점유합니다. 인기 옵션 하나에 트래픽이 몰리면 처리량이 1행 × 1 커넥션 × 결제 응답 시간으로 묶이고, 인스턴스가 두 대로 늘면 JVM 안의 락 풀은 서로 다른 인스턴스라 같은 옵션을 동시에 놓칠 수 있습니다. 이 글은 그 한계를 풀기 위해 미니쿠팡이 재고 선점을 Redis로 옮기되, 왜 단순 `GET → 검증 → DECRBY`가 아니라 <E>Luascript 한 명령으로 묶어야 했는지</E>를 정리합니다.
+
+- order-server 인스턴스는 두 대 이상으로 가정합니다.
+- 재고는 옵션(SKU) 단위, 단일 Redis 인스턴스가 가용 재고의 최신값을 들고 있습니다.
+- 결제는 외부 PG 호출이며 confirm 트랜잭션 밖에서 일어납니다.
+
+## 요구사항과 제약
+
+기능 요구사항은 세 가지입니다.
+
+1. order-server는 결제 인증 시작 직전에 product-server `/internal/stocks/{optionId}/reserve`를 호출해 재고를 선점합니다.
+2. 재고 부족 시 `INSUFFICIENT_AMOUNT`로 즉시 거절되며, 같은 옵션에 동시 선점 요청이 몰려도 성공한 합이 가용 재고를 넘지 않아야 합니다.
+3. 결제가 실패하면 보상 이벤트로 선점한 수량만큼 Redis 재고를 다시 INCRBY로 풀어 줍니다.
+
+평시에 결제 단계는 PG 응답 시간이 사용자 체감 지연의 대부분을 차지하므로, 재고 선점 단계는 그 안에서 가능한 한 짧고 락 점유가 없는 형태가 바람직합니다. 핫딜 윈도에서는 같은 옵션에 100명 이상의 동시 선점 요청이 몰리는 시나리오를 가정합니다.
+
+## 아키텍처 결정
+
+<Diagram caption="order-server N개와 product-server N개 모두 단일 Redis 키로 모이고, confirmed 이후에 단일 MySQL이 영구 차감을 받는다">{`flowchart LR
+    subgraph Orders["order-server (N개 인스턴스)"]
+        O1["주문 #1"]
+        O2["주문 #2"]
+        ON["주문 #N"]
+    end
+    subgraph Products["product-server (N개 인스턴스)"]
+        P1["재고 수정 요청 #1"]
+        P2["재고 수정 요청 #2"]
+        PN["재고 수정 요청 #N"]
+    end
+    subgraph Consumers["product-server consumer (N개 인스턴스)"]
+        C1["OrderEventProcessor #1"]
+        CN["OrderEventProcessor #N"]
+    end
+    Redis[("상품 Redis")]
+    Mysql[("RDB<br/>재고 영속")]
+    Kafka[("Kafka: order.confirmed<br/>order.payment-failed")]
+
+    O1 -->|Feign| P1
+    O2 -->|Feign| P2
+    ON -->|Feign| PN
+    P1 --> Redis
+    P2 --> Redis
+    PN --> Redis
+    Kafka --> C1
+    Kafka --> CN
+    C1 -->|confirmed| Mysql
+    CN -->|confirmed| Mysql
+    C1 -->|payment-failed<br/>INCRBY| Redis
+    CN -->|payment-failed<br/>INCRBY| Redis
+
+    classDef key stroke:#16a34a,stroke-width:2px;
+    class Redis,Mysql key
+`}</Diagram>
+
+결정은 네 가지입니다.
+
+1. <E>Redis가 가용 재고의 단일 소유자</E>입니다. order-server와 product-server가 모두 N개로 확장되어도 자기 메모리에 잔량을 들고 있지 않고, 모든 선점 시도가 단일 Redis 키 `stock:option:{id}`에 모입니다. 인스턴스를 늘려도 같은 키 하나를 보기 때문에 분산 환경에서 정합성 범위가 깨지지 않습니다.
+2. 영구 재고는 MySQL에 따로 둡니다. Redis는 휘발이고 단일 장애점이므로, 결제까지 성공한 주문(`order.confirmed`)이 도착했을 때만 MySQL `option_stocks`를 영구 차감합니다. Redis와 MySQL이 일시적으로 어긋나도 confirmed 이벤트가 진실의 기준이 됩니다.
+3. 동시 차감의 정합성은 행 락 대신 Redis EVAL의 원자성으로 풉니다. 비관적 락이 `결제 응답 시간 + 트랜잭션 길이`만큼 행을 점유하던 문제를 피하기 위해, 선점은 트랜잭션 밖에서 한 명령에 끝냅니다.
+4. 결제 실패 보상은 같은 키에 INCRBY로 되돌립니다. 보상 처리 자체도 한 명령이라 추가 락이 필요 없습니다.
+
+## 분산 락 후보 비교
+
+선점을 트랜잭션 밖으로 빼는 방법은 여러 가지가 있습니다. 각 후보가 어떤 비용을 내는지 정리합니다.
+
+| 후보 | 동작 | 락 보유 시간 | 단일 장애점 | 미니쿠팡 적합성 |
+|---|---|---|---|---|
+| 비관적 락(`FOR UPDATE`) | DB 행 X 락을 트랜잭션 commit까지 유지 | 결제 응답 시간 + 트랜잭션 길이 | DB | 인기 옵션에서 처리량이 1행으로 묶여 부적합 |
+| 분산 락(Redisson Redlock) | 별도 락 키를 잡고 임계 영역 진입, TTL로 자동 해제 | 임계 영역 길이 | Redis 클러스터 다수결 | 임계 영역이 한 명령이라면 락 자체가 과한 비용 |
+| Redis 원자 차감(EVAL) | 한 EVAL 명령 안에서 GET·검증·DECRBY 수행 | 명령 실행 시간(1ms 이내) | Redis | 한 명령으로 끝나는 선점에 적합 |
+
+미니쿠팡은 세 번째를 택했습니다. 분산 락이 자체 락 키를 잡고 임계 영역을 보호하는 일반 도구라면, Redis 원자 차감은 <E>임계 영역 자체가 한 명령</E>이라 락 키가 필요 없는 특수한 경우입니다. 선점 로직이 <E>"잔량을 보고, 충분하면 깎는다" 한 단계</E>라서 한 EVAL 안에 그대로 들어갑니다. 임계 영역이 두 단계 이상이거나 다른 키를 함께 다뤄야 한다면 그때는 분산 락이 다시 후보로 올라옵니다.
+
+## Redis만으로는 race가 다시 등장한다
+
+Redis가 단일 스레드라는 사실이 모든 동시성 문제를 막아 주는 것은 아닙니다. Redis가 보장하는 것은 <E>한 명령의 원자성</E>이지, 한 클라이언트가 보낸 두 명령 사이가 아니라는 점이 핵심입니다. 가령 선점 로직을 클라이언트 코드에서 다음처럼 풀어 쓴다면 race가 바로 돌아옵니다.
+
+```kotlin title="NaiveStockReserve.kt"
+fun reserveNaive(optionId: Long, quantity: Long): Long {
+    val current = redis.get("stock:option:$optionId").toLong()  // [!code highlight]
+    if (current < quantity) {
+        throw BusinessException(INSUFFICIENT_AMOUNT)
+    }
+    return redis.decrBy("stock:option:$optionId", quantity)     // [!code highlight]
+}
+```
+
+GET과 DECRBY 사이에 다른 인스턴스가 같은 키를 GET하면 두 인스턴스 모두 같은 잔량을 보고 통과합니다. 그다음 둘 다 DECRBY를 보내 잔량이 음수가 되거나, 잔량 1짜리 키에 두 인스턴스가 모두 차감을 성공시켜 한 명분 더 팔리는 결과가 나옵니다.
+
+<Diagram caption="두 product-server 인스턴스가 GET-검증-DECRBY를 별개 명령으로 보내면, 검증 단계에서 같은 잔량을 본 채 둘 다 통과한다">{`sequenceDiagram
+    participant A as product-server #1
+    participant B as product-server #2
+    participant R as Redis (단일 스레드)
+
+    A->>R: GET stock:option:42
+    R-->>A: "1"
+    B->>R: GET stock:option:42
+    R-->>B: "1"
+    A->>A: 1 >= 1, 통과
+    B->>B: 1 >= 1, 통과
+    A->>R: DECRBY stock:option:42 1
+    R-->>A: 0
+    B->>R: DECRBY stock:option:42 1
+    R-->>B: -1
+`}</Diagram>
+
+Redis는 GET 두 번과 DECRBY 두 번을 모두 자기 명령 큐에 한 줄로 세워 처리했습니다. 한 명령 안에서 본 잔량은 정확합니다. 그런데도 race가 일어나는 이유는 클라이언트가 보낸 <E>의사결정 단위가 한 명령이 아니기 때문</E>입니다. GET과 DECRBY 사이의 빈 자리에 다른 클라이언트의 GET이 끼어들 수 있고, 그 시점에는 아직 차감되지 않은 옛 잔량이 그대로 보입니다.
+
+## Luascript로 한 명령에 묶기
+
+해결책은 GET·검증·DECRBY를 한 EVAL 명령으로 묶어 Redis가 그 셋을 한 명령처럼 처리하게 만드는 것입니다. Redis EVAL은 등록된 Luascript를 받으면 그 스크립트가 끝날 때까지 다른 명령을 받지 않고 직렬 실행하므로, 스크립트 안의 GET 결과는 같은 스크립트 안의 DECRBY까지 변하지 않습니다.
+
+미니쿠팡 `ProductStockRedisRepository`는 두 개의 짧은 스크립트를 가집니다.
+
+```java title="ProductStockRedisRepository.java"
+private static final DefaultRedisScript<Long> RESERVE_STOCK_SCRIPT = new DefaultRedisScript<>("""
+        local current = redis.call('GET', KEYS[1])
+        if current == false then return -1 end
+        if tonumber(current) < tonumber(ARGV[1]) then return -2 end
+        return redis.call('DECRBY', KEYS[1], ARGV[1])
+        """, Long.class);                                                   // [!code highlight]
+
+private static final DefaultRedisScript<Long> RELEASE_STOCK_SCRIPT = new DefaultRedisScript<>("""
+        local current = redis.call('GET', KEYS[1])
+        if current == false then return -1 end
+        return redis.call('INCRBY', KEYS[1], ARGV[1])
+        """, Long.class);
+
+public long reserveStock(long optionId, long quantity) {
+    return redisTemplate.execute(RESERVE_STOCK_SCRIPT,
+        List.of(buildKey(optionId)), String.valueOf(quantity));
+}
+```
+
+반환값 규약은 한 가지로 통일했습니다. `-1`은 키 없음(아직 등록되지 않은 옵션), `-2`는 재고 부족, 0 이상은 차감 후 남은 잔량입니다. <E>음수와 잔량을 한 long 값에 인코딩</E>해 호출자가 분기 한 번으로 결과를 읽을 수 있게 했습니다.
+
+호출자인 `StockReserveService`는 이 반환값을 도메인 예외로 옮기는 얇은 역할만 합니다.
+
+```java title="StockReserveService.java"
+public StockReserveResult reserve(StockReserveCommand command) {
+    long result = productStockRedisRepository.reserveStock(
+        command.optionId(), command.quantity());
+
+    if (result == -1L) {
+        throw new BusinessException(ErrorCode.STOCK_NOT_FOUND);             // [!code highlight]
+    }
+    if (result == -2L) {
+        throw new BusinessException(ErrorCode.INSUFFICIENT_AMOUNT);         // [!code highlight]
+    }
+    return StockReserveResult.of(command.optionId(), command.quantity(), result);
+}
+```
+
+이 구조의 효과는 두 가지입니다. 첫째, <E>GET·검증·DECRBY가 Redis 안에서 한 명령으로 묶이므로</E> 여러 product-server 인스턴스가 동시에 EVAL을 보내도 한 EVAL이 끝난 뒤 다음 EVAL이 시작합니다. 잔량 1짜리 키에 두 EVAL이 동시에 도착해도 첫 EVAL은 0으로 만들고 두 번째 EVAL은 그 0을 보고 `-2`로 거절합니다. 둘째, 락 키나 타임아웃 같은 별도 객체를 운영하지 않아도 됩니다. 임계 영역이 한 EVAL 명령이라 보호 범위와 명령 범위가 일치합니다.
+
+confirm이 PG 거절로 실패하면 같은 옵션 키에 `releaseStock`이 INCRBY로 잔량을 되돌립니다. 보상 흐름 자체와 outbox·이벤트 처리는 자매 글에서 다룹니다.
+
+<RelatedPost slug="mini-coupang-choreography-saga" type="deep-dive" />
+
+<Callout type="error" title="핵심 통찰: 동시성은 단일 스레드 엔진을 골랐다고 사라지지 않는다">
+Redis 단일 스레드는 한 명령의 원자성만 보장합니다. 두 명령 사이의 race는 단일 스레드 안에서도 그대로 일어납니다. 동시성이 사라지는 것은 한 의사결정 단위(잔량 검사 + 차감)를 한 명령(EVAL)으로 만들었을 때입니다. Luascript의 가치는 빠른 실행이 아니라 임계 영역과 명령 범위를 일치시키는 데 있습니다.
+</Callout>
+
+## 통합 테스트 결과
+
+`integration-test` 모듈에서 product-server·order-server·payment-server·notification-server를 모두 띄운 통합 환경에 `ExecutorService` 스레드 풀과 `CountDownLatch` 배리어를 적용해 동시 주문 시나리오를 작성했습니다. 각 시나리오는 동일한 옵션에 N명이 동시에 prepare → confirm을 시도합니다.
+
+| 시나리오 | 가정 | 정합성 결과 |
+|---|---|---|
+| 재고 100, 동시 50 | 모두 결제 성공 | PAID 50, Redis 잔량 50, MySQL 잔량 50 |
+| 재고 100, 동시 100 | 모두 결제 성공 | PAID 100, Redis 잔량 0, MySQL 잔량 0 |
+| 재고 100, 동시 101 | 한 명은 INSUFFICIENT_AMOUNT | PAID 100, 거절 1, Redis 잔량 0, MySQL 잔량 0 |
+| 재고 100, 결제 실패 1건 | 보상 발생 | PAID 0, CANCELED 1, <E>Redis 잔량 100으로 복구</E> |
+
+세 번째 시나리오가 이 글의 핵심을 직접 검증합니다. 잔량 100짜리 키에 101개의 EVAL이 거의 동시에 도착했을 때 정확히 100건만 0 이상의 잔량을 받고, 마지막 1건은 `-2`(`INSUFFICIENT_AMOUNT`)로 떨어집니다. Lua 없이 클라이언트에서 GET·검증·DECRBY를 풀어 썼다면 이 위치에서 잔량 음수가 나오거나 101건 모두 통과하는 결과를 받았을 것입니다.
+
+```java title="Stock100Order101ConcurrentTest.java"
+@Test
+@DisplayName("정확히 100명이 성공한다")
+void hundredSucceed() {
+    assertThat(result.success()).isEqualTo(100);                            // [!code highlight]
+}
+
+@Test
+@DisplayName("정확히 1명이 재고 부족으로 거절된다")
+void oneInsufficient() {
+    assertThat(result.insufficient()).isEqualTo(1);                         // [!code highlight]
+}
+
+@Test
+@DisplayName("Redis 재고가 0으로 소진된다")
+void redisStockExhausted() {
+    assertThat(scenario.redisStock(prepared.optionId())).isZero();
+}
+```
+
+네 번째 시나리오는 결제 실패 보상이 같은 키에 도달하는지를 본 케이스입니다. PG가 거절을 돌려보내면 order-server가 `order.payment-failed`를 발행하고, product-server `OrderEventProcessor`가 이를 수신해 `releaseStock`을 호출합니다. 잔량 100짜리 옵션에 1건이 prepare로 99까지 깎였다가 confirm 단계에서 결제가 실패해도, 보상 EVAL이 INCRBY로 다시 100을 만듭니다.
+
+## 남은 한계와 다음 단계
+
+이 구조가 닫지 못한 한계를 세 가지로 정리합니다.
+
+| 한계 | 무엇을 줄이려 했나 | 트레이드오프 |
+|---|---|---|
+| Redis 단일 장애점 | 잔량 단일 소유자가 죽으면 선점 자체가 멈춤 | Redis Sentinel/Cluster로 가용성 확보, 복제 지연 윈도에서 잔량 시점 어긋남 가능 |
+| Redis-MySQL drift | confirmed 이벤트 소실 시 Redis는 깎였는데 MySQL이 따라가지 못함 | 일정 주기 reconcile 잡으로 보정, 실시간성은 포기 |
+| 보상 EVAL 자체 실패 | Redis가 일시적으로 끊기면 INCRBY가 누락 | 보상 이벤트를 outbox + relay로 발행해 재시도 가능 (이미 적용), 그래도 Redis 자체 장애 윈도에는 수동 보정 |
+
+세 가지 모두 단일 인스턴스 Redis와 비동기 보상 흐름의 구조적 비용입니다. 다음 글에서는 Redis Sentinel을 도입했을 때 페일오버 윈도 동안 잔량이 어떻게 흔들리는지와, reconcile 잡을 어떻게 설계했는지를 측정으로 확인해 보겠습니다.
+
+[mini-coupang 시리즈 모아보기](https://deep.ing9990.com/?cat=mini-coupang)
+
+## 참고 자료
+
+- Redis Documentation, [EVAL](https://redis.io/docs/latest/commands/eval/)
+- Redis Documentation, [Programmability with Lua scripts](https://redis.io/docs/latest/develop/interact/programmability/eval-intro/)
+- Spring Data Redis Reference, [Scripting](https://docs.spring.io/spring-data/redis/reference/redis/scripting.html)
+- Martin Kleppmann, [How to do distributed locking](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)
