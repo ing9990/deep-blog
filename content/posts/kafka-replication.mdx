@@ -23,31 +23,28 @@ category: kafka
 draft: false
 ---
 
-Kafka 입문편에서 <E>여러 브로커에 복제된다</E>는 한 줄로 지나간 부분이 있습니다. 그 한 줄이 사실은 Kafka가 프로덕션에서 신뢰받는 이유 전체입니다. 이 글은 브로커 장애에도 데이터가 살아남는 복제 메커니즘을 Leader/Follower, ISR, `acks`, 리더 재선출의 네 축으로 풀어냅니다.
+Kafka 입문편에서 <E>여러 브로커에 복제된다</E>는 한 줄로 지나간 부분이 있습니다. 그 한 줄이 사실은 Kafka가 프로덕션에서 신뢰받는 이유 전체입니다. 이 글은 브로커 장애에도 데이터가 살아남는 복제 메커니즘을 Leader와 Follower, `ISR`, `acks`, 리더 재선출의 네 가지 주제로 풀어냅니다.
 
 <RelatedPost slug="kafka-essentials" type="prerequisite" />
 
 ## Replication이란
 
-**Replication은 <E>같은 데이터를 여러 서버에 복제해두는 것</E>** 입니다. Kafka 입문편에서 Topic을 여러 Partition으로 쪼개 저장한다고 했는데, 그 Partition이 Broker 한 대에만 있다면 해당 Broker가 다운되는 순간 그 Partition의 모든 데이터는 쓰지도 읽지도 못합니다. 회사의 주문 이벤트가 거기 있었다면 장애 시간 동안 주문 처리가 멈추죠.
+**Replication은 <E>같은 데이터를 여러 서버에 복제해두는 것</E>** 입니다. Kafka 입문편에서 Topic을 여러 파티션으로 쪼개 저장한다고 했는데, 그 파티션이 Broker 한 대에만 있다면 해당 Broker가 다운되는 순간 그 파티션의 모든 데이터는 쓰지도 읽지도 못합니다. 회사의 주문 이벤트가 거기 있었다면 장애 시간 동안 주문 처리가 멈추죠.
 
-Kafka는 Partition마다 **Replica** 를 여러 개 둡니다. **Replication Factor = 3** 이면 같은 Partition이 3개 Broker에 복제됩니다. 그 중 **하나만 Leader** (읽기/쓰기 담당), 나머지는 **Follower** (리더에서 데이터를 당겨와 저장).
-
-경리부에 거래 장부 3부가 있다고 해볼게요. 한 사람(Leader)이 거래를 적으면 다른 두 명(Follower)이 똑같이 따라 적습니다. Leader가 쓰러져도 Follower 중 한 명이 장부를 이어받아 계속 쓸 수 있죠. 장부가 한 부였다면 그 한 명이 쓰러지는 순간 모든 기록이 멈춥니다.
+Kafka는 파티션마다 **Replica** 를 여러 개 둡니다. `Replication Factor = 3` 이면 같은 파티션이 3개 Broker에 복제됩니다. 그 중 **하나만 Leader** (읽기/쓰기 담당), 나머지는 **Follower** (리더에서 데이터를 당겨와 저장).
 
 여기서 반드시 짚어야 할 두 가지가 있습니다.
 
-**Leader는 Partition 별로 따로 정해진다.** 토픽 `orders` 에 파티션 3개, RF=3이면 리더 3개(파티션마다 1명)가 9개 replica에 분산되어 있습니다. 한 Broker가 파티션 A의 Leader이면서 파티션 B의 Follower일 수 있습니다. 부하가 자연스럽게 분산되죠.
-
-**Producer와 Consumer는 오직 Leader 하고만 대화한다.** Follower는 백그라운드에서 조용히 데이터만 복사합니다. 읽기 부하를 나누지 않는다는 점이 MySQL replication과 다른 부분입니다. 왜 그런지는 잠시 후 ISR을 설명할 때 자연스럽게 드러납니다.
+- **Leader는 파티션 별로 따로 정해진다.** 토픽 `orders` 에 파티션 3개, `RF=3` 이면 리더 3개(파티션마다 1명)가 9개 `replica` 에 분산되어 있습니다. 한 Broker가 파티션 A의 Leader이면서 파티션 B의 Follower일 수 있습니다. 부하가 자연스럽게 분산됩니다.
+- **Producer와 Consumer는 Leader만 사용한다.** Follower는 백그라운드에서 조용히 데이터만 복사합니다. 읽기 부하를 나누지 않는다는 점이 MySQL replication과 다른 부분입니다. 왜 그런지는 잠시 후 `ISR` 을 설명할 때 자연스럽게 드러납니다.
 
 ## 왜 필요한가
 
 <E>그냥 백업 받아놓으면 되지 않나요?</E> 라는 생각이 들 수 있습니다. 복제가 **왜** 필요한지, 복제가 **없으면** 실제로 어떤 일이 벌어지는지를 구체 시나리오로 보겠습니다.
 
-### 복제 없이 (RF=1)
+### 복제 없이 (`RF=1`)
 
-Broker 3대 클러스터에 토픽 `payments` 가 파티션 3개로 나뉘어 있다고 합시다. RF=1이니 각 파티션이 딱 한 Broker에만 있습니다.
+Broker 3대 클러스터에 토픽 `payments` 가 파티션 3개로 나뉘어 있다고 합시다. `RF=1` 이니 각 파티션이 딱 한 Broker에만 있습니다.
 
 ```text
 Broker-1: partition-0 (payments)
@@ -55,13 +52,13 @@ Broker-2: partition-1 (payments)
 Broker-3: partition-2 (payments)
 ```
 
-새벽 3시에 Broker-2의 디스크가 망가졌습니다. 그 순간 `partition-1` 을 담당하던 모든 Producer가 쓰기 실패하고, 이미 들어와 있던 `partition-1` 의 메시지들도 읽지 못합니다. 디스크를 교체하고 백업에서 복원하는 몇 시간 동안 `payments` 토픽의 1/3이 동작 불능입니다.
+새벽 3시에 `Broker-2` 의 디스크가 망가졌습니다. 그 순간 `partition-1` 을 담당하던 모든 Producer가 쓰기 실패하고, 이미 들어와 있던 `partition-1` 의 메시지들도 읽지 못합니다. 디스크를 교체하고 백업에서 복원하는 몇 시간 동안 `payments` 토픽의 1/3이 동작 불능입니다.
 
 **백업은 <E>어제까지의 데이터</E>** 만 구해줍니다. 복원되는 동안 들어왔어야 할 결제 이벤트는 어디에도 없습니다. 이걸 막는 게 복제의 첫 번째 목적, **내구성(Durability)** 입니다.
 
-### 복제 있음 (RF=3)
+### 복제 있음 (`RF=3`)
 
-같은 구성에서 RF=3이면 각 파티션이 3개 Broker에 복제됩니다.
+같은 구성에서 `RF=3` 이면 각 파티션이 3개 Broker에 복제됩니다.
 
 ```text
 partition-0:  Leader=Broker-1, Follower=[Broker-2, Broker-3]
@@ -69,7 +66,7 @@ partition-1:  Leader=Broker-2, Follower=[Broker-1, Broker-3]
 partition-2:  Leader=Broker-3, Follower=[Broker-1, Broker-2]
 ```
 
-Broker-2가 죽으면 `partition-1` 의 Leader가 사라집니다. 하지만 Broker-1이 `partition-1` 의 Follower로 데이터를 다 갖고 있습니다. 수 초 안에 Broker-1 또는 Broker-3이 새 Leader로 승격되고 Producer와 Consumer는 잠깐 멈췄다가 다시 흐릅니다. **장애 시간과 데이터 유실 시간이 분리**됩니다. 이게 **가용성(Availability)** 의 두 번째 목적이죠.
+`Broker-2` 가 죽으면 `partition-1` 의 Leader가 사라집니다. 하지만 `Broker-1` 이 `partition-1` 의 Follower로 데이터를 다 갖고 있습니다. 수 초 안에 `Broker-1` 또는 `Broker-3` 이 새 Leader로 승격되고 Producer와 Consumer는 잠깐 멈췄다가 다시 흐릅니다. **장애 시간과 데이터 유실 시간이 분리**됩니다. 이게 **가용성(Availability)** 의 두 번째 목적이죠.
 
 <RelatedPost slug="single-point-of-failure" type="deep-dive" />
 
@@ -83,42 +80,52 @@ Broker-2가 죽으면 `partition-1` 의 Leader가 사라집니다. 하지만 Bro
 
 복제가 <E>그냥 따라 쓰기</E>라면 글 한 편짜리 주제가 될 수 없었을 겁니다. 문제는 미묘한 시간 틈에 있습니다.
 
-Leader가 Producer에 <E>메시지를 받았어요</E> 라고 응답한 **직후에** 터졌다면? 그 메시지는 Follower에 도달했을까요, 못 했을까요? **도달했다면 안전하고, 못 했다면 유실입니다.** 이 <E>어느 시점까지를 안전이라 선언할 것인가</E>를 결정하는 게 Producer의 `acks` 옵션이고, <E>누구까지 복사를 받은 상태여야 안전이라 볼 것이냐</E>를 결정하는 게 **ISR(In-Sync Replica)** 입니다.
+Leader가 Producer에 <E>메시지를 받았어요</E> 라고 응답한 **직후에** 터졌다면? 그 메시지는 Follower에 도달했을까요, 못 했을까요? **도달했다면 안전하고, 못 했다면 유실입니다.** 이 <E>어느 시점까지를 안전이라 선언할 것인가</E>를 결정하는 게 Producer의 `acks` 옵션이고, <E>누구까지 복사를 받은 상태여야 안전이라 볼 것이냐</E>를 결정하는 게 **`ISR`** (In-Sync Replica) 입니다.
 
-즉 복제는 **<E>어느 순간을 안전이라 선언할 것인가</E>에 대한 약속 체계**입니다. 이 약속을 오해하면 <E>분명 `acks=1` 인데 왜 가끔 유실되지?</E> 같은 실무 함정에 빠집니다. 그래서 다음 섹션에서는 HW(High Watermark)부터 공들여 풀어냅니다.
+즉 복제는 **<E>어느 순간을 안전이라 선언할 것인가</E>에 대한 약속 체계**입니다. 이 약속의 시점이 어디인지에 따라 `acks=1` 인데 가끔 유실이 일어나는 이유가 설명됩니다. 그래서 다음 섹션에서는 `HW` (High Watermark) 부터 공들여 풀어냅니다.
 
 ## 내부 동작
 
-세부 장치를 파기 전에, 클러스터 전체에서 메시지가 어떻게 흐르는지를 먼저 한 화면에 놓고 보겠습니다. 2개 Producer, 3 Partition × RF=3, 3 Consumer 의 구성에서 각 이벤트가 어떤 파티션으로 라우팅되고, 각 replica 의 LEO 가 어떻게 올라가며, HW 가 언제 전진하고, Consumer 가 언제 읽을 수 있게 되는지를 스텝 단위로 따라가보세요. 특히 같은 key 의 두 이벤트(<E>order-42</E>의 a, c)가 왜 같은 파티션으로 가는지가 <E>순서 보장</E>의 출발점입니다.
+세부 장치를 파기 전에, 클러스터 전체에서 메시지가 어떻게 흐르는지를 먼저 한 화면에 놓고 보겠습니다. 아래 시각화는 Producer 2명, 파티션 3개에 `RF=3`, Consumer 3명이라는 단순한 구성입니다. 다음 네 가지를 스텝 단위로 따라가 보세요.
+
+- 각 이벤트가 어떤 파티션에 들어가는가
+- 각 `replica` 의 `LEO` 가 어떻게 올라가는가
+- `HW` 가 언제 한 칸 전진하는가
+- Consumer 가 그 메시지를 언제부터 읽을 수 있는가
+
+특히 같은 key 를 가진 두 이벤트(<E>order-42</E> 의 a, c)는 항상 같은 파티션으로 들어갑니다. 이 점이 Kafka 의 <E>같은 key 끼리는 순서가 보장된다</E> 는 약속의 출발점이니 한 번 더 눈으로 확인해 두면 좋습니다.
 
 <KafkaClusterFlow />
 
 <Callout type="warning" title="이 글의 핵심 포인트">
-  Kafka 복제는 네 가지 장치의 조합으로 내구성을 만듭니다. **Pull 기반 Follower 복제**,
-  **LEO/HW 의 분리**, **ISR 의 편입·축출 규칙**, **`acks` 의 응답 시점 약속**.
+  Kafka 복제는 네 가지 장치의 조합으로 내구성을 만듭니다. **`Pull` 기반 Follower 복제**,
+  **`LEO`/`HW` 의 분리**, **`ISR` 의 편입·축출 규칙**, **`acks` 의 응답 시점 약속**.
   이 넷을 나눠 이해하면 복제된다는 한 줄이 실제로 무엇을 보장하는지가 선명해집니다.
 </Callout>
 
-네 단계로 나눠 보겠습니다. **(1) Follower 는 어떻게 Leader 를 따라가는가** → **(2) LEO 와 HW 의 차이** → **(3) ISR 은 누가 들어가고 누가 쫓겨나는가** → **(4) `acks` 옵션이 실제로 어디서 응답을 보내는가**.
+네 단계로 나눠 보겠습니다.
 
-### Follower 의 Pull 복제
+1. Follower 는 어떻게 Leader 를 따라가는가
+2. `LEO` 와 `HW` 의 차이
+3. `ISR` 은 누가 들어가고 누가 쫓겨나는가
+4. `acks` 옵션이 실제로 어디서 응답을 보내는가
 
-Kafka 입문편에서 Consumer가 Broker에 `poll()` 을 보내 메시지를 가져간다고 했습니다. 놀랍게도 **Follower 도 똑같이 동작**합니다. Follower는 Leader에게 주기적으로 `Fetch` 요청을 보내 <E>내가 offset 152까지 갖고 있는데, 그 다음 것 주세요</E>라고 물어봅니다. Leader는 해당 offset 이후의 메시지들을 응답으로 돌려줍니다.
+### Follower 의 `Pull` 복제
 
-> **비유**: 팀의 모든 회의록을 팀장 노트북에만 저장한다고 해봅시다. 팀원들은 주기적으로 팀장에게 <E>어제 10시 기록까지 복사했는데, 그 뒤 추가된 거 있어?</E> 하고 물어봅니다. 팀장이 먼저 밀어붙이지(push) 팀원이 가져가는(pull) 구조입니다.
+Kafka 입문편에서 Consumer가 Broker에 `poll()` 을 보내 메시지를 가져간다고 했습니다. 놀랍게도 **Follower 도 똑같이 동작**합니다. Follower는 Leader에게 주기적으로 `Fetch` 요청을 보내 <E>내가 offset 152까지 갖고 있는데, 그 다음 것 주세요</E>라고 물어봅니다. Leader는 해당 `offset` 이후의 메시지들을 응답으로 돌려줍니다.
 
-왜 Leader가 Follower에 push하지 않고 이 구조를 썼을까요? **Consumer 와 Follower 가 똑같은 Fetch 프로토콜을 공유**하기 위해서입니다. Broker 입장에서는 Consumer가 읽든 Follower가 복제해 가든 <E>로그의 특정 offset 이후를 읽어 가는</E> 동일한 작업이라 코드 경로가 하나로 통합됩니다. 단순함이 장애 가능성을 줄이죠.
+왜 Leader가 Follower에 `Push` 하지 않고 이 구조를 썼을까요? **Consumer 와 Follower 가 똑같은 `Fetch` 프로토콜을 공유**하기 위해서입니다. Broker 입장에서는 Consumer가 읽든 Follower가 복제해 가든 <E>로그의 특정 offset 이후를 읽어 가는</E> 동일한 작업이라 코드 경로가 하나로 통합됩니다. 단순함이 장애 가능성을 줄이죠.
 
-### LEO 와 HW
+### `LEO` 와 `HW`
 
-여기가 많은 개발자가 처음 걸려 넘어지는 지점입니다. 한 Partition에는 offset이 두 종류로 관리됩니다.
+여기서부터는 `LEO` 와 `HW` 두 `offset` 의 구분이 이후 모든 보장을 떠받치는 출발점입니다. 한 파티션에는 `offset` 이 두 종류로 관리됩니다.
 
 | 개념 | 정의 | 누가 갖고 있나 |
 |---|---|---|
-| **LEO (Log End Offset)** | 내가 가진 로그의 마지막 offset + 1 (다음에 쓸 자리) | replica 마다 독립적으로 가짐 |
-| **HW (High Watermark)** | **모든 ISR replica 가 공통으로 가진** offset 중 최대 | Leader 가 관리, 모든 ISR 공유 |
+| **`LEO`** (Log End Offset) | 내가 가진 로그의 마지막 `offset` + 1 (다음에 쓸 자리) | `replica` 마다 독립적으로 가짐 |
+| **`HW`** (High Watermark) | **모든 `ISR` `replica` 가 공통으로 가진** `offset` 중 최대 | Leader 가 관리, 모든 `ISR` 공유 |
 
-말로는 헷갈리니 숫자로 보겠습니다. Partition 하나에 Leader 1 + Follower 2, 총 3개 replica가 있다고 합시다.
+말로는 헷갈리니 숫자로 보겠습니다. 파티션 하나에 Leader 1 + Follower 2, 총 3개 `replica` 가 있다고 합시다.
 
 ```text
 Producer 가 A, B, C, D, E 를 순서대로 보냈고 Leader 가 다 받았음.
@@ -132,33 +139,33 @@ Follower-2 LEO = 3 (A, B, C)
 → HW = min(Leader, Follower-1, Follower-2) = 3
 ```
 
-**HW = 3 의 의미**: Consumer에게는 offset 0, 1, 2만 읽힙니다(HW 미만). D와 E는 Leader 디스크엔 있지만 아직 외부에 <E>존재</E>하지 않습니다.
+**`HW` = 3 의 의미**: Consumer에게는 `offset` 0, 1, 2만 읽힙니다(`HW` 미만). D와 E는 Leader 디스크엔 있지만 아직 외부에 <E>존재</E>하지 않습니다.
 
-왜 이렇게 할까요? HW까지는 **모든 ISR 이 공통으로 가진 데이터** 이므로 **이 지점까지는 Leader 가 죽어도 살아남는다**는 보장이 있기 때문입니다. D, E는 Leader가 지금 당장 죽으면 Follower-1 또는 Follower-2 중 새 Leader로 뽑힐 쪽이 갖고 있을 수도, 없을 수도 있습니다. Kafka는 이 **불확실한 데이터를 Consumer 에게 노출시키지 않습니다**. 그래야 나중에 리더가 바뀌었을 때 <E>어제 읽었던 D가 사라졌어?</E> 같은 사태가 안 납니다.
+왜 이렇게 할까요? `HW` 까지는 **모든 `ISR` 이 공통으로 가진 데이터** 이므로 **이 지점까지는 Leader 가 죽어도 살아남는다**는 보장이 있기 때문입니다. D, E는 Leader가 지금 당장 죽으면 `Follower-1` 또는 `Follower-2` 중 새 Leader로 뽑힐 쪽이 갖고 있을 수도, 없을 수도 있습니다. Kafka는 이 **불확실한 데이터를 Consumer 에게 노출시키지 않습니다**. 그래야 나중에 리더가 바뀌었을 때 <E>어제 읽었던 D가 사라졌어?</E> 같은 사태가 안 납니다.
 
 <Callout type="error" title="핵심 통찰: Consumer 는 HW 까지만 읽는다">
-  **LEO 까지가 아닙니다**. Kafka 가 <E>읽은 메시지는 나중에 사라지지 않는다</E>를 보장하는 방식은
-  HW 라는 경계선에 있습니다. HW 는 <E>모든 ISR 이 공통으로 가진 offset</E> 이므로, 이 지점
-  이하는 Leader 가 죽어도 ISR 중 누군가에 반드시 남아있습니다.
+  **`LEO` 까지가 아닙니다**. Kafka 가 <E>읽은 메시지는 나중에 사라지지 않는다</E>를 보장하는 방식은
+  `HW` 라는 경계선에 있습니다. `HW` 는 <E>모든 ISR 이 공통으로 가진 offset</E> 이므로, 이 지점
+  이하는 Leader 가 죽어도 `ISR` 중 누군가에 반드시 남아있습니다.
 </Callout>
 
-추상이 많았으니 흐름을 직접 따라가 봅니다. 아래 시각화는 Producer 가 메시지를 보낼 때 LEO가 먼저 오르고, Followers가 Fetch로 따라잡을 때 HW가 뒤이어 전진하는 과정을 단계별로 보여줍니다.
+추상이 많았으니 흐름을 직접 따라가 봅니다. 아래 시각화는 Producer 가 메시지를 보낼 때 `LEO` 가 먼저 오르고, Followers가 `Fetch` 로 따라잡을 때 `HW` 가 뒤이어 전진하는 과정을 단계별로 보여줍니다.
 
 <KafkaReplicationFlow />
 
-### ISR 의 편입·축출
+### `ISR` 의 편입·축출
 
-방금 <E>모든 ISR이 가진 offset의 최소값이 HW</E> 라고 했습니다. 그럼 **ISR 은 뭘까요**.
+방금 <E>모든 ISR이 가진 offset의 최소값이 HW</E> 라고 했습니다. 그럼 **`ISR` 은 뭘까요**.
 
-**ISR(In-Sync Replica)** = <E>Leader 와 **충분히** 싱크되어 있다고 인정받은 replica 들의 집합</E> (Leader 본인 포함).
+**`ISR`** (In-Sync Replica) = <E>Leader 와 **충분히** 싱크되어 있다고 인정받은 replica 들의 집합</E> (Leader 본인 포함).
 
-반대로 말하면, Follower라고 모두 ISR은 아닙니다. 네트워크가 느리거나 Broker가 GC로 멈춰서 Leader를 **한참** 못 따라간 Follower는 ISR에서 **쫓겨납니다**. 그래야 <E>느린 한 명 때문에 HW가 영원히 전진 못 하는</E> 사태를 막을 수 있죠.
+반대로 말하면, Follower라고 모두 `ISR` 은 아닙니다. 네트워크가 느리거나 Broker가 GC로 멈춰서 Leader를 **한참** 못 따라간 Follower는 `ISR` 에서 **쫓겨납니다**. 그래야 <E>느린 한 명 때문에 HW가 영원히 전진 못 하는</E> 사태를 막을 수 있죠.
 
-**기준은 시간**입니다. `replica.lag.time.max.ms` (기본 **30초**). 이 시간 안에 Leader에게 Fetch 요청을 보내고 LEO까지 따라잡지 못하면 ISR에서 제외됩니다. 나중에 다시 따라잡으면 ISR에 재합류합니다.
+**기준은 시간**입니다. `replica.lag.time.max.ms` (기본 **30초**). 이 시간 안에 Leader에게 `Fetch` 요청을 보내고 `LEO` 까지 따라잡지 못하면 `ISR` 에서 제외됩니다. 나중에 다시 따라잡으면 `ISR` 에 재합류합니다.
 
 > **비유**: 스터디 모임에서 공유 문서를 같이 쓴다고 해봅시다. 일주일에 한 번이라도 업데이트를 읽고 최신까지 반영한 멤버만 <E>활동 멤버</E> 리스트에 남깁니다. 한 달 동안 문서를 안 연 멤버는 잠시 명단에서 빠집니다 (다시 따라잡으면 복귀). **활동 멤버가 모두 읽은 내용까지만** 외부 사람에게 공식 버전으로 배포합니다. 한 명이 한 달째 잠수한다고 공식 배포를 멈출 순 없잖아요.
 
-이 단순한 규칙이 많은 것을 풀어냅니다. ISR에서 쫓겨난 Follower가 있다고 해서 클러스터 전체가 멈추지 않고(HW는 **남은 ISR** 만으로 계산되어 계속 전진), 반대로 ISR이 줄어든다는 건 <E>안전 마진이 줄어들었다</E>는 경고로 모니터링의 핵심 지표가 됩니다. 뒤에서 볼 **리더 재선출은 ISR 안에서만** 후보를 뽑습니다. ISR 밖 replica는 데이터가 뒤처져 있기 때문이죠.
+이 단순한 규칙이 많은 것을 풀어냅니다. `ISR` 에서 쫓겨난 Follower가 있다고 해서 클러스터 전체가 멈추지 않고(`HW` 는 **남은 `ISR`** 만으로 계산되어 계속 전진), 반대로 `ISR` 이 줄어든다는 건 <E>안전 마진이 줄어들었다</E>는 경고로 모니터링의 핵심 지표가 됩니다. 뒤에서 볼 **리더 재선출은 `ISR` 안에서만** 후보를 뽑습니다. `ISR` 밖 `replica` 는 데이터가 뒤처져 있기 때문이죠.
 
 ### `acks` 의 응답 시점
 
@@ -171,15 +178,15 @@ Producer가 `send(message)` 를 호출했을 때 Broker가 <E>응답(ack)</E>을
 `acks=1` 의 유실 시나리오를 구체적으로 풀어보면 이렇습니다.
 
 1. Producer → Leader: <E>메시지 M 저장해줘</E>
-2. Leader 디스크에 M 기록. LEO=100
+2. Leader 디스크에 M 기록. `LEO=100`
 3. Leader → Producer: <E>OK, 받았어</E> (ack 리턴)
 4. Follower 들이 M 을 복제하기 전에 Leader 프로세스 죽음
-5. Follower 중 한 명(LEO=99)이 새 Leader 로 승격
+5. Follower 중 한 명(`LEO=99`)이 새 Leader 로 승격
 6. M 은 어디에도 없음. 영구 유실
 
-Producer는 3단계에서 <E>성공</E> 응답을 이미 받았으니 안전하다고 믿고 다음 처리를 진행합니다. 그런데 데이터는 사라졌죠. 이게 `acks=1` 의 함정입니다.
+Producer는 3단계에서 <E>성공</E> 응답을 이미 받았으니 안전하다고 믿고 다음 처리를 진행합니다. 그런데 데이터는 사라졌죠. `acks=1` 이 <E>Leader 디스크에 닿으면 성공</E> 으로 응답 시점을 정의하기 때문에, Follower 복제 이전 구간이 그대로 유실 창으로 남습니다.
 
-`acks=all` 은 2단계와 3단계 사이에 **ISR 전체가 M 을 복제 완료할 때까지 기다리는** 단계가 들어갑니다. 이 단계가 끝나야 HW가 M을 포함해 전진하고, 그때 비로소 Producer에 응답이 갑니다. Leader가 응답 직후 죽어도 ISR 중 누군가는 M을 갖고 있으니 유실이 없습니다. `acks` 는 Producer의 <E>안전 선언</E>과 Kafka의 <E>안전 보장</E>을 맞추는 계약인 셈입니다. `acks=1` 을 쓰면서 <E>유실 없어야 해</E>를 기대하면 안 됩니다.
+`acks=all` 은 2단계와 3단계 사이에 **`ISR` 전체가 M 을 복제 완료할 때까지 기다리는** 단계가 들어갑니다. 이 단계가 끝나야 `HW` 가 M을 포함해 전진하고, 그때 비로소 Producer에 응답이 갑니다. Leader가 응답 직후 죽어도 `ISR` 중 누군가는 M을 갖고 있으니 유실이 없습니다. `acks` 는 Producer의 <E>안전 선언</E>과 Kafka의 <E>안전 보장</E>을 맞추는 계약인 셈입니다. `acks=1` 을 쓰면서 <E>유실 없어야 해</E>를 기대하면 안 됩니다.
 
 ## 실전 문제
 
@@ -187,7 +194,7 @@ Replication이 <E>내구성 + 가용성</E>을 준다고 했지만 이 둘은 �
 
 ### `acks=all` 만으로는 부족하다
 
-`acks=all` 은 <E>ISR 전체에 복제되면 응답</E>이라고 했습니다. 그런데 **ISR 이 1명이면?** 즉, Leader만 남고 Follower 둘 다 ISR에서 쫓겨난 상태에서 `acks=all` 을 쓰면 어떻게 될까요.
+`acks=all` 은 <E>ISR 전체에 복제되면 응답</E>이라고 했습니다. 그런데 **`ISR` 이 1명이면?** 즉, Leader만 남고 Follower 둘 다 `ISR` 에서 쫓겨난 상태에서 `acks=all` 을 쓰면 어떻게 될까요.
 
 ```text
 Replica 3개 중:
@@ -220,37 +227,41 @@ ISR 크기 = 1 → Producer 에 NotEnoughReplicasException, 쓰기 거부
 
 이 조합이 의미하는 바는 <E>세 개 중 하나가 죽어도 쓰기 계속, 두 개가 죽으면 쓰기 중단(유실 대신)</E>. 내구성을 우선한 양자택일이죠.
 
-> **흔한 오해**: <E>`acks=all` 만 주면 끝 아닌가요?</E> `min.insync.replicas=1` (기본값)에서는 ISR이 Leader 하나로 쪼그라들어도 응답이 오므로 유실 창이 열립니다. **`min.insync.replicas=2` 이상으로 명시해야 `acks=all` 이 진짜 보장이 됩니다**.
+> **흔한 오해**: <E>`acks=all` 만 주면 끝 아닌가요?</E> `min.insync.replicas=1` (기본값)에서는 `ISR` 이 Leader 하나로 쪼그라들어도 응답이 오므로 유실 창이 열립니다. **`min.insync.replicas=2` 이상으로 명시해야 `acks=all` 이 진짜 보장이 됩니다**.
 
 ### Leader 장애와 재선출
 
 Leader가 죽었을 때 자동으로 새 Leader가 뽑힌다고 했는데, 이 과정을 누가 조율할까요?
 
-Kafka 클러스터에는 **Controller** 라는 특별한 Broker가 하나 있습니다. 보통 Broker는 데이터만 다루지만, Controller는 그에 더해 **메타데이터 관리**를 겸직합니다. 어느 파티션의 Leader가 누구인지, ISR에 누가 있는지, 브로커가 살아있는지 같은 **클러스터 상태를 유일하게 결정하는 역할**입니다. (과거엔 Zookeeper, 최신 버전은 KRaft가 이 합의를 뒷받침합니다.)
+Kafka 클러스터에는 **Controller** 라는 특별한 Broker가 하나 있습니다. 보통 Broker는 데이터만 다루지만, Controller는 그에 더해 **메타데이터 관리**를 겸직합니다. 어느 파티션의 Leader가 누구인지, `ISR` 에 누가 있는지, 브로커가 살아있는지 같은 **클러스터 상태를 유일하게 결정하는 역할**입니다.
+
+<Callout type="info" title="합의 기능의 변화">
+  합의 기능을 Kafka 2.8 버전 이전엔 Zookeeper가 담당했고, 그 이후로는 KRaft를 사용합니다.
+</Callout>
 
 재선출은 다음 6단계로 흐릅니다.
 
-1. **감지**: Broker-1(Leader) 다운. Controller 가 heartbeat 끊김을 감지 (수 초 이내)
+1. **감지**: `Broker-1` (Leader) 다운. Controller 가 heartbeat 끊김을 감지 (수 초 이내)
 2. **판정**: Controller 가 <E>Leader 부재</E> 상태를 확정
-3. **후보 선정**: Controller 가 해당 파티션의 ISR 조회. 살아있는 ISR 중 하나 선택
-4. **승격**: 선택된 replica 를 새 Leader 로 지정
+3. **후보 선정**: Controller 가 해당 파티션의 `ISR` 조회. 살아있는 `ISR` 중 하나 선택
+4. **승격**: 선택된 `replica` 를 새 Leader 로 지정
 5. **전파**: 변경된 메타데이터를 모든 Broker 와 클라이언트에게 전파
 6. **재연결**: Producer/Consumer 가 새 Leader 에 재연결, 쓰기/읽기 재개
 
-핵심은 3단계입니다. **후보는 ISR 안에서만** 뽑습니다. ISR 밖의 Follower는 데이터가 뒤처져 있으므로 리더로 뽑으면 HW 이전에 이미 보장됐던 데이터가 사라질 수 있기 때문입니다.
+핵심은 3단계입니다. **후보는 `ISR` 안에서만** 뽑습니다. `ISR` 밖의 Follower는 데이터가 뒤처져 있으므로 리더로 뽑으면 `HW` 이전에 이미 보장됐던 데이터가 사라질 수 있기 때문입니다.
 
-> **비유**: 축구 감독이 경기 중 쓰러졌습니다. 코치가 누구를 대행으로 뽑을까요? 경기 내내 옆에서 전술을 같이 공유한 **수석 코치들(ISR)** 중에서 뽑습니다. 하프타임 내내 자리를 비웠던 스태프(ISR 밖)를 뽑으면 지난 전반 45분 전술이 전부 날아갑니다.
+> **비유**: 축구 감독이 경기 중 쓰러졌습니다. 코치가 누구를 대행으로 뽑을까요? 경기 내내 옆에서 전술을 같이 공유한 **수석 코치들(`ISR`)** 중에서 뽑습니다. 하프타임 내내 자리를 비웠던 스태프(`ISR` 밖)를 뽑으면 지난 전반 45분 전술이 전부 날아갑니다.
 
 <KafkaLeaderFailover />
 
 ### Unclean Leader Election
 
-**ISR 이 모두 죽었다면** 어떡할까요? Leader도 죽고 모든 Follower도 ISR에서 쫓겨났거나 같이 죽은 상황. Controller는 두 가지 선택 사이에 놓입니다.
+**`ISR` 이 모두 죽었다면** 어떡할까요? Leader도 죽고 모든 Follower도 `ISR` 에서 쫓겨났거나 같이 죽은 상황. Controller는 두 가지 선택 사이에 놓입니다.
 
 | 선택 | 동작 | 결과 |
 |---|---|---|
-| **Clean (기본값)** | ISR 복귀까지 기다림. 파티션은 offline, 쓰기 불가 | 데이터 유실 없음 / **가용성 중단** |
-| **Unclean** | ISR 밖의 replica(가장 덜 뒤처진 것) 를 Leader 로 승격 | 가용성 회복 / **일부 유실** |
+| **Clean (기본값)** | `ISR` 복귀까지 기다림. 파티션은 offline, 쓰기 불가 | 데이터 유실 없음 / **가용성 중단** |
+| **Unclean** | `ISR` 밖의 `replica` (가장 덜 뒤처진 것) 를 Leader 로 승격 | 가용성 회복 / **일부 유실** |
 
 이 선택은 `unclean.leader.election.enable` 설정으로 제어됩니다. **기본값은 `false`** (= Clean). Kafka가 기본적으로 <E>애매하면 쓰기를 멈춰라</E> 쪽에 서 있다는 뜻입니다.
 
@@ -277,13 +288,13 @@ Follower-2 만 살아남아 unclean election 으로 새 Leader 가 됨.
 
 그럼에도 Unclean을 켜는 이유는 한 가지입니다. <E>**몇 분의 서비스 중단 vs 몇 건의 데이터 유실**</E> 에서 전자가 더 치명적인 비즈니스(실시간 광고 입찰, 모니터링 메트릭 등)에서는 유실을 감수하는 게 합리적이기 때문입니다. 결제·금융처럼 정합성이 핵심인 도메인에서는 Clean을 유지합니다. 기본값을 바꾸기 전에 이 질문에 답할 수 있어야 합니다.
 
-### ISR 흔들림의 조용한 약화
+### `ISR` 흔들림의 조용한 약화
 
 마지막 문제는 장애 상황이 아니라 **정상 운영 중의 점진적 약화**입니다.
 
-`replica.lag.time.max.ms = 30000` (30초)이 기본값이라고 했습니다. 이 값이 너무 짧으면 일시적 네트워크 흔들림이나 GC pause로 Follower가 잠깐 밀려도 ISR에서 쫓겨납니다. ISR 크기가 떨어지면 `acks=all` 쓰기 지연은 감소하지만 **내구성 마진**도 같이 감소해 `min.insync.replicas` 한계에 가까워집니다. 극단적으로는 Producer 쓰기 거부(`NotEnoughReplicasException`)로 서비스 중단입니다. 반대로 너무 길면 실제로 죽은 Follower도 한참 ISR에 남아 HW 전진을 막고 `acks=all` 응답 지연이 커집니다.
+`replica.lag.time.max.ms = 30000` (30초)이 기본값이라고 했습니다. 이 값이 너무 짧으면 일시적 네트워크 흔들림이나 GC pause로 Follower가 잠깐 밀려도 `ISR` 에서 쫓겨납니다. `ISR` 크기가 떨어지면 `acks=all` 쓰기 지연은 감소하지만 **내구성 마진**도 같이 감소해 `min.insync.replicas` 한계에 가까워집니다. 극단적으로는 Producer 쓰기 거부(`NotEnoughReplicasException`)로 서비스 중단입니다. 반대로 너무 길면 실제로 죽은 Follower도 한참 `ISR` 에 남아 `HW` 전진을 막고 `acks=all` 응답 지연이 커집니다.
 
-대응은 운영 모니터링입니다. Kafka는 `UnderReplicatedPartitions` 와 `UnderMinIsrPartitionCount` 라는 JMX 지표를 내놓습니다. **이 둘이 0이 아닌 상태가 지속되면 장애 전 경보로 받아야 합니다**. ISR이 흔들리는 건 <E>지금 당장의 유실</E>이 아니라 <E>다음 장애 때의 유실 가능성</E>을 알리는 신호입니다.
+대응은 운영 모니터링입니다. Kafka는 `UnderReplicatedPartitions` 와 `UnderMinIsrPartitionCount` 라는 JMX 지표를 내놓습니다. **이 둘이 0이 아닌 상태가 지속되면 장애 전 경보로 받아야 합니다**. `ISR` 이 흔들리는 건 <E>지금 당장의 유실</E>이 아니라 <E>다음 장애 때의 유실 가능성</E>을 알리는 신호입니다.
 
 <RelatedPost slug="two-generals-problem" type="deep-dive" />
 
@@ -291,13 +302,13 @@ Follower-2 만 살아남아 unclean election 으로 새 Leader 가 됨.
 
 복제는 공짜가 아닙니다. 핵심만 두 가지.
 
-**저장 공간은 RF 배수로 늘어납니다.** RF=3이면 같은 메시지를 Broker 3대에 중복 저장하므로 디스크 사용량이 3배입니다. 대용량 토픽일수록 디스크 비용이 직접 영향을 받습니다.
+**저장 공간은 RF 배수로 늘어납니다.** `RF=3` 이면 같은 메시지를 Broker 3대에 중복 저장하므로 디스크 사용량이 3배입니다. 대용량 토픽일수록 디스크 비용이 직접 영향을 받습니다.
 
-**`acks=all` 은 쓰기 지연을 Follower 복제 시간만큼 늘립니다.** Leader 디스크 쓰기 + Follower 복제 + HW 전진까지 기다리므로 `acks=1` 보다 체감 응답 시간이 길어집니다. 그 대신 내구성 보장을 얻는 거죠. 실무에서는 <E>결제는 `acks=all`, 로그 수집은 `acks=1`</E> 식으로 **토픽 성격에 따라 다른 세기**를 적용합니다. 이 트레이드오프의 실제 측정과 튜닝은 후속 글 <E>Kafka 운영 튜닝</E>에서 다룹니다.
+**`acks=all` 은 쓰기 지연을 Follower 복제 시간만큼 늘립니다.** Leader 디스크 쓰기 + Follower 복제 + `HW` 전진까지 기다리므로 `acks=1` 보다 체감 응답 시간이 길어집니다. 그 대신 내구성 보장을 얻는 거죠. 실무에서는 <E>결제는 `acks=all`, 로그 수집은 `acks=1`</E> 식으로 **토픽 성격에 따라 다른 세기**를 적용합니다. 이 트레이드오프의 실제 측정과 튜닝은 후속 글 <E>Kafka 운영 튜닝</E>에서 다룹니다.
 
 ## 마무리
 
-Kafka 복제를 이해하는 가장 짧은 경로는 <E>그냥 따라 쓰기</E>가 아니라 <E>**어느 순간을 안전이라 선언할 것인가의 약속 체계**</E> 라는 틀로 바라보는 것입니다. 그 약속은 네 장치가 맞물려 만들어집니다. Pull 기반 Follower 복제, LEO/HW 의 분리로 <E>공개된 데이터</E>와 <E>쓰기만 된 데이터</E>를 구분하는 경계, ISR의 편입·축출로 느린 replica가 전체를 막지 못하게 하는 장치, 그리고 `acks` + `min.insync.replicas` 로 Producer의 <E>성공</E>과 Kafka의 <E>안전</E>을 일치시키는 계약. 이 넷을 합쳐야 비로소 Leader가 죽어도 Consumer의 과거 읽기가 거짓이 되지 않는 HA가 완성됩니다. 다음 편은 Consumer Group Rebalance로, 파티션이 Consumer에게 분배되는 과정을 같은 각도(내부 메커니즘 + 실전 문제)로 풀어냅니다.
+Kafka 복제를 이해하는 가장 짧은 경로는 <E>그냥 따라 쓰기</E>가 아니라 <E>**어느 순간을 안전이라 선언할 것인가의 약속 체계**</E> 라는 틀로 바라보는 것입니다. 그 약속은 네 장치가 맞물려 만들어집니다. `Pull` 기반 Follower 복제, `LEO`/`HW` 의 분리로 <E>공개된 데이터</E>와 <E>쓰기만 된 데이터</E>를 구분하는 경계, `ISR` 의 편입·축출로 느린 `replica` 가 전체를 막지 못하게 하는 장치, 그리고 `acks` + `min.insync.replicas` 로 Producer의 <E>성공</E>과 Kafka의 <E>안전</E>을 일치시키는 계약. 이 넷을 합쳐야 비로소 Leader가 죽어도 Consumer의 과거 읽기가 거짓이 되지 않는 HA가 완성됩니다. 다음 편은 Consumer Group Rebalance로, 파티션이 Consumer에게 분배되는 과정을 같은 각도(내부 메커니즘 + 실전 문제)로 풀어냅니다.
 
 ## 참고 자료
 
