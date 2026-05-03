@@ -141,12 +141,15 @@ cd mini-coupang/shared/docker
 docker compose -f docker-compose-local.yml up -d --build
 ```
 
-서비스 5종 + Kafka UI + RedisInsight + Prometheus + Grafana 모두 기동.
+서비스 5종 + Kafka **3-broker KRaft 클러스터** + Kafka UI + RedisInsight + Prometheus + Grafana 모두 기동. 다중 브로커는 leader fail-over, ISR shrink·expand, partition rebalance 같은 시나리오를 학습할 수 있도록 RF=3 / MIN_ISR=2 로 구성됩니다 (dev / integration-tests 는 단일 브로커 유지).
 
 - 서비스: `http://localhost:8081` ~ `http://localhost:8085`
+- Kafka brokers (호스트 접근): `localhost:29092`, `localhost:29192`, `localhost:29292`
 - Kafka UI: `http://localhost:18099`
 - RedisInsight: `http://localhost:15540`
 - Grafana: `http://localhost:3000` (admin/admin)
 - Prometheus: `http://localhost:9090`
 
 헬스체크: `curl http://localhost:8081/actuator/health` (각 포트 동일 패턴).
+
+> RF 효과를 보려면 producer 설정에 `acks=all` + `enable.idempotence=true` 가 필요합니다. acks=1 이면 leader 만 받고 응답하므로 다중 브로커가 무의미.

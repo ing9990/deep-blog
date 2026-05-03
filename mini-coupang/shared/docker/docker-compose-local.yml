@@ -1,6 +1,12 @@
 # 로컬 풀 스택 (스테이징 유사 환경). 인프라 + 5개 서비스 + 모니터링 + 관찰 UI.
 # 호스트에서 실제 API 요청을 받을 수 있도록 서비스는 표준 포트(8081-8085) 그대로 노출.
 #
+# Kafka 는 KRaft 3-broker 클러스터 (combined mode: broker+controller).
+# - 컨테이너 내부: kafka-1:9092, kafka-2:9092, kafka-3:9092
+# - 호스트 접근:  localhost:29092, localhost:29192, localhost:29292
+# RF=3, MIN_ISR=2 로 leader fail-over / ISR shrink·expand 시나리오 학습 가능.
+# 클라이언트가 acks=all + enable.idempotence=true 를 써야 RF 효과를 봄.
+#
 # 기동:  docker compose -f docker-compose-local.yml up -d --build
 # 상태:  docker compose -f docker-compose-local.yml ps
 # 종료:  docker compose -f docker-compose-local.yml down [-v]
@@ -15,6 +21,30 @@
 #   RedisInsight         http://localhost:15540
 #   Prometheus           http://localhost:9090
 #   Grafana              http://localhost:3000   (admin/admin)
+
+x-kafka-common: &kafka-common
+  image: confluentinc/cp-kafka:7.7.1
+  restart: unless-stopped
+  environment: &kafka-common-env
+    KAFKA_PROCESS_ROLES: broker,controller
+    KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+    KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+    KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+    KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+    KAFKA_MIN_INSYNC_REPLICAS: 2
+    KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    KAFKA_NUM_PARTITIONS: 3
+    CLUSTER_ID: "mini-coupang-local"
+  healthcheck:
+    test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+    interval: 10s
+    timeout: 5s
+    retries: 20
+    start_period: 60s
 
 services:
   mysql:
@@ -72,37 +102,44 @@ services:
       redis:
         condition: service_healthy
 
-  kafka:
-    image: confluentinc/cp-kafka:7.7.1
-    container_name: mini-coupang-local-kafka
-    restart: unless-stopped
+  kafka-1:
+    <<: *kafka-common
+    container_name: mini-coupang-local-kafka-1
     ports:
-      - "9092:9092"
-      - "29092:29092"
+      - "29092:29092"   # 호스트 → broker-1 EXTERNAL
     environment:
+      <<: *kafka-common-env
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_NUM_PARTITIONS: 3
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-      CLUSTER_ID: "mini-coupang-local"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9092,EXTERNAL://localhost:29092
     volumes:
-      - kafka-data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      - kafka-1-data:/var/lib/kafka/data
+
+  kafka-2:
+    <<: *kafka-common
+    container_name: mini-coupang-local-kafka-2
+    ports:
+      - "29192:29092"   # 호스트 → broker-2 EXTERNAL
+    environment:
+      <<: *kafka-common-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:9092,EXTERNAL://localhost:29192
+    volumes:
+      - kafka-2-data:/var/lib/kafka/data
+
+  kafka-3:
+    <<: *kafka-common
+    container_name: mini-coupang-local-kafka-3
+    ports:
+      - "29292:29092"   # 호스트 → broker-3 EXTERNAL
+    environment:
+      <<: *kafka-common-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-3:9092,EXTERNAL://localhost:29292
+    volumes:
+      - kafka-3-data:/var/lib/kafka/data
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -112,11 +149,12 @@ services:
       - "18099:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: mini-coupang-local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       DYNAMIC_CONFIG_ENABLED: "true"
     depends_on:
-      kafka:
-        condition: service_healthy
+      kafka-1: { condition: service_healthy }
+      kafka-2: { condition: service_healthy }
+      kafka-3: { condition: service_healthy }
 
   prometheus:
     image: prom/prometheus:v2.55.0
@@ -160,11 +198,13 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/member?serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
       SPRING_DATA_REDIS_HOST: redis
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
-      kafka: { condition: service_healthy }
+      kafka-1: { condition: service_healthy }
+      kafka-2: { condition: service_healthy }
+      kafka-3: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/actuator/health"]
       interval: 5s
@@ -182,12 +222,14 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/product?serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
       SPRING_DATA_REDIS_HOST: redis
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       CLIENTS_MEMBER_SERVER_URL: http://member-server:8081
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
-      kafka: { condition: service_healthy }
+      kafka-1: { condition: service_healthy }
+      kafka-2: { condition: service_healthy }
+      kafka-3: { condition: service_healthy }
       member-server: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
@@ -205,12 +247,14 @@ services:
       - "8083:8083"
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/payment?serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       PAYMENT_PG_MIN_LATENCY_MS: "0"
       PAYMENT_PG_MAX_LATENCY_MS: "10"
     depends_on:
       mysql: { condition: service_healthy }
-      kafka: { condition: service_healthy }
+      kafka-1: { condition: service_healthy }
+      kafka-2: { condition: service_healthy }
+      kafka-3: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8083/actuator/health"]
       interval: 5s
@@ -228,7 +272,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/orders?serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
       SPRING_DATA_REDIS_HOST: redis
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       CLIENTS_MEMBER_SERVER_URL: http://member-server:8081
       CLIENTS_PRODUCT_SERVER_URL: http://product-server:8082
       CLIENTS_PAYMENT_SERVER_URL: http://payment-server:8083
@@ -252,10 +296,12 @@ services:
       - "8085:8085"
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/notification?serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
     depends_on:
       mysql: { condition: service_healthy }
-      kafka: { condition: service_healthy }
+      kafka-1: { condition: service_healthy }
+      kafka-2: { condition: service_healthy }
+      kafka-3: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/actuator/health"]
       interval: 5s
@@ -266,6 +312,8 @@ services:
 volumes:
   mysql-data:
   redis-data:
-  kafka-data:
+  kafka-1-data:
+  kafka-2-data:
+  kafka-3-data:
   prometheus-data:
   grafana-data:
