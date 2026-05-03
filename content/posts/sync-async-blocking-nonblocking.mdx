@@ -3,7 +3,7 @@ title:
   ko: "동기·비동기와 블로킹·논블로킹"
   en: "Sync/Async and Blocking/Non-Blocking"
 slug: "sync-async-blocking-nonblocking"
-date: 2026-03-04
+date: 2026-01-01
 tags:
   - cs
   - backend
@@ -135,8 +135,8 @@ JVM 관점에서 `suspend` 지점에서 스레드는 **해제되어 다른 corou
 - **Async + Blocking** 데이터 준비 감시는 비동기, 실제 복사는 여전히 sync.
 - **Async + Non-Blocking** 두 단계 모두 커널이 처리, 완료 시 알림.
 
-<Callout type="warning" title="흔한 오해: epoll은 async가 아니다">
-  epoll은 '어느 진동벨이 울렸는지' 감시만 해주는 도구입니다. 음식을 집어 가는(`read()`) 행위는 여전히 sync + blocking입니다. 이 구분을 놓치면 Node.js가 왜 single-thread인데 빠른지, Java NIO의 non-blocking read가 왜 여전히 sync인지를 설명할 수 없게 됩니다.
+<Callout type="info" title="epoll은 readiness 감시일 뿐 데이터 복사는 sync다">
+  epoll은 <E>어떤 fd에 데이터가 도착했는가</E>만 감시해 주는 readiness notification 메커니즘이기 때문에, 알림을 받은 뒤 호출하는 `read()`는 여전히 sync + blocking입니다. 이 구분을 잡고 있으면 Node.js가 single-thread임에도 빠른 이유(I/O 대기 시간을 다른 요청 처리에 쓰는 것)와 Java NIO의 non-blocking read가 여전히 sync인 이유(데이터 복사 단계는 호출자 책임)가 같은 모델로 설명됩니다.
 </Callout>
 
 ## C10K 문제
@@ -279,7 +279,7 @@ Async 모델의 진짜 비용은 코드 바깥에 있습니다.
   <E>일단 async/reactive로 시작</E>은 안티패턴입니다. Blocking으로 단순하게 시작해 실제 한계에 부딪혔을 때 NIO나 coroutine을 도입하거나, JDK 21+의 Virtual Thread로 blocking 코드를 그대로 수평 확장하는 경로가 가장 낮은 리스크입니다.
 </Callout>
 
-## 흔한 오해
+## 자주 마주치는 구분
 
 이 개념들이 헷갈리는 가장 큰 이유는 **프로그래밍 언어의 추상화가 OS 레벨의 실체를 숨기기** 때문입니다. 코드에 `await`라고 쓰여 있어도 런타임이 실제로 어떤 시스템 콜을 호출하는지는 언어마다 다릅니다.
 

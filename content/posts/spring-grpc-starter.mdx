@@ -3,7 +3,7 @@ title:
   ko: "spring-grpc"
   en: "spring-grpc"
 slug: "spring-grpc-starter"
-date: 2026-04-23
+date: 2026-04-11
 tags:
   - backend
   - gRPC
@@ -61,16 +61,16 @@ public class RawGrpcApp {
 }
 ```
 
-spring-grpc가 이 배선을 대신 처리합니다. 크게 네 가지입니다.
+spring-grpc가 이 연결을 대신 처리합니다. 크게 네 가지입니다.
 
 | 자동화 영역 | spring-grpc가 대신 하는 일 |
 |---|---|
 | 서버 라이프사이클 | `@GrpcService` 빈을 모아 Boot 기동 시 포트 열기, `ApplicationContext` 종료 시 graceful shutdown |
-| 채널·스텁 배선 | 생성된 `*Grpc$...Stub`을 자동 스캔해 빈으로 등록, 이름 채널과 묶어줌 |
+| 채널·스텁 연결 | 생성된 `*Grpc$...Stub`을 자동 스캔해 빈으로 등록, 이름 채널과 묶어줌 |
 | 외부 설정화 | 포트·TLS·keepalive·메시지 크기 상한을 `application.properties`로 외부화 |
 | 공용 인프라 | `SslBundles`, Micrometer Observation, Actuator Health를 gRPC 쪽에도 연결 |
 
-한 가지 오해만 짚어 두면, spring-grpc는 gRPC 자체를 대체하지 않습니다. 내부적으로는 여전히 `grpc-java`의 `Server`와 `ManagedChannel`을 씁니다. 스타터는 이 객체들을 만들고 라이프사이클에 맞춰 관리하고 설정 소스와 묶어주는 <E>배선 층</E>만 Spring Boot 스타일로 표준화한 것입니다. 따라서 `ServerInterceptor`, `ClientInterceptor`, `Metadata` 같은 `grpc-java` API는 그대로 유효합니다.
+한 가지 오해만 짚어 두면, spring-grpc는 gRPC 자체를 대체하지 않습니다. 내부적으로는 여전히 `grpc-java`의 `Server`와 `ManagedChannel`을 씁니다. 스타터는 이 객체들을 만들고 라이프사이클에 맞춰 관리하고 설정 소스와 묶어주는 <E>연결 계층</E>만 Spring Boot 스타일로 표준화한 것입니다. 따라서 `ServerInterceptor`, `ClientInterceptor`, `Metadata` 같은 `grpc-java` API는 그대로 유효합니다.
 
 ## 기초 문법
 
@@ -78,8 +78,8 @@ spring-grpc가 이 배선을 대신 처리합니다. 크게 네 가지입니다.
   spring-grpc는 `grpc-java`를 대체하지 않고 감쌉니다. 아래 다섯 가지 문법 단위는 전부 기존 `grpc-java` API 위에 Spring Boot의 자동설정, 의존성 주입, 외부 설정을 얹은 얇은 층입니다. 각 어노테이션과 설정 키를 볼 때 <E>이게 원래 `grpc-java`에서는 무엇이었는가</E>를 떠올리면 구조가 선명해집니다.
 </Callout>
 
-<Callout type="error" title="핵심 통찰: spring-grpc는 새로운 RPC가 아니라 Boot 규칙으로의 재배선">
-  spring-grpc의 모든 어노테이션과 설정 키는 결국 `grpc-java`의 `Server`, `ManagedChannel`, `BindableService` 객체를 Spring이 대신 만들고 연결해 주는 것으로 환원됩니다. 스타터가 만드는 것은 새로운 RPC가 아니라, 기존 gRPC 배선을 Boot의 라이프사이클·설정·DI 규칙 안으로 끌어오는 변환 층입니다.
+<Callout type="error" title="핵심 통찰: spring-grpc는 새로운 RPC가 아니라 Boot 규칙으로의 재구성">
+  spring-grpc의 모든 어노테이션과 설정 키는 결국 `grpc-java`의 `Server`, `ManagedChannel`, `BindableService` 객체를 Spring이 대신 만들고 연결해 주는 것으로 환원됩니다. 스타터가 만드는 것은 새로운 RPC가 아니라, 기존 gRPC 연결을 Boot의 라이프사이클·설정·DI 규칙 안으로 끌어오는 변환 층입니다.
 </Callout>
 
 ### 의존성 선택
@@ -300,7 +300,7 @@ management.observations.annotations.enabled=true
 
 ## 마무리
 
-spring-grpc 위에서 작성하는 모든 코드는 결국 `grpc-java`의 `Server`, `ManagedChannel`, `BindableService`로 환원됩니다. 스타터가 해 주는 일은 이 객체들을 Spring Boot의 라이프사이클, DI, 외부 설정, 공용 인프라 규칙에 맞춰 대신 배선해 주는 것입니다. 어노테이션과 설정 키를 볼 때마다 `grpc-java`의 어떤 개념을 대신하고 있는지 매핑해 두면, 새로운 훅이 등장해도 구조가 흔들리지 않습니다.
+spring-grpc 위에서 작성하는 모든 코드는 결국 `grpc-java`의 `Server`, `ManagedChannel`, `BindableService`로 환원됩니다. 스타터가 해 주는 일은 이 객체들을 Spring Boot의 라이프사이클, DI, 외부 설정, 공용 인프라 규칙에 맞춰 대신 연결해 주는 것입니다. 어노테이션과 설정 키를 볼 때마다 `grpc-java`의 어떤 개념을 대신하고 있는지 매핑해 두면, 새로운 훅이 등장해도 구조가 흔들리지 않습니다.
 
 ## 참고 자료
 

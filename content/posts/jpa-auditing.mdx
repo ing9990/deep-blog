@@ -3,7 +3,7 @@ title:
   ko: "JPA Auditing 딥다이브"
   en: "JPA Auditing Deep Dive"
 slug: "jpa-auditing"
-date: 2026-04-22
+date: 2026-04-05
 tags:
   - Backend
   - Spring
@@ -16,7 +16,7 @@ keywords:
   - "@LastModifiedDate"
   - "@MappedSuperclass"
 summary:
-  ko: "Spring Data JPA의 @EnableJpaAuditing과 AuditingEntityListener가 엔티티 lifecycle 콜백 위에 올라타 @CreatedDate·@LastModifiedDate를 자동 주입하는 내부 배선과 실행 흐름을 이해할 수 있습니다. persist·update·벌크 UPDATE 세 경로의 차이와 updated_at이 stale이 되는 실전 함정도 함께 다룹니다."
+  ko: "Spring Data JPA의 @EnableJpaAuditing과 AuditingEntityListener가 엔티티 lifecycle 콜백 위에 올라타 @CreatedDate·@LastModifiedDate를 자동 주입하는 내부 등록 흐름과 실행 흐름을 이해할 수 있습니다. persist·update·벌크 UPDATE 세 경로의 차이와 updated_at이 stale이 되는 실전 차이도 함께 다룹니다."
   en: "Understand how Spring Data JPA's @EnableJpaAuditing and AuditingEntityListener hook into JPA lifecycle callbacks to inject @CreatedDate and @LastModifiedDate. Covers the wiring, execution paths for persist/update/bulk-update, and the pitfalls that leave updated_at stale."
 category: spring-boot
 relatedServices:
@@ -26,7 +26,7 @@ relatedServices:
 draft: false
 ---
 
-감사 필드(`created_at` / `updated_at`)는 도메인의 책임이 아니라 저장소의 책임입니다. 엔티티마다 손으로 `Instant.now()`를 박는 대신, Spring Data JPA가 제공하는 Auditing 기능이 엔티티 lifecycle 콜백 위에서 이 일을 대신해 줍니다. 이 글은 `@EnableJpaAuditing`이 무엇을 배선하는지, `@CreatedDate`와 `@LastModifiedDate`가 정확히 언제 발화하는지를 내부 동작 수준에서 따라갑니다.
+감사 필드(`created_at` / `updated_at`)는 도메인의 책임이 아니라 저장소의 책임입니다. 엔티티마다 손으로 `Instant.now()`를 박는 대신, Spring Data JPA가 제공하는 Auditing 기능이 엔티티 lifecycle 콜백 위에서 이 일을 대신해 줍니다. 이 글은 `@EnableJpaAuditing`이 무엇을 등록하는지, `@CreatedDate`와 `@LastModifiedDate`가 정확히 언제 발화하는지를 내부 동작 수준에서 따라갑니다.
 
 ## 개요
 
@@ -44,7 +44,7 @@ JPA Auditing은 Spring Data JPA가 제공하는 기능으로, 엔티티가 영�
 - **시간 소스 불일치**: 어떤 곳에선 `LocalDateTime.now()`, 어떤 곳에선 `Instant.now()`, 어떤 곳에선 DB의 `NOW()`. 서로 다른 시각이 섞입니다.
 - **경계 침범**: `Account.create(email, password)` 같은 도메인 정적 팩토리가 감사 필드까지 인자로 받으면 시그니처가 오염됩니다.
 
-JPA Auditing은 이 셋을 한 번에 정리합니다. 엔티티는 `BaseEntity`를 상속하고, 배선은 `@EnableJpaAuditing` 한 줄로 끝납니다. 시간 주입 지점이 **Spring Data 안쪽 하나**로 수렴합니다.
+JPA Auditing은 이 셋을 한 번에 정리합니다. 엔티티는 `BaseEntity`를 상속하고, 등록은 `@EnableJpaAuditing` 한 줄로 끝납니다. 시간 주입 지점이 **Spring Data 안쪽 하나**로 수렴합니다.
 
 ### 등장인물 네 개
 
@@ -53,7 +53,7 @@ JPA Auditing은 이 셋을 한 번에 정리합니다. 엔티티는 `BaseEntity`
 @EntityListeners        →  lifecycle 콜백을 실은 listener를 엔티티에 묶는 JPA 표준
 AuditingEntityListener  →  Spring Data 제공 listener. 실제 주입을 수행
 @EnableJpaAuditing      →  위 listener가 Spring 컨테이너의 AuditingHandler를
-                           볼 수 있게 배선하는 스위치
+                           볼 수 있게 등록하는 스위치
 ```
 
 앞의 두 개는 **JPA 표준**, 뒤의 두 개는 **Spring Data 확장**입니다. 이 구분이 §3 내부 동작을 따라갈 때 결정적으로 중요합니다. JPA 스펙이 열어둔 hook 자리에 Spring Data가 자기 listener를 꽂는 구조입니다.
@@ -198,10 +198,10 @@ public class TestJpaConfig { }
 ## 내부 동작
 
 <Callout type="warning" title="이 섹션의 핵심 포인트">
-  `@CreatedDate`와 `@LastModifiedDate`는 **`save()` 호출 시점이 아니라 Hibernate가 실제로 SQL을 내보낼 때** 값이 박힙니다. 이 미묘한 차이가 벌크 UPDATE 우회, 변경 없는 `save`, 타임존 오차 같은 실전 함정의 근원입니다.
+  `@CreatedDate`와 `@LastModifiedDate`는 **`save()` 호출 시점이 아니라 Hibernate가 실제로 SQL을 내보낼 때** 값이 박힙니다. 이 미묘한 차이가 벌크 UPDATE 우회, 변경 없는 `save`, 타임존 오차 같은 실전 차이의 근원입니다.
 </Callout>
 
-### 부팅 시 배선
+### 부팅 시 연결
 
 `@EnableJpaAuditing` 한 줄이 무엇을 연결하는지가 이 섹션의 출발점입니다. 이 애노테이션은 `JpaAuditingRegistrar`라는 `ImportBeanDefinitionRegistrar`를 import합니다. 그 registrar가 애플리케이션 시작 시점에 **두 개의 빈을 등록**합니다.
 
@@ -209,19 +209,19 @@ public class TestJpaConfig { }
 @EnableJpaAuditing
     └─ imports JpaAuditingRegistrar
           ├─ registers  AuditingHandler                    (실제 주입을 수행하는 워커)
-          └─ registers  AuditingBeanFactoryPostProcessor   (listener ↔ 핸들러 배선)
+          └─ registers  AuditingBeanFactoryPostProcessor   (listener ↔ 핸들러 연결)
 ```
 
 `AuditingEntityListener` 자체는 JPA가 만드는 객체입니다. JPA 스펙상 `@EntityListeners`에 선언된 클래스는 JPA 프로바이더(Hibernate)가 기본 생성자로 인스턴스화합니다. 그렇게 만들어진 listener 객체는 Spring 컨테이너를 전혀 모르는 상태이므로, 그 상태로는 `AuditingHandler`를 볼 방법이 없습니다. 여기서 `AuditingBeanFactoryPostProcessor`가 개입합니다.
 
-이 후처리기는 다음 두 가지를 배선합니다.
+이 후처리기는 다음 두 가지를 등록합니다.
 
 1. `AuditingEntityListener`를 **Spring 빈 정의로 등록**합니다. 이로써 listener 인스턴스가 Spring 컨테이너를 거쳐 생성될 수 있게 됩니다.
 2. Hibernate에게 <E>listener를 만들 때 Spring 컨테이너를 사용하라</E>고 지시하는 연결(`SpringBeanContainer`)이 활성화됩니다. Spring Boot는 `HibernatePropertiesCustomizer`로 이 연결을 자동 구성합니다.
 
 결과적으로 Hibernate가 listener를 새로 찍을 때마다 Spring이 개입해 `ObjectFactory<AuditingHandler>`를 setter로 주입합니다. listener는 핸들러 참조를 들고 런타임에 진입합니다.
 
-`@EnableJpaAuditing`을 빠뜨리면 이 모든 배선이 걸리지 않습니다. `AuditingEntityListener`는 JPA가 콜백은 부를지 몰라도, 내부 핸들러 참조가 없어 아무 필드도 채우지 못합니다. 예외도 로그도 없이 `createdAt`이 `null`로 남습니다. 이게 실전에서 가장 흔한 <E>조용한 실패</E> 모드입니다.
+`@EnableJpaAuditing`을 빠뜨리면 이 모든 등록이 이루어지지 않습니다. `AuditingEntityListener`는 JPA가 콜백은 부를지 몰라도, 내부 핸들러 참조가 없어 아무 필드도 채우지 못합니다. 예외도 로그도 없이 `createdAt`이 `null`로 남습니다. 이게 실전에서 가장 흔한 <E>조용한 실패</E> 모드입니다.
 
 ### 실행 경로 세 갈래
 
@@ -341,9 +341,9 @@ AuditableBeanWrapper로 target의 audit 필드 발견
 
 필드 타입과 provider 반환 타입이 다를 때의 변환 경로가 미묘합니다. 기본 provider가 `LocalDateTime`을 돌려주는데 엔티티 필드가 `Instant`면, 변환 시점에 **시스템 기본 타임존**이 개입합니다. 이 경계에서 생기는 이슈는 바로 다음 소절에서 다룹니다.
 
-### 실전 함정
+### 실전 동작 차이
 
-배선과 실행 흐름을 이해하면 다음 세 가지가 같은 뿌리의 증상이라는 게 보입니다. 공통점은 <E>`save()`만 부르면 알아서 될 것</E>이라는 기대가 깨지는 경계에 있다는 것입니다.
+등록 흐름과 실행 순서을 이해하면 다음 세 가지가 같은 뿌리의 증상이라는 게 보입니다. 공통점은 <E>`save()`만 부르면 알아서 될 것</E>이라는 기대가 깨지는 경계에 있다는 것입니다.
 
 **(1) 벌크 UPDATE의 `updated_at` stale**
 
@@ -382,9 +382,9 @@ public DateTimeProvider utcInstantProvider() {
 
 ## 마무리
 
-JPA Auditing은 <E>엔티티 lifecycle 콜백 위에 올라탄 얇은 자동화</E>입니다. 그래서 콜백이 발화하는 지점에서만 작동하고, 콜백을 우회하는 모든 경로(벌크 UPDATE, 변경 없는 `save`)에서 침묵합니다. 이 단순한 계약을 기억하면 실전에서 만나는 대부분의 함정이 같은 뿌리의 증상으로 읽힙니다.
+JPA Auditing은 <E>엔티티 lifecycle 콜백 위에 올라탄 얇은 자동화</E>입니다. 그래서 콜백이 발화하는 지점에서만 작동하고, 콜백을 우회하는 모든 경로(벌크 UPDATE, 변경 없는 `save`)에서 침묵합니다. 이 단순한 계약을 기억하면 실전에서 만나는 대부분의 지점이 같은 뿌리의 증상으로 읽힙니다.
 
-배선은 `@EnableJpaAuditing` 한 줄이면 끝이지만, 그 한 줄 뒤에는 `JpaAuditingRegistrar` → `AuditingBeanFactoryPostProcessor` → `SpringBeanContainer` → Hibernate listener 인스턴스화까지의 긴 체인이 있습니다. 이 체인이 성립한다는 전제를 이해하면, `createdAt`이 조용히 `null`로 남는 순간에도 어디를 먼저 의심해야 할지가 자명해집니다.
+등록은 `@EnableJpaAuditing` 한 줄이면 끝이지만, 그 한 줄 뒤에는 `JpaAuditingRegistrar` → `AuditingBeanFactoryPostProcessor` → `SpringBeanContainer` → Hibernate listener 인스턴스화까지의 긴 체인이 있습니다. 이 체인이 성립한다는 전제를 이해하면, `createdAt`이 조용히 `null`로 남는 순간에도 어디를 먼저 의심해야 할지가 자명해집니다.
 
 ## 참고 자료
 

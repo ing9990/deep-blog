@@ -3,7 +3,7 @@ title:
   ko: "Mono/Flux"
   en: "Mono/Flux"
 slug: "mono-flux-primer"
-date: 2026-04-07
+date: 2026-03-10
 tags:
   - backend
   - concurrency
@@ -15,13 +15,13 @@ keywords:
   - "Reactive Streams"
   - "Publisher"
 summary:
-  ko: "Spring Reactive와 WebFlux를 처음 접하는 입문자를 위한 Mono/Flux 정리. Publisher 개념과 Cold/Lazy 실행 모델, 연산자 체인이 왜 CompletableFuture 체인보다 편한지, 그리고 입문자가 가장 자주 만드는 4가지 실수(구독 누락, 블로킹 호출 혼입, map/flatMap 혼동, 에러 처리 누락)까지 다룹니다."
+  ko: "Spring Reactive와 WebFlux를 처음 접할 때 필요한 Mono/Flux 정리. Publisher 개념과 Cold/Lazy 실행 모델, 연산자 체인이 CompletableFuture 체인보다 편한 이유, 그리고 처음 작성할 때 자주 마주치는 네 가지 패턴(구독 누락, 블로킹 호출 혼입, map과 flatMap 선택, 에러 처리)까지 정리합니다."
   en: "A beginner primer on Mono/Flux for newcomers to Spring Reactive/WebFlux. Covers the Publisher model, Cold/Lazy execution, why operator chains beat CompletableFuture, and the four most common beginner mistakes (missing subscribe, blocking calls, map vs flatMap, error handling)."
 category: spring-boot
 draft: false
 ---
 
-Spring WebFlux 코드를 처음 열면 `Mono<User>`, `Flux<Order>` 같은 리턴 타입에 당황하게 됩니다. 이 글은 Mono/Flux가 무엇이고 왜 이런 모양을 하고 있는지, 그리고 입문자가 가장 자주 부딪히는 네 가지 함정까지를 예제 중심으로 정리합니다. WebFlux 본편을 보기 전 반드시 알아야 할 개념만 담았습니다.
+Spring WebFlux 코드를 처음 열면 `Mono<User>`, `Flux<Order>` 같은 리턴 타입이 낯섭니다. 이 글은 Mono/Flux가 무엇이고 왜 이런 모양인지, 그리고 처음 작성할 때 자주 마주치는 네 가지 패턴까지를 예제 중심으로 정리합니다. WebFlux 본편을 읽기 전에 잡고 가야 할 개념만 담았습니다.
 
 ## Mono와 Flux란
 
@@ -40,7 +40,7 @@ Mono와 Flux는 <E>**나중에 뱉어질 값을 담는 그릇**</E>입니다. �
   Publisher는 Reactive Streams 스펙이 정의한 <E>값을 발행하는 쪽</E>의 최상위 인터페이스입니다. `subscribe(Subscriber)` 메서드 하나만 요구하며, Mono/Flux 모두 이를 구현합니다. 즉 <E>Publisher를 리턴한다</E>는 말은 <E>구독자가 붙으면 값을 뱉기 시작한다</E>는 약속입니다.
 </Callout>
 
-가장 중요한 첫 인상은 이것 하나입니다. 메서드 리턴 타입이 `Mono<User>`라면, 그건 **User가 아직 없다**는 뜻입니다. 구독해야 비로소 값이 흐릅니다. 이 지연 실행이 입문자가 가장 먼저 넘어져야 하는 개념입니다.
+가장 중요한 첫 인상은 이것 하나입니다. 메서드 리턴 타입이 `Mono<User>`라면 그건 **User가 아직 없다**는 뜻이고, 구독해야 비로소 값이 흐르기 시작합니다. 이 지연 실행이 Reactor 코드를 처음 읽을 때 가장 먼저 잡아야 할 개념입니다.
 
 ## 왜 필요한가
 
@@ -142,11 +142,11 @@ onComplete()
 
 ## 실전 문제
 
-입문자가 가장 자주 부딪히는 네 가지 함정입니다. 모두 앞의 <E>Cold/Lazy + 시그널 3종 + 체인은 설계도</E> 원칙의 파생입니다.
+처음 작성할 때 자주 마주치는 네 가지 패턴입니다. 모두 앞의 <E>Cold/Lazy + 시그널 3종 + 체인은 설계도</E> 원칙에서 파생됩니다.
 
 ### 1. subscribe 누락
 
-가장 흔한 실수입니다. 체인을 만들었지만 구독하지 않아 **아무 일도 일어나지 않는** 버그. 테스트에서는 `.block()`으로 강제 구독하지만 프로덕션에서는 WebFlux 프레임워크가 자동으로 구독합니다. 컨트롤러 메서드가 `Mono/Flux`를 리턴만 하면 WebFlux가 알아서 구독하는 구조입니다.
+체인을 만들고 구독을 빠뜨리는 패턴입니다. 체인을 만들었지만 구독하지 않아 **아무 일도 일어나지 않는** 버그. 테스트에서는 `.block()`으로 강제 구독하지만 프로덕션에서는 WebFlux 프레임워크가 자동으로 구독합니다. 컨트롤러 메서드가 `Mono/Flux`를 리턴만 하면 WebFlux가 알아서 구독하는 구조입니다.
 
 <Callout type="warning" title="예외 케이스">
   `@Scheduled` 메서드나 `CommandLineRunner` 안에서 Reactor 체인을 만들었다면 WebFlux가 자동 구독하지 않습니다. 직접 `.subscribe()`를 호출해야 실행됩니다.
@@ -249,7 +249,7 @@ Flux.range(1, 10)
 실서비스에서는 WebFlux 프레임워크가 자동으로 구독하므로 `subscribe()`를 직접 호출할 일은 거의 없습니다. 직접 호출이 필요한 건 단위 테스트, `main` 메서드, `@Scheduled` 작업 정도입니다.
 
 ```java title="BlockingInTests.java"
-// 테스트에서만. 체인 안에서 호출하면 실전 문제 2번 함정에 빠진다.
+// 테스트에서만. 체인 안에서 호출하면 실전 문제 2번 지점에 빠진다.
 User user = userRepo.findById(1L).block();
 List<Product> list = productFlux.collectList().block();
 ```
@@ -283,7 +283,7 @@ Reactor 도입의 대가는 명확합니다. 수십 종의 연산자(`flatMap` �
 
 ## 마무리
 
-Mono/Flux는 <E>나중에 값을 뱉을 약속</E>을 타입 시스템에 올린 것입니다. 구독해야 실행되고, 시그널 3종으로 생애가 닫히며, 연산자 체인은 설계도일 뿐이라는 세 원칙이 나머지 모든 동작을 파생시킵니다. 입문 단계에서 부딪히는 함정(구독 누락, 블로킹 혼입, `map`/`flatMap` 혼동, 에러 처리 누락)도 이 세 원칙의 파생이므로, 원칙부터 잡으면 함정도 자연스럽게 피할 수 있습니다.
+Mono/Flux는 <E>나중에 값을 뱉을 약속</E>을 타입 시스템에 올린 것입니다. 구독해야 실행되고, 시그널 3종으로 생애가 닫히며, 연산자 체인은 설계도일 뿐이라는 세 원칙이 나머지 모든 동작을 파생시킵니다. 입문 단계에서 부딪히는 지점(구독 누락, 블로킹 혼입, `map`/`flatMap` 혼동, 에러 처리 누락)도 이 세 원칙의 파생이므로, 원칙부터 잡으면 지점도 자연스럽게 피할 수 있습니다.
 
 다음 글에서는 이 Mono/Flux를 기반으로 Spring WebFlux가 어떻게 요청을 처리하는지, 어떤 상황에서 MVC 대신 WebFlux를 선택하는지를 다룹니다.
 

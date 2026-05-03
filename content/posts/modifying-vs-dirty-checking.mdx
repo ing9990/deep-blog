@@ -3,7 +3,7 @@ title:
   ko: "@Modifying vs Dirty Checking"
   en: "@Modifying vs Dirty Checking"
 slug: "modifying-vs-dirty-checking"
-date: 2026-04-28
+date: 2026-04-21
 tags:
   - Backend
   - Spring
@@ -18,13 +18,13 @@ keywords:
   - "clearAutomatically"
   - "flushAutomatically"
 summary:
-  ko: "Spring Data JPA에서 데이터베이스 레코드를 수정하는 두 가지 방법(@Modifying JPQL UPDATE와 도메인 객체 변경을 통한 Dirty Checking)이 영속성 컨텍스트와 어떻게 다르게 상호작용하는지 이해할 수 있습니다. 1차 캐시 stale, lifecycle 우회, lost update 같은 실전 함정이 모두 같은 차이에서 나온다는 것을 정리합니다."
+  ko: "Spring Data JPA에서 데이터베이스 레코드를 수정하는 두 가지 방법(@Modifying JPQL UPDATE와 도메인 객체 변경을 통한 Dirty Checking)이 영속성 컨텍스트와 어떻게 다르게 상호작용하는지 이해할 수 있습니다. 1차 캐시 stale, lifecycle 우회, lost update 같은 실전 차이이 모두 같은 차이에서 나온다는 것을 정리합니다."
   en: "Understand how the two update methods in Spring Data JPA (@Modifying JPQL UPDATE and domain object mutation via Dirty Checking) interact with the persistence context differently. Follow the difference that produces stale first-level cache, lifecycle bypass, and lost update pitfalls."
 category: spring-boot
 draft: false
 ---
 
-Spring Data JPA에서 데이터를 수정하는 코드는 외형이 거의 같아 보입니다. 그러나 `@Modifying` JPQL과 도메인 객체 변경(Dirty Checking)은 내부에서 완전히 다른 컴포넌트를 거칩니다. 이 글은 두 방법이 영속성 컨텍스트와 어떻게 다르게 상호작용하는지를 정리하면서, 1차 캐시 stale·lifecycle 우회·lost update 같은 실전 함정이 모두 같은 차이에서 비롯된다는 것을 보여줍니다.
+Spring Data JPA에서 데이터를 수정하는 코드는 외형이 거의 같아 보입니다. 그러나 `@Modifying` JPQL과 도메인 객체 변경(Dirty Checking)은 내부에서 완전히 다른 컴포넌트를 거칩니다. 이 글은 두 방법이 영속성 컨텍스트와 어떻게 다르게 상호작용하는지를 정리하면서, 1차 캐시 stale·lifecycle 우회·lost update 같은 실전 차이이 모두 같은 차이에서 비롯된다는 것을 보여줍니다.
 
 ## 두 업데이트 방식
 
@@ -92,7 +92,7 @@ UPDATE product SET price = price * 1.1
 ## 내부 동작
 
 <Callout type="warning" title="이 글의 핵심 포인트">
-  두 방법은 같은 SQL을 만들어 내는 것 같지만 거치는 컴포넌트와 시점이 다릅니다. 그 차이가 뒤에 나올 모든 실전 함정의 원인입니다.
+  두 방법은 같은 SQL을 만들어 내는 것 같지만 거치는 컴포넌트와 시점이 다릅니다. 그 차이가 뒤에 나올 모든 실전 차이의 원인입니다.
 </Callout>
 
 ### 영속성 컨텍스트와 스냅샷
@@ -154,7 +154,7 @@ productRepository.decreaseQuantity(1L)             // DB: quantity=9
 val after = productRepository.findById(1L).get()   // 1차 캐시 hit -> quantity=10 (stale!)
 ```
 
-이 stale 상태가 `@Modifying`의 가장 유명한 함정이며, 다음 절의 출발점입니다.
+이 stale 상태가 `@Modifying`의 가장 유명한 차이이며, 다음 절의 출발점입니다.
 
 ### 두 흐름을 한눈에
 
@@ -192,7 +192,7 @@ UPDATE product SET quantity=9 WHERE id=1
 
 ## 실전 문제
 
-두 방식이 실제 코드베이스에 들어왔을 때 어떤 함정에 빠지는지 네 가지로 추립니다.
+두 방식이 실제 코드베이스에 들어왔을 때 어떤 차이가 드러나는지 네 가지로 추립니다.
 
 ### 1차 캐시 stale
 
@@ -208,7 +208,7 @@ fun process(id: Long) {
 }
 ```
 
-Spring Data JPA는 이 함정을 알고 있어 두 가지 옵션을 제공합니다.
+Spring Data JPA는 이 케이스를 알고 있어 두 가지 옵션을 제공합니다.
 
 ```kotlin title="ProductRepository.kt"
 @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -252,7 +252,7 @@ fun decrease(id: Long) {
 
 <RelatedPost slug="jpa-auditing" type="deep-dive" />
 
-이 함정의 깊은 배경은 위 글에서 다룹니다. 핵심만 가져오면 <E>Auditing은 Hibernate lifecycle 콜백에 올라타기 때문에, lifecycle을 거치지 않는 벌크 UPDATE는 자동 갱신이 안 된다</E>입니다.
+이 차이의 깊은 배경은 위 글에서 다룹니다. 핵심만 가져오면 <E>Auditing은 Hibernate lifecycle 콜백에 올라타기 때문에, lifecycle을 거치지 않는 벌크 UPDATE는 자동 갱신이 안 된다</E>입니다.
 
 ### Cascading·연관관계 부재
 
@@ -308,7 +308,7 @@ order.cancel()  // OrderItem들의 status도 cascade로 같이 바뀜
 
 ## 마무리
 
-`@Modifying`과 도메인 업데이트는 같은 결과를 만드는 두 방법처럼 보이지만, 한쪽은 영속성 컨텍스트를 통과하고 한쪽은 우회한다는 차이 하나가 모든 함정을 결정합니다. 1차 캐시 stale, lifecycle 우회, lost update, cascading 부재는 모두 이 차이에서 나오는 결과입니다. 평소에는 도메인 객체의 메서드를 호출해 변경하고, 객체 추상화의 비용이 명확히 측정되는 지점에서만 `@Modifying`을 쓰는 정책이 JPA의 설계 의도와도 일치합니다.
+`@Modifying`과 도메인 업데이트는 같은 결과를 만드는 두 방법처럼 보이지만, 한쪽은 영속성 컨텍스트를 통과하고 한쪽은 우회한다는 차이 하나가 모든 차이를 결정합니다. 1차 캐시 stale, lifecycle 우회, lost update, cascading 부재는 모두 이 차이에서 나오는 결과입니다. 평소에는 도메인 객체의 메서드를 호출해 변경하고, 객체 추상화의 비용이 명확히 측정되는 지점에서만 `@Modifying`을 쓰는 정책이 JPA의 설계 의도와도 일치합니다.
 
 ## 참고 자료
 

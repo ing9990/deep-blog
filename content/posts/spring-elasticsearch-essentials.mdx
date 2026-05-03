@@ -1,0 +1,571 @@
+---
+title:
+  ko: "Spring Data Elasticsearch 정리"
+  en: "Spring Data Elasticsearch Guide"
+slug: "spring-elasticsearch-essentials"
+date: 2026-04-30
+tags:
+  - Backend
+  - Spring
+  - Elasticsearch
+  - Search
+keywords:
+  - "Spring Data Elasticsearch"
+  - "@Document"
+  - "ElasticsearchRepository"
+  - "ElasticsearchOperations"
+  - "NativeQuery"
+  - "Criteria"
+summary:
+  ko: "Spring Data Elasticsearch가 제공하는 어노테이션과 클래스로 인덱스 매핑·CRUD·검색을 선언적으로 구성하는 방법을 정리합니다. @Document, @Id, @Field, ElasticsearchRepository, ElasticsearchOperations, Criteria, NativeQuery와 그 뒤에서 동작하는 MappingElasticsearchConverter를 Kotlin·Java 예시와 함께 살펴봅니다."
+  en: "Walk through the Spring Data Elasticsearch annotations and classes that turn boilerplate index access into declarative repositories. Covers @Document, @Field, ElasticsearchRepository, ElasticsearchOperations, Criteria, and NativeQuery with Kotlin and Java examples."
+category: spring-boot
+draft: false
+---
+
+Elasticsearch를 자바 코드에서 호출하는 방법은 둘로 나뉩니다. 하나는 ES가 공식 제공하는 `co.elastic.clients:elasticsearch-java`(Java API Client)를 직접 사용하는 것이고, 다른 하나는 그 위에 Spring 추상화를 얹은 Spring Data Elasticsearch를 사용하는 것입니다. 이 글은 후자를 정리합니다. 어노테이션으로 도큐먼트 매핑을 선언하고, Repository로 CRUD와 단순 검색을 자동화하며, 더 복잡한 검색은 `Criteria` 또는 `NativeQuery`로 표현하는 흐름을 Kotlin·Java 예시와 함께 살펴봅니다.
+
+<RelatedPost slug="elasticsearch-essentials" type="prerequisite" />
+
+## 의존성과 활성화
+
+Spring Boot 3.2 기준, `spring-boot-starter-data-elasticsearch` 하나로 충분합니다. 내부적으로 ES 공식 Java API Client를 끌어옵니다.
+
+```kotlin title="build.gradle.kts"
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-data-elasticsearch")
+}
+```
+
+`application.yml`에 ES 접속 정보를 둡니다.
+
+```yaml title="application.yml"
+spring:
+  elasticsearch:
+    uris: http://localhost:9200
+    username: elastic
+    password: changeme
+    connection-timeout: 2s
+    socket-timeout: 10s
+```
+
+Spring Boot의 `ElasticsearchClientAutoConfiguration`이 이 값들로 `ElasticsearchClient`, `ElasticsearchOperations`, `ElasticsearchConverter`를 모두 자동 등록합니다. 추가 설정 클래스를 만들 필요는 없습니다.
+
+### `@EnableElasticsearchRepositories`
+
+Repository 인터페이스를 자동 스캔해 프록시 빈으로 등록하는 활성화 어노테이션입니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ElasticsearchConfig.kt"
+    @Configuration
+    @EnableElasticsearchRepositories(basePackages = ["com.example.search.repository"])
+    class ElasticsearchConfig
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ElasticsearchConfig.java"
+    @Configuration
+    @EnableElasticsearchRepositories(basePackages = "com.example.search.repository")
+    public class ElasticsearchConfig {
+    }
+    ```
+  </Tab>
+</Tabs>
+
+Spring Boot의 `ElasticsearchRepositoriesAutoConfiguration`이 메인 클래스의 `@SpringBootApplication` 패키지부터 자동 스캔하므로 표준 부트 프로젝트에서는 명시적으로 부착하지 않아도 동작합니다. Repository 패키지가 메인 패키지 밖에 있을 때만 `basePackages`로 명시합니다.
+
+## `@Document`: 도큐먼트 매핑
+
+도큐먼트 클래스는 어노테이션 한 줄로 ES 인덱스에 결합됩니다. 클래스 자체는 불변(record / data class)이 자연스럽습니다. 도큐먼트는 인덱싱 시점에 한 번 만들어 보내고 검색 시점에 한 번 역직렬화되는 값 객체이므로, 외부에서 필드를 다시 바꿀 비즈니스 이유가 없기 때문입니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ProductDocument.kt"
+    @Document(indexName = "product")
+    data class ProductDocument(
+        @Id
+        val id: String,
+
+        @Field(type = FieldType.Text, analyzer = "standard")
+        val name: String,
+
+        @Field(type = FieldType.Integer)
+        val price: Int,
+    )
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ProductDocument.java"
+    @Document(indexName = "product")
+    public record ProductDocument(
+        @Id
+        String id,
+
+        @Field(type = FieldType.Text, analyzer = "standard")
+        String name,
+
+        @Field(type = FieldType.Integer)
+        int price
+    ) {}
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Spring Data Elasticsearch의 어노테이션은 그 자체로 ES와 통신하지 않습니다. `MappingElasticsearchConverter`가 빈 등록 시점에 어노테이션을 읽어 자바 클래스 ↔ ES 도큐먼트의 매핑 메타데이터를 만들고, 실제 통신은 `ElasticsearchClient`(Java API Client)가 담당합니다. 어노테이션은 <E>어떤 클래스가 어떤 인덱스의 어떤 필드 타입과 매핑되는지</E>를 선언하는 메타데이터입니다.
+</Callout>
+
+### `@Document`
+
+클래스를 ES 인덱스에 결합합니다. 자주 쓰는 옵션입니다.
+
+| 옵션 | 의미 |
+|---|---|
+| `indexName` | 매핑할 인덱스 이름. SpEL 표현식 `#{...}`로 동적 이름도 가능 |
+| `createIndex` | 애플리케이션 시작 시 인덱스 자동 생성 여부 (기본 `true`) |
+| `versionType` | 낙관적 잠금에 사용할 버전 타입. `EXTERNAL`, `INTERNAL` 등 |
+| `writeTypeHint` | 도큐먼트에 `_class` 메타 필드를 저장할지 여부. 기본 `DEFAULT` |
+
+`createIndex = true`는 개발에는 편하지만 운영에서는 보통 `false`로 두고 인덱스 생성·매핑은 별도 마이그레이션 스크립트로 관리합니다. 잘못 만들어진 매핑이 운영 인덱스에 자동으로 박히는 사고를 막기 위해서입니다.
+
+### `@Id`
+
+도큐먼트의 ID 필드를 지정합니다. 필드 타입은 `String`이 일반적이지만 `Long`도 허용됩니다. 인덱싱 시 이 값이 ES `_id`로 들어가고, `null`이면 ES가 자동 ID를 부여합니다.
+
+### `@Field`
+
+필드 타입과 분석기 등 ES 매핑 정보를 선언합니다. 자주 쓰는 옵션입니다.
+
+| 옵션 | 의미 |
+|---|---|
+| `type` | ES 필드 타입. `Text`, `Keyword`, `Integer`, `Long`, `Date`, `Boolean`, `Object`, `Nested` 등 |
+| `analyzer` | 인덱싱 시 사용할 analyzer (`standard`, `nori`, 사용자 정의 등) |
+| `searchAnalyzer` | 검색 시 사용할 analyzer. 미지정 시 `analyzer`와 동일 |
+| `format` | `Date` 타입의 포맷 패턴 (`date_optional_time`, `epoch_millis` 등) |
+| `index` | 이 필드를 검색 가능하게 인덱싱할지 (기본 `true`) |
+| `store` | 원본을 별도 저장할지 (기본 `false`, `_source`에서 충분) |
+
+`Text`와 `Keyword`의 차이가 가장 자주 헷갈리는데, 입력값을 토큰화해 부분 일치·전문 검색을 할 거면 `Text`, 정확 일치·정렬·집계를 할 거면 `Keyword`입니다. 한 필드에 두 용도가 모두 필요하면 `@MultiField`로 감싸 둘 다 만들어 둡니다.
+
+```kotlin title="ProductMultiField.kt"
+@MultiField(
+    mainField = Field(type = FieldType.Text, analyzer = "standard"),
+    otherFields = [
+        InnerField(suffix = "keyword", type = FieldType.Keyword),
+    ],
+)
+val name: String,
+```
+
+위 선언은 `name`(전문 검색용)과 `name.keyword`(정렬·집계·정확 일치용) 두 필드를 동시에 매핑합니다.
+
+### `@Setting`
+
+인덱스 settings(샤드·레플리카 수, 사용자 정의 analyzer 등)를 클래스파스 위 JSON 파일로 선언합니다.
+
+```kotlin title="ProductDocumentWithSetting.kt"
+@Document(indexName = "product")
+@Setting(settingPath = "/elasticsearch/product-settings.json")
+data class ProductDocument(/* ... */)
+```
+
+해당 JSON에 샤드 수·analyzer 정의를 두면 `createIndex = true` 동작 시 그 설정으로 인덱스가 만들어집니다.
+
+## `ElasticsearchRepository`: Repository 패턴
+
+`ElasticsearchRepository<T, ID>`를 상속하면 기본 CRUD 메서드와 메서드 이름 기반 자동 쿼리가 함께 제공됩니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ProductRepository.kt"
+    interface ProductRepository : ElasticsearchRepository<ProductDocument, String> {
+
+        fun findByName(name: String): List<ProductDocument>
+
+        fun findByNameContaining(keyword: String): List<ProductDocument>
+
+        fun findByPriceGreaterThanEqual(price: Int): List<ProductDocument>
+
+        fun findByNameAndPriceGreaterThanEqual(name: String, price: Int): List<ProductDocument>
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ProductRepository.java"
+    public interface ProductRepository extends ElasticsearchRepository<ProductDocument, String> {
+
+        List<ProductDocument> findByName(String name);
+
+        List<ProductDocument> findByNameContaining(String keyword);
+
+        List<ProductDocument> findByPriceGreaterThanEqual(int price);
+
+        List<ProductDocument> findByNameAndPriceGreaterThanEqual(String name, int price);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`ElasticsearchRepository`가 상속하는 `CrudRepository`에서 다음 메서드들이 자동으로 제공됩니다.
+
+| 메서드 | 동작 |
+|---|---|
+| `save(entity)` | 단건 인덱싱(또는 업데이트). ID가 같으면 덮어쓰기 |
+| `saveAll(entities)` | 다건 인덱싱. 내부적으로 bulk API 사용 |
+| `findById(id)` | ID로 단건 조회. `Optional<T>` 반환 |
+| `findAll()` | 전체 조회. 결과가 클 수 있어 운영에서는 거의 사용하지 않음 |
+| `count()` | 전체 건수 |
+| `deleteById(id)` | ID로 단건 삭제 |
+| `delete(entity)` / `deleteAll()` | 엔티티·전체 삭제 |
+
+메서드 이름 키워드 매핑은 JPA Repository와 거의 같은 컨벤션을 따릅니다.
+
+| 키워드 | ES 쿼리 의미 |
+|---|---|
+| `findBy<Field>` | 해당 필드에 `match`(또는 `term`, 필드 타입에 따라) |
+| `<Field>Containing` | 해당 필드에 부분 일치(`wildcard` 또는 `match`) |
+| `<Field>GreaterThanEqual` / `LessThan` | `range` 쿼리의 `gte` / `lt` |
+| `<Field>Between` | `range` 쿼리의 `gte`+`lte` |
+| `<Field>In` | `terms` 쿼리 |
+| `And` / `Or` | `bool` 쿼리의 `must` / `should` 결합 |
+| `OrderBy<Field>Asc` / `Desc` | 정렬 |
+
+이름이 길어지거나 자동 변환이 의도와 다를 때는 `@Query`로 직접 ES JSON을 쓸 수 있습니다.
+
+```kotlin title="ProductRepositoryQuery.kt"
+interface ProductRepository : ElasticsearchRepository<ProductDocument, String> {
+
+    @Query("""
+      {
+        "match": {
+          "name": {
+            "query": "?0",
+            "fuzziness": "AUTO"
+          }
+        }
+      }
+    """)
+    fun searchFuzzy(keyword: String): List<ProductDocument>
+}
+```
+
+`?0`, `?1`은 메서드 인자 위치를 가리키는 바인딩 자리표시자입니다.
+
+## `ElasticsearchOperations`: 더 유연한 호출
+
+Repository로는 표현하기 까다로운 동작(인덱스 관리, 명시적 쿼리, 결과 메타데이터 접근 등)은 `ElasticsearchOperations`를 직접 주입받아 호출합니다. Repository 자체도 내부적으로 이 빈을 사용합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ProductIndexService.kt"
+    @Service
+    class ProductIndexService(
+        private val operations: ElasticsearchOperations,
+    ) {
+
+        fun save(doc: ProductDocument): ProductDocument =
+            operations.save(doc)
+
+        fun saveAll(docs: List<ProductDocument>): List<ProductDocument> =
+            operations.save(docs).toList()
+
+        fun findById(id: String): ProductDocument? =
+            operations.get(id, ProductDocument::class.java)
+
+        fun deleteById(id: String): String =
+            operations.delete(id, ProductDocument::class.java)
+
+        fun deleteByQuery(criteria: Criteria) {
+            operations.delete(CriteriaQuery(criteria), ProductDocument::class.java)
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ProductIndexService.java"
+    @Service
+    @RequiredArgsConstructor
+    public class ProductIndexService {
+
+        private final ElasticsearchOperations operations;
+
+        public ProductDocument save(ProductDocument doc) {
+            return operations.save(doc);
+        }
+
+        public List<ProductDocument> saveAll(List<ProductDocument> docs) {
+            return StreamSupport.stream(operations.save(docs).spliterator(), false).toList();
+        }
+
+        public ProductDocument findById(String id) {
+            return operations.get(id, ProductDocument.class);
+        }
+
+        public String deleteById(String id) {
+            return operations.delete(id, ProductDocument.class);
+        }
+
+        public void deleteByQuery(Criteria criteria) {
+            operations.delete(new CriteriaQuery(criteria), ProductDocument.class);
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+자주 쓰는 메서드입니다.
+
+| 메서드 | 의미 |
+|---|---|
+| `save(entity)` / `save(entities)` | 단건·다건 인덱싱. 다건은 내부적으로 bulk |
+| `get(id, Class<T>)` | ID로 단건 조회 |
+| `search(Query, Class<T>)` | 쿼리 실행. `SearchHits<T>` 반환(ID·점수·본문 모두 포함) |
+| `delete(id, Class<T>)` / `delete(Query, Class<T>)` | ID 또는 쿼리 기반 삭제 |
+| `indexOps(Class<T>)` | 인덱스 관리, 생성·삭제·매핑 갱신 |
+
+인덱스 자체를 코드에서 명시적으로 만들고 싶을 때 `indexOps`를 씁니다.
+
+```kotlin title="IndexBootstrap.kt"
+@Component
+class IndexBootstrap(
+    private val operations: ElasticsearchOperations,
+) {
+
+    @PostConstruct
+    fun ensureIndex() {
+        val indexOps = operations.indexOps(ProductDocument::class.java)
+        if (!indexOps.exists()) {
+            indexOps.create()
+            indexOps.putMapping()
+        }
+    }
+}
+```
+
+## `Criteria`: 동적 쿼리 빌더
+
+쿼리 조건이 사용자 입력에 따라 달라지면 `Criteria` 빌더가 가장 깔끔합니다. JPA의 `Specification`과 비슷한 위치에 있는 추상화입니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ProductSearchService.kt"
+    @Service
+    class ProductSearchService(
+        private val operations: ElasticsearchOperations,
+    ) {
+
+        fun search(keyword: String?, minPrice: Int?): List<ProductDocument> {
+            var criteria = Criteria()
+
+            if (!keyword.isNullOrBlank()) {
+                criteria = criteria.and(Criteria("name").matches(keyword))
+            }
+            if (minPrice != null) {
+                criteria = criteria.and(Criteria("price").greaterThanEqual(minPrice))
+            }
+
+            val query = CriteriaQuery(criteria)
+                .addSort(Sort.by(Sort.Direction.DESC, "_score"))
+                .setPageable(PageRequest.of(0, 20))
+
+            val hits = operations.search(query, ProductDocument::class.java)
+            return hits.searchHits.map { it.content }
+        }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ProductSearchService.java"
+    @Service
+    @RequiredArgsConstructor
+    public class ProductSearchService {
+
+        private final ElasticsearchOperations operations;
+
+        public List<ProductDocument> search(String keyword, Integer minPrice) {
+            Criteria criteria = new Criteria();
+
+            if (keyword != null && !keyword.isBlank()) {
+                criteria = criteria.and(new Criteria("name").matches(keyword));
+            }
+            if (minPrice != null) {
+                criteria = criteria.and(new Criteria("price").greaterThanEqual(minPrice));
+            }
+
+            CriteriaQuery query = new CriteriaQuery(criteria)
+                .addSort(Sort.by(Sort.Direction.DESC, "_score"))
+                .setPageable(PageRequest.of(0, 20));
+
+            SearchHits<ProductDocument> hits =
+                operations.search(query, ProductDocument.class);
+
+            return hits.getSearchHits().stream()
+                .map(SearchHit::getContent)
+                .toList();
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+자주 쓰는 `Criteria` 메서드입니다.
+
+| 메서드 | 의미 |
+|---|---|
+| `is(value)` | 정확 일치 (`term`) |
+| `matches(value)` | 분석 후 매칭 (`match`) |
+| `contains(value)` | 부분 일치 (`wildcard`) |
+| `startsWith` / `endsWith` | 접두·접미 일치 |
+| `greaterThan` / `greaterThanEqual` / `lessThan` / `lessThanEqual` | 범위 (`range`) |
+| `between(lo, hi)` | 범위 |
+| `in(values)` | `terms` |
+| `and(criteria)` / `or(criteria)` | `bool` 결합 |
+| `not()` | `must_not` |
+
+`Criteria`로 표현하기 어려운 ES 고유 기능(집계, 하이라이트, 함수 점수, more_like_this 등)이 필요해지는 순간 `NativeQuery`로 넘어갑니다.
+
+## `NativeQuery`: 전체 DSL이 필요한 순간
+
+`NativeQuery`는 Java API Client의 빌더를 그대로 받아 `ElasticsearchOperations`로 실행할 수 있게 감싼 표현입니다. ES가 제공하는 모든 쿼리·집계·정렬을 그대로 쓸 수 있고, Spring Data의 매핑·역직렬화·`SearchHits` 변환은 그대로 활용됩니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin title="ProductNativeSearch.kt"
+    fun searchAdvanced(keyword: String, minPrice: Int): List<ProductDocument> {
+        val query = NativeQuery.builder()
+            .withQuery { q -> q
+                .bool { b -> b
+                    .must { m -> m.match { mm -> mm.field("name").query(keyword) } }
+                    .filter { f -> f.range { r -> r.field("price").gte(JsonData.of(minPrice)) } }
+                }
+            }
+            .withSort { s -> s.score { sc -> sc.order(SortOrder.Desc) } }
+            .withPageable(PageRequest.of(0, 20))
+            .build()
+
+        val hits = operations.search(query, ProductDocument::class.java)
+        return hits.searchHits.map { it.content }
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java title="ProductNativeSearch.java"
+    public List<ProductDocument> searchAdvanced(String keyword, int minPrice) {
+        NativeQuery query = NativeQuery.builder()
+            .withQuery(q -> q
+                .bool(b -> b
+                    .must(m -> m.match(mm -> mm.field("name").query(keyword)))
+                    .filter(f -> f.range(r -> r.field("price").gte(JsonData.of(minPrice))))
+                )
+            )
+            .withSort(s -> s.score(sc -> sc.order(SortOrder.Desc)))
+            .withPageable(PageRequest.of(0, 20))
+            .build();
+
+        SearchHits<ProductDocument> hits =
+            operations.search(query, ProductDocument.class);
+
+        return hits.getSearchHits().stream()
+            .map(SearchHit::getContent)
+            .toList();
+    }
+    ```
+  </Tab>
+</Tabs>
+
+`q -> q.bool(...)` 람다 안의 빌더 체인은 ES REST API의 JSON 본문과 1:1로 대응합니다. 즉 자바 코드는 <E>JSON 쿼리의 다른 표기법</E>이며, 람다 안의 메서드 체인은 JSON 객체의 키-값을 그대로 옮긴 것입니다. `gte(JsonData.of(1000))`처럼 값에 `JsonData`를 쓰는 이유는 `range`가 숫자·문자열·날짜 등 임의 JSON 값을 받기 때문입니다.
+
+## `SearchHits<T>`: 응답 다루기
+
+검색 결과는 단순 `List<T>`가 아니라 `SearchHits<T>`로 돌아옵니다. 본문뿐 아니라 ID·점수·하이라이트·집계 결과까지 함께 들어 있습니다.
+
+```
+SearchHits<T>
+├─ totalHits          // 총 건수
+├─ maxScore           // 최고 점수
+├─ searchHits         // List<SearchHit<T>>
+│   └─ SearchHit<T>
+│       ├─ id           // 도큐먼트 ID
+│       ├─ score        // 관련도 점수
+│       ├─ content      // T 로 역직렬화된 본문
+│       ├─ highlightFields
+│       └─ sortValues
+└─ aggregations       // 집계 결과 (Aggregation API 사용 시)
+```
+
+본문만 꺼내는 가장 흔한 패턴입니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin
+    val products: List<ProductDocument> = hits.searchHits.map { it.content }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java
+    List<ProductDocument> products = hits.getSearchHits().stream()
+        .map(SearchHit::getContent)
+        .toList();
+    ```
+  </Tab>
+</Tabs>
+
+ID·점수까지 같이 쓰려면 `SearchHit<T>` 자체를 다음 단계로 넘기는 편이 깔끔합니다.
+
+<Tabs group="lang">
+  <Tab label="Kotlin">
+    ```kotlin
+    data class SearchResult(val id: String, val score: Double, val doc: ProductDocument)
+
+    val results = hits.searchHits.map { h ->
+        SearchResult(h.id, h.score.toDouble(), h.content)
+    }
+    ```
+  </Tab>
+  <Tab label="Java">
+    ```java
+    record SearchResult(String id, double score, ProductDocument doc) {}
+
+    List<SearchResult> results = hits.getSearchHits().stream()
+        .map(h -> new SearchResult(h.getId(), h.getScore(), h.getContent()))
+        .toList();
+    ```
+  </Tab>
+</Tabs>
+
+## 동작 원리
+
+여기까지 어노테이션과 클래스의 사용법을 봤습니다. 실제로 이 추상화가 ES 호출로 어떻게 이어지는지 한 번 짚고 갑니다.
+
+<Callout type="error" title="핵심 통찰: 어노테이션은 메타데이터, 통신은 Java API Client">
+  Spring Data Elasticsearch는 ES와 직접 통신하는 새 클라이언트가 아니라, 공식 Java API Client 위에 얹힌 추상화 계층입니다. `@Document`·`@Field`는 `MappingElasticsearchConverter`가 한 번 읽어 매핑 메타데이터로 보관하고, Repository는 빈 등록 시점에 프록시로 만들어집니다. 실제 검색 호출은 결국 `ElasticsearchClient`(Java API Client)로 위임되어 ES에 HTTP 요청으로 나갑니다.
+</Callout>
+
+흐름은 다음과 같습니다.
+
+1. `spring-boot-starter-data-elasticsearch`가 클래스패스에 있으면 `ElasticsearchClientAutoConfiguration`이 `application.yml`을 읽어 `ElasticsearchClient`(Java API Client)를 자동 등록합니다.
+2. 같은 자동 설정이 `ElasticsearchOperations`(`ElasticsearchTemplate`)와 `MappingElasticsearchConverter`도 함께 등록합니다.
+3. `@EnableElasticsearchRepositories`(또는 자동 활성화)가 Repository 인터페이스들을 스캔해 `SimpleElasticsearchRepository`를 베이스로 한 프록시 빈을 만듭니다.
+4. 프록시는 메서드 이름을 파싱해 `Criteria` 또는 ES 쿼리로 변환합니다. `@Query`가 붙어 있으면 본문을 그대로 사용합니다.
+5. 변환된 쿼리는 `ElasticsearchOperations.search(...)`로 위임되고, 내부적으로 `MappingElasticsearchConverter`가 매핑 정보를 참조해 요청을 빌드합니다.
+6. 최종 요청은 `ElasticsearchClient`가 JSON으로 직렬화해 ES에 HTTP로 보내고, 응답은 같은 매퍼로 도큐먼트 클래스로 역직렬화되어 `SearchHits<T>`에 담깁니다.
+
+이 구조 때문에 두 가지 사실이 따라옵니다.
+
+- **추상화 비용은 매핑 컨버터에 모입니다**. 새 ES 기능(예: 새 쿼리 타입, 새 집계)이 나오면 Java API Client에는 곧바로 들어오지만, Spring Data가 자동 변환할 수 있는 형태가 되기까지 시간이 걸립니다. 그래서 첨단 기능이 필요할 때는 `NativeQuery`로 우회합니다.
+- **CRUD와 단순 검색은 압도적으로 짧아집니다**. `findById`, `save`, `findByNameContaining` 같은 흔한 동작이 인터페이스 한 줄로 끝나므로, 비즈니스 로직이 ES 호출 보일러플레이트에 가려지지 않습니다.
+
+## 마무리
+
+Spring Data Elasticsearch의 어노테이션과 클래스는 결국 두 가지 일을 합니다. 하나는 `@Document`·`@Id`·`@Field`로 <E>어떤 클래스가 어떤 인덱스의 어떤 필드 타입과 매핑되는지</E>를 선언하는 것이고, 다른 하나는 `ElasticsearchRepository`·`ElasticsearchOperations`·`Criteria`·`NativeQuery`로 <E>그 매핑 위에서 어떤 쿼리를 실행할지</E>를 단계별 추상화로 표현하는 것입니다.
+
+CRUD와 단순 조건 검색은 Repository 한 줄로 끝나고, 동적 조건은 `Criteria`로, ES 고유 기능이 필요하면 `NativeQuery`로 내려가는 단계가 자연스럽게 이어집니다. 이 모든 동작이 결국 Java API Client의 `ElasticsearchClient`로 위임된다는 점을 머릿속에 두면, Spring 추상화의 편의와 ES 원본 DSL의 표현력을 상황에 맞게 골라 쓸 수 있습니다.
+
+## 참고 자료
+
+- [Spring Data Elasticsearch Reference (공식 문서)](https://docs.spring.io/spring-data/elasticsearch/reference/index.html)
+- [Spring Data Elasticsearch: Elasticsearch Object Mapping](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/object-mapping.html)
+- [Spring Data Elasticsearch: Repositories](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/repositories/elasticsearch-repositories.html)
+- [Spring Data Elasticsearch: Elasticsearch Operations](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/template.html)
+- [Elasticsearch Java API Client (공식 문서)](https://www.elastic.co/guide/en/elasticsearch/client/java-api-client/current/index.html)

@@ -3,7 +3,7 @@ title:
   ko: "Two Generals' Problem 소개"
   en: "Two Generals' Problem"
 slug: "two-generals-problem"
-date: 2026-03-25
+date: 2026-02-13
 tags:
   - cs
   - backend
@@ -45,8 +45,8 @@ draft: false
 - **TCP 연결 종료**: 마지막 ACK가 잃으면 한쪽은 `CLOSED`로, 다른 쪽은 `LAST_ACK`로 갈리며 `TIME_WAIT`라는 타협이 개입한다
 - **2PC의 In-Doubt 상태**: 코디네이터가 `commit` 명령 후 응답이 없으면 참여자 상태를 알 수 없어 무기한 블로킹된다
 
-<Callout type="warning" title="흔한 오해: 재시도하면 해결된다?">
-  재시도하면 <E>중복 실행</E>이 발생합니다. 이 중복을 흡수하기 위해 멱등성이 필요한 것이고, At-least-once 전송과 멱등 처리의 조합이 분산 시스템의 사실상 표준이 된 것도 Two Generals가 강제한 결과입니다.
+<Callout type="info" title="재시도와 멱등성이 함께 가야 하는 이유">
+  네트워크에서 응답이 유실될 수 있어 재시도가 필요하지만, 재시도는 같은 명령을 두 번 이상 도착시킬 가능성을 같이 만듭니다. 그래서 수신 측이 같은 요청을 여러 번 받아도 같은 결과를 만드는 멱등성을 갖춰야 합니다. At-least-once 전송과 멱등 처리의 조합이 분산 시스템의 사실상 표준이 된 것은 Two Generals가 이 두 책임의 분리를 강제하기 때문입니다.
 </Callout>
 
 ## 불가능성 증명
