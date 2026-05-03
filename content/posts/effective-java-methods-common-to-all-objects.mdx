@@ -1,0 +1,470 @@
+---
+title:
+  ko: "모든 객체의 공통 메서드"
+  en: "Methods Common to All Objects"
+slug: effective-java-methods-common-to-all-objects
+date: 2026-01-31
+category: books
+book: effective-java
+tags:
+  - 이펙티브 자바
+keywords:
+  - equals
+  - hashCode
+  - toString
+  - Comparable
+  - Comparator
+  - Cloneable
+  - 복사 생성자
+  - 값 클래스
+  - 자연 순서
+  - Objects.hash
+summary:
+  ko: "이펙티브 자바 3판 3장 모든 객체의 공통 메서드에서 다섯 아이템을 정리합니다. equals 일반 규약, hashCode와의 짝, toString의 의무, clone을 피하고 복사 생성자로 가는 이유, Comparable의 자연 순서까지 자바 예시 코드와 Before/After 비교로 살펴봅니다."
+  en: "Five items from Effective Java 3E Chapter 3. equals contract, the equals/hashCode pair, toString as a debugging entry point, why clone is a last resort, and Comparable for natural ordering. with Java samples and before/after comparisons."
+draft: false
+---
+
+이펙티브 자바 3판 3장은 <E>모든 객체의 공통 메서드</E>를 다룬다. `Object`는 구체 클래스지만 본질적으로는 상속을 위해 설계되었고, 그래서 모든 클래스는 `equals`, `hashCode`, `toString`, `clone`, `Comparable.compareTo` 같은 메서드를 자동으로 물려받는다. 물려받았다는 사실과 잘 동작한다는 사실은 별개라서, 이 메서드들을 언제 어떻게 재정의할지가 곧 그 클래스의 품질을 결정한다. 이 글에서는 3장의 다섯 아이템을 자바 예시 코드와 Before/After 비교로 정리한다.
+
+<Note title="이 글에서 다루는 다섯 아이템">
+  - Item 10. equals는 일반 규약을 지켜 재정의하라
+  - Item 11. equals를 재정의하려거든 hashCode도 재정의하라
+  - Item 12. toString을 항상 재정의하라
+  - Item 13. clone 재정의는 주의해서 진행하라
+  - Item 14. Comparable을 구현할지 고려하라
+</Note>
+
+이 글의 코드 예시는 시리즈를 따라 같은 도메인을 공유한다. 4·5장에서 등장한 `OrderId`, `Money`, `LineItem`이 그대로 쓰이고, 값 객체로서의 모범 사례를 보여주기 위해 `PhoneNumber`가 새로 등장한다. `PhoneNumber`는 지역번호·국번·가입자 번호 세 short 필드만 가진 단순한 값 클래스이고, 다섯 아이템이 어떻게 맞물려 돌아가는지를 한 자리에서 보여준다.
+
+## equals 재정의의 일반 규약
+
+`equals` 메서드는 재정의하기 쉬워 보이지만, 잘못 손대면 오히려 버그의 원인이 된다. 가장 안전한 길은 <E>아예 재정의하지 않는 것</E>이다. 다음과 같은 클래스라면 `Object`의 기본 구현(참조 동일성 비교)이 정확히 원하는 동작이다.
+
+- 각 인스턴스가 본질적으로 고유하다. `Thread`처럼 값이 아니라 활동 단위를 표현하는 클래스.
+- 인스턴스의 <E>논리적 동치성(logical equality)</E>을 검사할 일이 없다. `java.util.Random`이 두 난수 발생기가 같은 시드에서 같은 수열을 만들지 비교할 필요는 없다.
+- 상위 클래스에서 재정의한 `equals`가 하위 클래스에도 적합하다. 대부분의 `Set` 구현체는 `AbstractSet`이 구현한 `equals`를 그대로 쓴다.
+- 클래스가 `private`이거나 package-private이고, `equals` 메서드가 호출될 일이 없다.
+
+이 네 가지에 해당하지 않는다면, 즉 객체 식별이 아니라 <E>논리적 동치</E>를 비교해야 한다면 `equals`를 재정의해야 한다. 주로 값 클래스(value class)가 이 경우다. `PhoneNumber`처럼 두 인스턴스가 같은 번호를 표현하면 같다고 봐야 하는 클래스들이다.
+
+### 다섯 가지 규약
+
+`Object` 명세에 적힌 `equals` 규약은 다음과 같다. `null`이 아닌 참조 값 `x`, `y`, `z`에 대해서다.
+
+- <E>반사성(reflexivity)</E>. `x.equals(x)`는 항상 `true`다.
+- <E>대칭성(symmetry)</E>. `x.equals(y)`가 `true`면 `y.equals(x)`도 `true`다.
+- <E>추이성(transitivity)</E>. `x.equals(y)`와 `y.equals(z)`가 모두 `true`면 `x.equals(z)`도 `true`다.
+- <E>일관성(consistency)</E>. 두 객체가 변경되지 않는 한, 여러 번 호출해도 같은 결과가 나와야 한다.
+- <E>non-null</E>. `x.equals(null)`은 항상 `false`다.
+
+이 다섯은 단순한 약속이 아니다. 자바 컬렉션 프레임워크(`HashMap`, `HashSet`, `TreeSet` 등)가 이 규약을 전제하고 동작하기 때문에, 하나라도 어기면 컬렉션이 객체를 잃어버리거나 잘못된 결과를 돌려준다.
+
+### 상속이 깨뜨리는 대칭성과 추이성
+
+규약을 깨는 흔한 자리는 상속 관계다. `Point`라는 좌표 클래스를 만들고 `equals`를 재정의한 뒤, `Point`를 상속해 색을 추가한 `ColorPoint`에서 `equals`를 다시 손보면 대칭성·추이성 중 하나는 무너진다. `ColorPoint`가 같은 좌표의 `Point`를 같다고 보지만 `Point`는 색을 모르기 때문이다.
+
+이 때문에 책은 `instanceof` 대신 `getClass()`를 쓰는 방안도 함께 소개한다. 다만 `getClass()`는 리스코프 치환 원칙(Liskov Substitution Principle)을 깨뜨려 다형성이 사라지므로, 실무에서는 <E>구체 클래스 확장 대신 컴포지션</E>으로 우회하는 편이 안전하다. 즉 `ColorPoint`는 `Point`를 상속하지 않고, `Point` 필드를 갖고 색을 추가하는 형태로 구성한다.
+
+### 좋은 equals 작성 레시피
+
+자바 16부터는 패턴 매칭(`instanceof PhoneNumber pn`) 덕분에 정형화된 형태가 더 짧아졌다.
+
+1. `==`로 자기 자신 참조인지 검사한다. 단순한 성능 최적화다.
+2. `instanceof`로 입력이 올바른 타입인지 확인한다.
+3. 입력을 올바른 타입으로 형변환한다 (패턴 매칭이면 자동).
+4. 입력 객체와 자기 자신의 핵심 필드들이 모두 일치하는지 검사한다.
+
+<Tabs group="phonenumber-equals">
+  <Tab label="Before: equals 미구현">
+```java title="PhoneNumber.java"
+public final class PhoneNumber {
+    private final short areaCode;
+    private final short prefix;
+    private final short lineNum;
+
+    public PhoneNumber(int areaCode, int prefix, int lineNum) {
+        this.areaCode = rangeCheck(areaCode, 999);
+        this.prefix   = rangeCheck(prefix,   999);
+        this.lineNum  = rangeCheck(lineNum,  9999);
+    }
+    // equals 재정의 없음. Object 의 참조 비교 그대로
+}
+
+// 호출부
+Set<PhoneNumber> phones = new HashSet<>();
+phones.add(new PhoneNumber(707, 867, 5309));
+
+// 같은 번호로 다시 만든 인스턴스. 그러나 참조가 다르므로...
+phones.contains(new PhoneNumber(707, 867, 5309)); // false
+```
+  </Tab>
+  <Tab label="After: 규약을 지킨 equals">
+```java title="PhoneNumber.java"
+public final class PhoneNumber {
+    private final short areaCode;
+    private final short prefix;
+    private final short lineNum;
+
+    public PhoneNumber(int areaCode, int prefix, int lineNum) {
+        this.areaCode = rangeCheck(areaCode, 999);
+        this.prefix   = rangeCheck(prefix,   999);
+        this.lineNum  = rangeCheck(lineNum,  9999);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this) return true;
+        if (!(o instanceof PhoneNumber pn)) return false;
+        return pn.lineNum  == lineNum
+            && pn.prefix   == prefix
+            && pn.areaCode == areaCode;
+    }
+}
+
+// 같은 번호 → 같다고 인식
+phones.contains(new PhoneNumber(707, 867, 5309)); // true
+```
+  </Tab>
+</Tabs>
+
+`HashSet.contains`는 내부적으로 `hashCode`와 `equals`를 함께 쓴다. 따라서 위 After 코드는 절반만 정답이고, 다음 절에서 `hashCode`까지 재정의하면 비로소 완성된다.
+
+<Callout type="info" title="기억할 한 줄">
+  `equals`는 꼭 필요할 때만 재정의하고, 재정의하기로 했다면 다섯 규약을 모두 지켜야 한다. 컬렉션은 그 약속 위에서 돌아간다.
+</Callout>
+
+## hashCode는 equals와 짝이다
+
+`equals`만 재정의하고 `hashCode`를 그대로 두면 클래스가 해시 기반 컬렉션과 어울리지 못한다. `Object` 명세는 둘 사이에 다음 규약을 둔다.
+
+- 같은 객체에 대해 여러 번 호출해도 일관되게 같은 값을 반환해야 한다(애플리케이션 실행 동안).
+- `equals`가 `true`인 두 객체의 `hashCode`는 반드시 같아야 한다.
+- `equals`가 `false`인 두 객체의 `hashCode`는 다를 필요는 없지만, 다르게 만드는 편이 해시 분포에 좋다.
+
+두 번째 항목이 핵심이다. 같다고 본 두 객체가 다른 해시를 돌려주면 `HashMap`은 둘을 다른 버킷에 넣어서 한 객체를 다른 객체로 절대 찾지 못한다.
+
+### 잘못된 hashCode가 망가뜨리는 것
+
+가장 단순한 실수는 모든 객체에 대해 상수를 반환하는 것이다.
+
+```java
+@Override public int hashCode() { return 42; }
+```
+
+이 코드는 규약은 지킨다. `equals`가 `true`인 두 객체가 같은 값(42)을 반환하니까. 그러나 모든 객체가 같은 버킷에 들어가므로 해시 테이블이 사실상 연결 리스트가 된다. 평균 O(1)이어야 할 조회가 O(n)으로 떨어지고, 객체가 많아지면 체감 가능한 속도 저하가 일어난다.
+
+### 표준 레시피 두 가지
+
+좋은 `hashCode`는 핵심 필드를 모두 사용하면서 같지 않은 두 객체에 대해 다른 값을 만들도록 잘 섞는다. 책의 권고는 두 갈래다.
+
+첫째, 직접 계산하는 방식. `int result = ...`로 시작해 각 필드 해시를 누적하면서 `31 * result + fieldHash` 형태로 곱한다. 31은 홀수 소수라서 곱셈이 시프트로 최적화되면서도 충돌 패턴이 적게 나오는 값으로 알려져 있다.
+
+둘째, `Objects.hash`로 한 줄 처리. 자바 7부터 들어온 메서드로, 가변 인수를 받아 위 레시피와 거의 같은 결과를 만든다. 가독성이 가장 좋지만 가변 인수 배열 생성과 박싱 비용이 있어 성능에 민감한 자리에서는 직접 계산을 권한다.
+
+성능이 정말 중요한데 객체가 불변이라면 결과를 캐싱하는 패턴을 추가할 수 있다. 같은 `hashCode`를 반복 계산하지 않도록 처음 호출 시점에 한 번만 계산해 필드에 저장한다.
+
+<Tabs group="phonenumber-hashcode">
+  <Tab label="Before: 상수 반환">
+```java title="PhoneNumber.java"
+@Override
+public int hashCode() {
+    return 42; // 모든 인스턴스가 같은 해시
+}
+```
+이 상태에서 `HashMap<PhoneNumber, String>`에 1만 개를 넣고 조회하면, 모든 키가 같은 버킷에 충돌해 한 번의 `get`이 O(n) 비용을 치른다.
+  </Tab>
+  <Tab label="After 1: 직접 계산 (31 누적)">
+```java title="PhoneNumber.java"
+@Override
+public int hashCode() {
+    int result = Short.hashCode(areaCode);
+    result = 31 * result + Short.hashCode(prefix);
+    result = 31 * result + Short.hashCode(lineNum);
+    return result;
+}
+```
+  </Tab>
+  <Tab label="After 2: Objects.hash">
+```java title="PhoneNumber.java"
+@Override
+public int hashCode() {
+    return Objects.hash(areaCode, prefix, lineNum);
+}
+```
+  </Tab>
+  <Tab label="After 3: 불변 객체 캐싱">
+```java title="PhoneNumber.java"
+private int hashCode; // 0 으로 자동 초기화
+
+@Override
+public int hashCode() {
+    int result = hashCode;
+    if (result == 0) {
+        result = Short.hashCode(areaCode);
+        result = 31 * result + Short.hashCode(prefix);
+        result = 31 * result + Short.hashCode(lineNum);
+        hashCode = result;
+    }
+    return result;
+}
+```
+필드를 0으로 초기화해두고 처음 호출 때만 계산해 캐싱한다. 불변 객체이므로 한 번 계산한 값은 영원히 유효하다.
+  </Tab>
+</Tabs>
+
+<Callout type="info" title="기억할 한 줄">
+  `equals`를 만진 순간 `hashCode`도 함께 만진다. 둘 중 하나만 재정의된 클래스는 해시 기반 컬렉션 안에서 길을 잃는다.
+</Callout>
+
+## toString은 디버깅의 입구다
+
+`Object`의 기본 `toString`은 `클래스이름@해시코드_16진수` 형태다. `Order@12af56b9` 같은 문자열이다. 이 문자열은 어떤 정보도 주지 않는다. 객체가 무엇을 담고 있는지, 어떤 상태인지 알려면 디버거를 켜고 필드를 하나씩 들여다봐야 한다.
+
+`toString`을 잘 구현해 두면 그 객체가 등장하는 모든 곳, 즉 로그 출력, 예외 메시지, 단위 테스트의 assertion 실패 메시지가 한 줄에 모든 진단 정보를 담는다. 사후 부검(post-mortem)이 곧 로그 라인이 된다.
+
+### 포맷을 명시할지의 트레이드오프
+
+`toString` 결과의 포맷을 문서로 명시할 것인지 여부는 의도적 결정이다. 명시하면 그 결과가 사실상 표준 표현이 되어 직렬화·역직렬화에 쓰이거나 사람이 직접 읽고 쓸 수 있다. 다만 한번 명시한 포맷은 향후 변경이 호환성 깨짐으로 이어지므로 약속은 신중해야 한다. 명시하지 않으면 향후 자유롭게 바꿀 수 있고, 다음 버전에서 더 좋은 표현으로 진화시킬 수 있다.
+
+명시하든 명시하지 않든 한 가지는 공통이다. <E>`toString`이 반환하는 값에 포함된 정보는 별도 접근자(getter)로도 제공해야 한다.</E> 그렇지 않으면 `toString` 결과를 파싱해 정보를 꺼내는 코드를 다른 사람이 작성하게 된다.
+
+### Before / After
+
+<Tabs group="order-tostring">
+  <Tab label="Before: 기본 toString">
+```java title="Order.java"
+public class Order {
+    private final OrderId id;
+    private final OrderStatus status;
+    private final Money total;
+    // toString 재정의 없음
+
+    public static void main(String[] args) {
+        Order order = new Order(...);
+        System.out.println(order);
+        // 출력: com.example.shop.Order@4926097b
+    }
+}
+
+// 로그에서도 똑같이 무력하다
+log.info("주문 생성: {}", order);
+// 주문 생성: com.example.shop.Order@4926097b
+```
+  </Tab>
+  <Tab label="After: 의미 있는 toString">
+```java title="Order.java"
+public final class Order {
+    private final OrderId id;
+    private final OrderStatus status;
+    private final Money total;
+
+    @Override
+    public String toString() {
+        return "Order{id=" + id
+             + ", status=" + status
+             + ", total=" + total + "}";
+    }
+}
+
+System.out.println(order);
+// 출력: Order{id=ORDER-2026-0042, status=PAID, total=KRW 18900}
+
+log.info("주문 생성: {}", order);
+// 주문 생성: Order{id=ORDER-2026-0042, status=PAID, total=KRW 18900}
+```
+  </Tab>
+</Tabs>
+
+값 클래스의 `toString`은 한 걸음 더 나아가 사람이 일상적으로 쓰는 표기를 그대로 돌려주면 좋다. 전화번호라면 `707-867-5309` 같은 형식이다.
+
+```java title="PhoneNumber.java"
+@Override
+public String toString() {
+    return String.format("%03d-%03d-%04d", areaCode, prefix, lineNum);
+}
+```
+
+자바 14부터의 `record`는 정규 `toString`을 자동으로 제공하므로, 단순 데이터 운반체라면 `record`로 선언하는 것만으로 이 아이템의 의무를 자동 이행한다.
+
+<Callout type="info" title="기억할 한 줄">
+  `toString`은 객체가 자기 자신을 설명하는 의무다. 디버깅 비용이 직접 줄어든다.
+</Callout>
+
+## clone은 마지막 수단이다
+
+`Cloneable`은 자바에서 가장 어색한 인터페이스다. 인터페이스인데 메서드가 하나도 없다. 그런데도 이 인터페이스를 구현하는 것이 `Object#clone`의 동작을 바꾼다. `Object#clone`은 `protected`로 선언되어 있어 외부에서 직접 호출할 수도 없다. 클래스가 `Cloneable`을 구현한 경우에만 객체의 필드를 모두 복사한 새 객체를 반환하고, 그렇지 않으면 `CloneNotSupportedException`을 던진다.
+
+이 설계는 인터페이스의 의도와 정반대다. 인터페이스는 보통 그것을 구현한 클래스가 무엇을 할 수 있는지를 약속하는데, `Cloneable`은 상위 클래스에 있는 `protected` 메서드의 동작을 바꾸는 마커로 쓰인다. 사용하는 쪽에서는 `Cloneable`이 선언된 클래스라도 `clone()`을 외부에서 호출하지 못할 수 있고, 호출할 수 있다 해도 깊은 복사인지 얕은 복사인지를 별도 문서로 확인해야 한다.
+
+### 얕은 복사가 만드는 문제
+
+`Object#clone`의 기본 동작은 모든 필드를 그대로 복사하는 <E>얕은 복사(shallow copy)</E>다. 기본 타입이면 값이 복사되지만, 가변 객체를 가리키는 참조라면 두 객체가 같은 가변 객체를 공유한다. 시리즈 1편에서 본 `Stack` 구현체로 그 결과를 보자.
+
+<Tabs group="stack-clone">
+  <Tab label="Before: 얕은 clone">
+```java title="Stack.java"
+public class Stack implements Cloneable {
+    private Object[] elements;
+    private int size = 0;
+
+    @Override
+    public Stack clone() {
+        try {
+            return (Stack) super.clone(); // elements 배열은 두 인스턴스가 공유
+        } catch (CloneNotSupportedException e) {
+            throw new AssertionError();   // 여기엔 도달할 수 없다
+        }
+    }
+}
+
+// 사용
+Stack a = new Stack();
+a.push("apple");
+Stack b = a.clone();
+b.push("banana");
+
+// a 의 내부 배열도 함께 변형되어 불변식이 깨진다
+```
+  </Tab>
+  <Tab label="After 1: 가변 필드 깊은 복사">
+```java title="Stack.java"
+@Override
+public Stack clone() {
+    try {
+        Stack result = (Stack) super.clone();
+        result.elements = elements.clone(); // 배열도 따로 복사
+        return result;
+    } catch (CloneNotSupportedException e) {
+        throw new AssertionError();
+    }
+}
+```
+배열은 `clone()`이 잘 정의된 거의 유일한 자료형이다. 배열의 `clone()`은 같은 타입으로 이미 형변환된 새 배열을 반환한다.
+  </Tab>
+  <Tab label="After 2: 복사 생성자 / 복사 팩토리 (권장)">
+```java title="Stack.java"
+public Stack(Stack other) {
+    this.elements = other.elements.clone();
+    this.size     = other.size;
+}
+
+public static Stack copyOf(Stack other) {
+    return new Stack(other);
+}
+
+// 사용
+Stack b = new Stack(a);
+// 또는
+Stack b = Stack.copyOf(a);
+```
+복사 생성자와 복사 팩토리는 `Cloneable`의 모든 어색함에서 자유롭다. 정상적인 final 필드를 쓸 수 있고, `throws CloneNotSupportedException` 같은 검사 예외에 시달리지 않으며, 형변환이 필요 없고, 인터페이스 타입(`Collection`, `Map` 등)을 그대로 받아 동일 인터페이스의 다른 구현으로 변환할 수도 있다.
+  </Tab>
+</Tabs>
+
+`HashSet`을 `TreeSet`으로 변환할 수 있는 `new TreeSet<>(s)`도 같은 패턴이다. 이를 <E>변환 생성자(conversion constructor)</E> 또는 <E>변환 팩토리(conversion factory)</E>라고 부르며, `Cloneable`보다 훨씬 유연하다.
+
+<Callout type="info" title="기억할 한 줄">
+  `Cloneable`은 피하고, 객체 복사가 필요하면 복사 생성자 또는 복사 팩토리로 대체한다. 배열만 예외다.
+</Callout>
+
+## Comparable로 자연 순서를 부여하라
+
+`Comparable`은 `Object`에 속하지 않은 유일한 메서드 `compareTo`를 정의하는 인터페이스다. 단순 동치 비교에 더해 <E>순서</E>까지 표현하며, 제네릭하다. `Comparable`을 구현했다는 것은 그 클래스의 인스턴스에 <E>자연 순서(natural ordering)</E>가 있다는 선언이다.
+
+`Comparable`을 구현하면 그 인스턴스를 담은 배열을 `Arrays.sort(a)` 한 줄로 정렬할 수 있고, `Collections.binarySearch` 같은 검색 연산도 그대로 쓸 수 있다. `TreeSet`/`TreeMap` 같은 정렬된 컬렉션은 `compareTo`를 키 비교에 사용한다.
+
+### compareTo 규약과 equals 일관성
+
+`compareTo`는 `equals`와 비슷한 다섯 항목짜리 규약(반사·대칭·추이성, 그리고 두 가지 일관성)을 따른다. 그중 가장 자주 어겨지는 부분이 `equals`와의 일관성이다.
+
+규약은 "(`x.compareTo(y) == 0`) == (`x.equals(y)`)"가 성립하기를 권장하지만 강제하지는 않는다. 권장 사항이 깨진 대표적인 클래스가 `BigDecimal`이다. `new BigDecimal("1.0")`과 `new BigDecimal("1.00")`은 `equals`로는 다르지만 `compareTo`로는 같다. 이 두 객체를 `HashSet`에 넣으면 다른 원소로 취급되지만, `TreeSet`에 넣으면 같은 원소로 보인다. 같은 컬렉션 자료형을 쓰는 것 같은데 결과가 갈리는 이상한 동작이 여기서 나온다.
+
+### 빼기 연산은 박싱 타입에 위험하다
+
+`compareTo`를 빠르게 구현하려고 두 정수의 차이를 그대로 반환하는 코드를 쓰는 경우가 있다.
+
+```java
+// 잘못된 패턴: int 오버플로
+public int compareTo(PhoneNumber pn) {
+    return this.areaCode - pn.areaCode;
+}
+```
+
+이 코드는 작은 양수끼리는 잘 동작한다. 그러나 `Integer.MIN_VALUE`와 양수 사이에서는 차이가 `int` 범위를 넘어 음수가 양수로, 양수가 음수로 둔갑한다. 정렬 결과가 뒤집힌다.
+
+대안은 두 가지다. 박싱 타입의 정적 비교 메서드를 직접 부르거나, `Comparator`의 비교 생성자(comparator construction methods) 체인을 쓴다. 자바 8부터 들어온 `Comparator.comparingInt`/`thenComparingInt` 계열이 후자다.
+
+### Before / After
+
+<Tabs group="phonenumber-compareto">
+  <Tab label="Before: 빼기로 비교">
+```java title="PhoneNumber.java"
+public final class PhoneNumber implements Comparable<PhoneNumber> {
+
+    @Override
+    public int compareTo(PhoneNumber pn) {
+        int cmp = this.areaCode - pn.areaCode; // 오버플로 위험
+        if (cmp != 0) return cmp;
+        cmp = this.prefix - pn.prefix;
+        if (cmp != 0) return cmp;
+        return this.lineNum - pn.lineNum;
+    }
+}
+```
+  </Tab>
+  <Tab label="After 1: Integer.compare">
+```java title="PhoneNumber.java"
+@Override
+public int compareTo(PhoneNumber pn) {
+    int cmp = Short.compare(areaCode, pn.areaCode);
+    if (cmp != 0) return cmp;
+    cmp = Short.compare(prefix, pn.prefix);
+    if (cmp != 0) return cmp;
+    return Short.compare(lineNum, pn.lineNum);
+}
+```
+박싱 타입의 정적 `compare` 메서드는 오버플로 없이 정확한 비교 결과를 돌려준다. `Integer.compare`, `Long.compare`, `Short.compare`, `Double.compare` 모두 같은 형태다.
+  </Tab>
+  <Tab label="After 2: Comparator 체인 (권장)">
+```java title="PhoneNumber.java"
+private static final Comparator<PhoneNumber> COMPARATOR =
+        Comparator.comparingInt((PhoneNumber pn) -> pn.areaCode)
+                  .thenComparingInt(pn -> pn.prefix)
+                  .thenComparingInt(pn -> pn.lineNum);
+
+@Override
+public int compareTo(PhoneNumber pn) {
+    return COMPARATOR.compare(this, pn);
+}
+```
+선언적이고, 비교 키가 늘어나도 한 줄씩 추가만 하면 된다. 첫 번째 람다에는 타입 추론이 잘 안 되어 명시적 타입을 적어주지만, 두 번째부터는 추론이 자연스럽게 이어진다. 책은 이 방식이 약간 느릴 수 있다고 적고 있지만, 일반적인 애플리케이션에서는 가독성 이득이 비용을 압도한다.
+  </Tab>
+</Tabs>
+
+값 클래스에 자연 순서가 명백하면 `Comparable`을 구현해 클라이언트에게 정렬·검색·정렬된 컬렉션의 이점을 그대로 넘긴다. 자연 순서가 없거나 여러 정렬 기준이 필요하면 `Comparable`을 구현하지 않고, 정렬이 필요한 자리에서 `Comparator`를 따로 만들어 넘긴다.
+
+<Callout type="info" title="기억할 한 줄">
+  값 클래스에 자연 순서가 있으면 `Comparable`을 구현하고, 그 외에는 `Comparator`로 외부에서 순서를 넘긴다. 빼기 연산은 쓰지 않는다.
+</Callout>
+
+## 정리
+
+다섯 아이템을 한 줄씩 다시 적어 두면 다음과 같다.
+
+- <E>Item 10.</E> 값 클래스라면 `equals`를 재정의해 논리적 동치를 정의하고, 다섯 규약(반사·대칭·추이·일관·non-null)을 모두 지킨다.
+- <E>Item 11.</E> `equals`를 재정의했다면 반드시 `hashCode`도 같이 재정의한다. 같은 객체는 같은 해시여야 한다.
+- <E>Item 12.</E> `toString`을 재정의해 객체가 자기 자신을 설명하게 한다. 로그 한 줄이 사후 부검 자료가 된다.
+- <E>Item 13.</E> `Cloneable`은 피한다. 복사가 필요하면 복사 생성자나 복사 팩토리로 대체한다.
+- <E>Item 14.</E> 자연 순서가 있는 값 클래스에는 `Comparable`을 구현한다. 빼기 연산은 오버플로가 있으니 `Integer.compare`나 `Comparator.comparingInt`로 대체한다.
+
+다섯 아이템의 공통점은 분명하다. <E>모든 객체가 묵시적으로 받는 메서드는 묵시적으로 두지 말라</E>는 것이다. 값 클래스에서 가장 강하게 적용되며, `equals`/`hashCode`/`toString`/`compareTo` 네 메서드가 함께 정의되었을 때 그 클래스는 비로소 컬렉션·로깅·테스트·정렬 도구와 자연스럽게 어울리는 객체가 된다.
+
+## 참고 자료
+
+- 조슈아 블로크, 『이펙티브 자바 3판』, 인사이트, 2018, 3장 모든 객체의 공통 메서드 (Item 10, 11, 12, 13, 14).
+- Oracle Java Documentation, [`Object#equals`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#equals(java.lang.Object)). `equals`의 일반 규약 원문.
+- Oracle Java Documentation, [`Object#hashCode`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#hashCode()). 일반 규약과 권장 구현.
+- Oracle Java Documentation, [`Objects#hash`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Objects.html#hash(java.lang.Object...)). 한 줄 `hashCode` 헬퍼.
+- Oracle Java Documentation, [`Comparable`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Comparable.html), [`Comparator#comparing`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Comparator.html#comparing(java.util.function.Function)). 자연 순서와 비교 생성자.
+- Oracle Java Documentation, [`Cloneable`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Cloneable.html). 메서드 없는 마커 인터페이스의 동작 명세.
