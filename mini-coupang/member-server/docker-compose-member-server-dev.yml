@@ -1,7 +1,16 @@
+# member-server 단독 개발용 compose. 인프라만 컨테이너로 띄우고
+# 서비스는 `./gradlew :member-server:bootRun` 으로 호스트에서 실행한다.
+#
+# 기동:  docker compose -f docker-compose-member-server-dev.yml up -d
+# 종료:  docker compose -f docker-compose-member-server-dev.yml down [-v]
+#
+# 다른 서비스 dev 스택과 동시 기동은 가정하지 않는다 (호스트 포트 3306/6379/9092 공유).
+# 같이 띄우려면 한쪽을 down 후 기동.
+
 services:
   mysql:
     image: mysql:8.4
-    container_name: mini-coupang-mysql
+    container_name: mini-coupang-member-dev-mysql
     restart: unless-stopped
     ports:
       - "3306:3306"
@@ -17,7 +26,7 @@ services:
       - --default-time-zone=+09:00
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+      - ../shared/docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-uroot", "-proot", "--silent"]
       interval: 5s
@@ -27,7 +36,7 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    container_name: mini-coupang-redis
+    container_name: mini-coupang-member-dev-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -40,10 +49,23 @@ services:
       timeout: 3s
       retries: 10
 
-  # KRaft 모드 단일 노드. Zookeeper 없음. sandbox 용으로만 사용.
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: mini-coupang-member-dev-redis-insight
+    restart: unless-stopped
+    ports:
+      - "5540:5540"
+    environment:
+      RI_REDIS_HOST: redis
+      RI_REDIS_PORT: "6379"
+      RI_REDIS_ALIAS: mini-coupang-member-dev
+    depends_on:
+      redis:
+        condition: service_healthy
+
   kafka:
     image: confluentinc/cp-kafka:7.7.1
-    container_name: mini-coupang-kafka
+    container_name: mini-coupang-member-dev-kafka
     restart: unless-stopped
     ports:
       - "9092:9092"
@@ -63,7 +85,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_NUM_PARTITIONS: 3
       KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-      CLUSTER_ID: "mini-coupang-cluster"
+      CLUSTER_ID: "mini-coupang-member-dev"
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
@@ -73,41 +95,21 @@ services:
       retries: 10
       start_period: 30s
 
-  prometheus:
-    image: prom/prometheus:v2.55.0
-    container_name: mini-coupang-prometheus
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: mini-coupang-member-dev-kafka-ui
     restart: unless-stopped
     ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus:/etc/prometheus
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.enable-lifecycle'
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-  grafana:
-    image: grafana/grafana:11.4.0
-    container_name: mini-coupang-grafana
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - grafana-data:/var/lib/grafana
+      - "18099:8080"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
+      KAFKA_CLUSTERS_0_NAME: mini-coupang-member-dev
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
     depends_on:
-      - prometheus
+      kafka:
+        condition: service_healthy
 
 volumes:
   mysql-data:
   redis-data:
   kafka-data:
-  prometheus-data:
-  grafana-data:
