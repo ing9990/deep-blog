@@ -1,0 +1,352 @@
+---
+title:
+  ko: "람다와 스트림"
+  en: "Lambdas and Streams"
+slug: effective-java-lambdas-and-streams
+date: 2026-03-31
+category: books
+book: effective-java
+tags:
+  - 이펙티브 자바
+keywords:
+  - 람다
+  - Lambda
+  - 메서드 참조
+  - Method Reference
+  - 함수형 인터페이스
+  - Functional Interface
+  - 스트림
+  - Stream
+  - Collectors
+  - 부수 효과
+summary:
+  ko: "이펙티브 자바 3판 7장 람다와 스트림에서 다섯 아이템을 정리합니다. 익명 클래스 대신 람다, 람다 대신 메서드 참조, 표준 함수형 인터페이스 활용, 부수 효과 없는 스트림, 그리고 반환 타입으로서의 스트림과 컬렉션의 비대칭까지 자바 예시 코드와 Before/After 비교로 살펴봅니다."
+  en: "Five items from Effective Java 3E Chapter 7. lambdas over anonymous classes, method references over lambdas, standard functional interfaces, side-effect-free stream pipelines, and choosing Collection over Stream as a return type. with Java samples and before/after comparisons."
+draft: false
+---
+
+이펙티브 자바 3판 7장은 <E>람다와 스트림</E>을 다룬다. 자바 8에서 들어온 두 도구는 자바 코드의 모양을 한 번에 바꿨다. 람다는 함수 객체를 한 줄로 표현하고, 스트림은 컬렉션을 다루는 작업을 데이터 파이프라인처럼 적게 한다. 다만 두 도구를 잘못 쓰면 짧은 코드가 곧 좋은 코드라는 착각으로 미끄러지기 쉽다. 이 글에서는 7장에서 자주 인용되는 다섯 아이템을 자바 예시 코드와 Before/After 비교로 정리한다.
+
+<Note title="이 글에서 다루는 다섯 아이템">
+  - Item 42. 익명 클래스보다는 람다를 사용하라
+  - Item 43. 람다보다는 메서드 참조를 사용하라
+  - Item 44. 표준 함수형 인터페이스를 사용하라
+  - Item 46. 스트림에서는 부작용 없는 함수를 사용하라
+  - Item 47. 반환 타입으로는 스트림보다 컬렉션이 낫다
+</Note>
+
+이 글의 코드 예시는 시리즈를 따라 같은 주문 도메인을 공유한다. `OrderId`, `Money`, `LineItem`, `Order`. 스트림 예시는 "주문 목록을 상태별로 그룹화", "라인 아이템을 상품별로 합산", "특정 금액 이상 주문만 추출" 같은 일상적인 집계 코드다.
+
+## 익명 클래스보다 람다
+
+자바 8 이전에는 함수 객체를 만드는 표준 방법이 익명 클래스였다. 정렬 비교자(`Comparator`), 콜백 리스너, 한 번 쓰고 버리는 작업을 익명 클래스로 감싸면 한 줄로 끝날 일이 다섯 줄이 되곤 했다. 자바 8은 <E>추상 메서드가 하나뿐인 인터페이스</E>(함수형 인터페이스)에 대해 람다 표현식이라는 짧은 표기를 도입해 이 작업을 다시 한 줄로 줄였다.
+
+### Before / After
+
+같은 정렬 비교를 익명 클래스와 람다로 비교하면 차이가 한눈에 들어온다.
+
+<Tabs group="lambda-vs-anon">
+  <Tab label="Before: 익명 클래스">
+```java title="OrderSorter.java"
+List<Order> orders = ...;
+
+orders.sort(new Comparator<Order>() {
+    @Override
+    public int compare(Order a, Order b) {
+        return Long.compare(a.total().amount(), b.total().amount());
+    }
+});
+```
+  </Tab>
+  <Tab label="After 1: 람다">
+```java title="OrderSorter.java"
+orders.sort((a, b) -> Long.compare(a.total().amount(), b.total().amount()));
+```
+타입은 컴파일러가 추론한다. `(a, b)`의 타입이 `Order`임은 `List<Order>`의 `sort` 시그니처에서 결정된다.
+  </Tab>
+  <Tab label="After 2: Comparator 정적 메서드">
+```java title="OrderSorter.java"
+orders.sort(Comparator.comparingLong(o -> o.total().amount()));
+```
+키 추출 함수를 받는 정적 비교 생성 메서드를 쓰면 의도가 더 분명해진다. 이 패턴은 시리즈 4번째 글(3장)의 `Comparable` 절에서도 다뤘다.
+  </Tab>
+</Tabs>
+
+### 람다가 부적합한 자리
+
+람다가 익명 클래스를 대체하지 못하는 경우가 있다.
+
+- <E>추상 메서드가 둘 이상</E>인 인터페이스의 인스턴스를 만들 때. 함수형 인터페이스가 아니므로 람다 문법이 적용되지 않는다.
+- <E>람다 본문에서 `this`</E>가 자기 자신(함수 객체)을 가리켜야 할 때. 람다 안의 `this`는 바깥 인스턴스를 가리키므로, 함수 객체 자기 참조가 필요하다면 익명 클래스를 써야 한다.
+- <E>직렬화 가능성을 안정적으로 보장</E>해야 할 때. 람다도 직렬화는 가능하지만 구현체가 가상머신마다 다르다. 직렬화 형식이 외부에 노출되는 자리에서는 명시적으로 클래스를 정의한다.
+
+또한 람다는 이름과 문서가 없어 본문이 한두 줄 이상 길어지면 읽기 어려워진다. 본문이 길어진다면 람다 대신 이름 있는 메서드를 만들고, 다음 절에서 다룰 메서드 참조로 넘기는 편이 낫다.
+
+<Callout type="info" title="기억할 한 줄">
+  함수형 인터페이스가 매개변수라면 익명 클래스 대신 람다를 먼저 고려한다. 본문이 길어지면 메서드를 빼라.
+</Callout>
+
+## 람다보다 메서드 참조
+
+람다가 익명 클래스보다 짧다면, 메서드 참조는 그 람다보다 더 짧을 수 있다. 이미 이름과 문서가 있는 메서드를 가리키는 동작이라면, 같은 동작을 람다로 다시 쓰는 일은 중복이다.
+
+```java
+// 람다
+map.merge(key, 1, (count, increment) -> count + increment);
+
+// 메서드 참조
+map.merge(key, 1, Integer::sum);
+```
+
+`Integer.sum`은 자바 8이 정확히 이런 자리를 위해 추가한 메서드다. 람다가 더 짧고 더 표준적인 이름을 잃으면, 코드는 짧아 보일지 몰라도 의도 표현이 약해진다.
+
+### 다섯 가지 메서드 참조
+
+| 종류 | 예 | 같은 의미의 람다 |
+|---|---|---|
+| 정적 (static) | `Integer::parseInt` | `s -> Integer.parseInt(s)` |
+| 한정적 인스턴스 (bound) | `Instant.now()::isAfter` | `t -> Instant.now().isAfter(t)` |
+| 비한정적 인스턴스 (unbound) | `String::toLowerCase` | `s -> s.toLowerCase()` |
+| 클래스 생성자 | `TreeMap<K,V>::new` | `() -> new TreeMap<K,V>()` |
+| 배열 생성자 | `int[]::new` | `len -> new int[len]` |
+
+비한정적 메서드 참조는 처음에 헷갈리기 쉽다. `String::toLowerCase`는 메서드를 호출할 인스턴스를 첫 번째 인수로 받으므로 결과 함수의 타입이 `Function<String, String>`이 된다. 한정적은 인스턴스가 이미 정해졌고, 비한정적은 호출 시점에 결정된다는 차이다.
+
+### 람다가 더 명확한 자리
+
+메서드 참조가 짧다고 늘 좋은 건 아니다. 클래스 이름이 길고 메서드 이름이 그에 비해 짧으면, 메서드 참조는 그 긴 클래스 이름을 정면에 띄운다.
+
+```java
+// 메서드 참조: 클래스 이름이 노이즈가 된다
+service.execute(GoshThisClassNameIsHumongous::action);
+
+// 람다: 짧고 의도가 분명하다
+service.execute(() -> action());
+```
+
+람다가 한 줄이고 본문이 즉시 의미를 전달한다면, 굳이 메서드 참조로 바꾸지 않는다. 메서드 참조는 도구이지 강제가 아니다.
+
+<Callout type="info" title="기억할 한 줄">
+  메서드 참조 쪽이 짧고 의도가 분명하면 메서드 참조를, 람다가 자기 자체로 더 명확하면 람다를 쓴다.
+</Callout>
+
+## 표준 함수형 인터페이스를 쓰라
+
+자바 8부터 `java.util.function` 패키지에 43개의 함수형 인터페이스가 들어 있다. 모두 외워야 하는 건 아니고, 여섯 개의 기본 형태만 익히면 나머지는 같은 패턴의 변형이다.
+
+| 인터페이스 | 시그니처 | 의미 | 예 |
+|---|---|---|---|
+| `UnaryOperator<T>` | `T apply(T)` | 같은 타입 안에서 변환 | `String::toLowerCase` |
+| `BinaryOperator<T>` | `T apply(T, T)` | 같은 타입 두 개를 합쳐 같은 타입 | `BigInteger::add` |
+| `Predicate<T>` | `boolean test(T)` | 조건 검사 | `Collection::isEmpty` |
+| `Function<T,R>` | `R apply(T)` | 다른 타입으로 변환 | `Arrays::asList` |
+| `Supplier<T>` | `T get()` | 매개변수 없이 값 공급 | `Instant::now` |
+| `Consumer<T>` | `void accept(T)` | 값을 받아 부수 효과 | `System.out::println` |
+
+박싱이 일어나면 안 되는 자리에는 같은 형태의 기본 타입 특화 변형이 있다. `IntPredicate`, `LongFunction<R>`, `IntUnaryOperator` 등이 그 예다. 성능에 민감한 코드에서 박싱된 기본 타입을 받는 표준 함수형 인터페이스를 쓰는 것은 피한다.
+
+### Before / After
+
+직접 함수형 인터페이스를 정의해 매개변수로 받던 코드를 표준으로 바꾸면 다음과 같다.
+
+<Tabs group="custom-fi-vs-standard">
+  <Tab label="Before: 직접 정의">
+```java title="OrderFilter.java"
+@FunctionalInterface
+interface OrderPredicate {
+    boolean test(Order order);
+}
+
+public List<Order> filter(List<Order> orders, OrderPredicate p) {
+    List<Order> result = new ArrayList<>();
+    for (Order o : orders) {
+        if (p.test(o)) result.add(o);
+    }
+    return result;
+}
+```
+  </Tab>
+  <Tab label="After: Predicate&lt;Order&gt;">
+```java title="OrderFilter.java"
+public List<Order> filter(List<Order> orders, Predicate<Order> p) {
+    return orders.stream()
+                 .filter(p)
+                 .toList();
+}
+
+// 호출부
+List<Order> paidOrders = filter(orders, o -> o.status() == OrderStatus.PAID);
+```
+  </Tab>
+</Tabs>
+
+### 그래도 직접 정의가 정당한 자리
+
+다음 세 조건을 만족하면 직접 정의를 고려할 만하다.
+
+- <E>자주 쓰이고</E> 이름이 의도를 또렷하게 드러낼 때. `Comparator<T>`가 그 예시다. `ToIntBiFunction<T,T>`로도 표현할 수 있지만 비교의 의미가 가려진다.
+- <E>강력한 규약</E>이 따라붙을 때. `Comparator`는 반사·대칭·추이성을 명세한다. 단순 함수 시그니처로는 그 규약이 드러나지 않는다.
+- <E>유용한 디폴트 메서드</E>를 함께 제공할 때. `Comparator`의 `thenComparing`, `Predicate`의 `and`/`or` 같은 체인 메서드가 그 예다.
+
+직접 정의할 때는 항상 `@FunctionalInterface` 애너테이션을 붙인다. 추상 메서드가 정확히 하나임을 컴파일러가 강제하고, 의도를 코드에 박아 둔다.
+
+<Callout type="info" title="기억할 한 줄">
+  필요한 모양은 거의 다 `java.util.function`에 있다. 직접 정의는 이름·규약·디폴트 메서드 중 하나가 필요할 때만.
+</Callout>
+
+## 스트림에서는 부수 효과 없는 함수
+
+스트림은 함수형 프로그래밍에 기반을 두고 있고, 그 본질은 <E>일련의 변환을 부수 효과 없이</E> 표현하는 것이다. 입력에서 출력까지의 흐름이 입력만의 함수이면 그 코드는 읽기 쉽고, 디버깅이 쉽고, 병렬화도 안전해진다.
+
+가장 흔한 안티 패턴은 `forEach` 안에서 외부 자료구조를 변형하는 코드다. 단어 빈도를 세는 다음 코드를 보자.
+
+<Tabs group="stream-side-effect">
+  <Tab label="Before: forEach 가 변형 책임을 진다">
+```java title="WordFrequencyBad.java"
+Map<String, Long> freq = new HashMap<>();
+words.stream().forEach(word ->
+    freq.merge(word.toLowerCase(), 1L, Long::sum)
+);
+```
+얼핏 동작하지만 이 코드는 스트림이라는 모양만 빌렸을 뿐 실제로는 명령형 반복문이다. 외부 `freq`를 갱신하는 부수 효과가 본체이고, 스트림은 단순한 반복자 역할이다.
+  </Tab>
+  <Tab label="After: 결과는 collect 로 모은다">
+```java title="WordFrequencyGood.java"
+Map<String, Long> freq = words.stream()
+    .collect(Collectors.groupingBy(
+        String::toLowerCase,
+        Collectors.counting()));
+```
+이번에는 스트림의 결과를 `Collectors`가 모아 새 `Map`을 만든다. 외부 상태가 없어 코드 의미가 입력만의 함수가 되고, 같은 입력에 대해 같은 출력이 반복적으로 나온다.
+  </Tab>
+</Tabs>
+
+### forEach 의 자리
+
+`forEach`가 무용한 건 아니다. <E>스트림 계산의 결과를 보고하는</E> 자리, 가령 콘솔 출력이나 로그 기록이 그것의 본업이다. 결과 데이터를 만들어내는 일은 다른 종단 연산(`collect`, `reduce`, `toList` 등)에 맡긴다.
+
+```java
+// 디버깅용 출력
+orders.stream()
+      .filter(o -> o.total().amount() > 100_000)
+      .forEach(System.out::println);
+```
+
+### 자주 쓰는 Collectors
+
+`Collectors`는 스트림을 컬렉션으로 모으거나 그룹화하거나 통계를 내는 도구 묶음이다. 다음 정도가 자주 등장한다.
+
+| Collector | 결과 | 예 |
+|---|---|---|
+| `toList` / `toUnmodifiableList` | `List<T>` | `stream.collect(toList())` |
+| `toMap` | `Map<K,V>` | `stream.collect(toMap(Order::id, o -> o))` |
+| `groupingBy` | `Map<K, List<T>>` | `stream.collect(groupingBy(Order::status))` |
+| `groupingBy` + downstream | `Map<K, V>` | `groupingBy(Order::status, counting())` |
+| `partitioningBy` | `Map<Boolean, List<T>>` | `partitioningBy(o -> o.total().amount() > 100_000)` |
+| `joining` | `String` | `stream.map(Order::toString).collect(joining(", "))` |
+| `summingLong` / `averagingLong` | `Long` / `Double` | `summingLong(o -> o.total().amount())` |
+
+자바 16부터는 `stream.toList()`라는 짧은 종단 연산이 추가되어, 가장 흔한 `Collectors.toList()` 호출은 거의 대체된다. 결과는 변경 불가능한 리스트다.
+
+<Callout type="info" title="기억할 한 줄">
+  스트림 파이프라인은 입력만의 함수여야 한다. 결과는 `Collectors`로 모으고, `forEach`는 결과를 보고할 때만 쓴다.
+</Callout>
+
+## 반환 타입은 스트림보다 컬렉션
+
+API를 설계할 때 반환 타입을 `Stream`으로 둘지, `Iterable`이나 `Collection`으로 둘지 결정해야 할 자리가 있다. 결론부터 말하면 <E>대부분 `Collection`이 정답</E>이다. 이유를 보려면 `Stream`과 `Iterable`의 비대칭부터 살펴야 한다.
+
+`Stream`은 `Iterable`을 확장하지 않는다. 그래서 다음 코드는 컴파일이 되지 않는다.
+
+```java
+// 컴파일 에러: Stream<E> 는 Iterable<E> 가 아님
+for (ProcessHandle ph : ProcessHandle.allProcesses()) { ... }
+```
+
+반대로 `Iterable`을 받으면 `for-each` 루프는 자연스럽게 도는데, `stream()` 메서드가 없으니 함수형 파이프라인으로 넘기려면 별도 변환이 필요하다.
+
+`Collection` 인터페이스는 `Iterable`을 확장하면서 `stream()` 메서드를 함께 제공한다. 즉 `Collection`을 반환하면 호출자는 `for-each`도 쓸 수 있고 `stream()`도 받아서 흘려보낼 수 있다. 양쪽 사용 패턴을 모두 수용하는 가장 단순한 선택이다.
+
+### Before / After
+
+같은 메서드를 세 가지 반환 타입으로 비교해 보자. "주문 중에서 결제 완료된 것만 돌려준다."
+
+<Tabs group="return-stream-vs-collection">
+  <Tab label="Before 1: Stream 반환">
+```java title="OrderQuery.java"
+public Stream<Order> paidOrders(List<Order> orders) {
+    return orders.stream()
+                 .filter(o -> o.status() == OrderStatus.PAID);
+}
+
+// 호출자
+paidOrders(orders).forEach(System.out::println);          // 가능
+
+// for-each 는 막힌다
+for (Order o : paidOrders(orders)) { ... }                // 컴파일 에러
+```
+  </Tab>
+  <Tab label="Before 2: Iterable 반환">
+```java title="OrderQuery.java"
+public Iterable<Order> paidOrders(List<Order> orders) {
+    return () -> orders.stream()
+                       .filter(o -> o.status() == OrderStatus.PAID)
+                       .iterator();
+}
+
+// 호출자
+for (Order o : paidOrders(orders)) { ... }                // 가능
+
+// stream 으로 받으려면 변환 필요
+StreamSupport.stream(paidOrders(orders).spliterator(), false)
+             .map(Order::id)
+             ...
+```
+  </Tab>
+  <Tab label="After: Collection 반환 (권장)">
+```java title="OrderQuery.java"
+public List<Order> paidOrders(List<Order> orders) {
+    return orders.stream()
+                 .filter(o -> o.status() == OrderStatus.PAID)
+                 .toList();
+}
+
+// 호출자: 양쪽 다 자연스럽다
+for (Order o : paidOrders(orders)) { ... }
+paidOrders(orders).stream().mapToLong(o -> o.total().amount()).sum();
+```
+  </Tab>
+</Tabs>
+
+### 작지 않은 시퀀스를 반환할 때
+
+반환할 시퀀스가 메모리에 한 번에 담기 어려울 정도로 크다면 `Collection` 대신 `Stream`이 옳다. `Stream`은 게으르게 평가되므로 종단 연산 직전까지 원소를 만들지 않는다. 책은 대표적인 예로 부분집합(power set) 같은 조합 폭증 시퀀스를 든다. 멤버 N개의 부분집합은 2^N개라서 Collection으로 담기 시작하면 메모리가 빠르게 고갈된다.
+
+규칙은 단순하다.
+
+- 반환 시퀀스가 작거나 미리 다 계산해 둔 결과라면 `Collection`을 반환한다.
+- 시퀀스가 사실상 무한하거나 아주 크고, 호출자가 일부만 소비할 가능성이 있다면 `Stream`을 반환한다.
+
+<Callout type="info" title="기억할 한 줄">
+  반환 타입은 `Collection`을 기본값으로. 시퀀스가 너무 크거나 게으른 평가가 본질이면 `Stream`으로 간다.
+</Callout>
+
+## 정리
+
+다섯 아이템을 한 줄씩 다시 적어 두면 다음과 같다.
+
+- <E>Item 42.</E> 함수형 인터페이스를 받는 자리에서는 익명 클래스 대신 람다를 쓴다. 본문이 길어지면 메서드로 빼낸다.
+- <E>Item 43.</E> 이미 이름 있는 메서드가 같은 동작을 한다면 람다를 메서드 참조로 바꿔 의도를 살린다. 다만 클래스 이름이 노이즈일 때는 람다가 더 명확하다.
+- <E>Item 44.</E> 함수 매개변수는 `java.util.function`의 표준을 먼저 검토한다. 직접 정의는 이름·규약·디폴트 메서드 중 하나가 필요할 때다.
+- <E>Item 46.</E> 스트림 파이프라인은 부수 효과 없이 입력만의 함수가 되도록 짜고, 결과는 `Collectors`로 모은다. `forEach`는 결과 보고용이다.
+- <E>Item 47.</E> 반환 타입은 `Collection`이 기본. 양쪽 사용 패턴(`for-each`와 `stream()`)을 모두 수용한다. 시퀀스가 너무 크면 `Stream`이 답이다.
+
+다섯 아이템의 공통점은 분명하다. <E>람다와 스트림은 도구이지 목적이 아니다</E>. 같은 동작을 더 짧게, 더 의도 분명하게 쓸 수 있을 때 쓰고, 그렇지 않은 자리에서는 익명 클래스나 명시적 반복문이 여전히 정답이다.
+
+## 참고 자료
+
+- 조슈아 블로크, 『이펙티브 자바 3판』, 인사이트, 2018, 7장 람다와 스트림 (Item 42, 43, 44, 46, 47).
+- Oracle Java Documentation, [`java.util.function`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/function/package-summary.html). 표준 함수형 인터페이스 43종.
+- Oracle Java Documentation, [`Collectors`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/stream/Collectors.html). `groupingBy`/`toMap`/`joining` 등 종단 수집기.
+- Oracle Java Documentation, [`Stream#toList`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/stream/Stream.html#toList()). 자바 16에서 추가된 짧은 종단 연산.
+- Brian Goetz, [State of the Lambda](http://cr.openjdk.java.net/~briangoetz/lambda/lambda-state-final.html). 자바 람다 도입 배경 문서.
