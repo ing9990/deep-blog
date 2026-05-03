@@ -126,7 +126,7 @@ docker compose -f docker-compose-integration-tests.yml up -d --build
 docker compose -f docker-compose-integration-tests.yml ps   # 모든 서비스 healthy 확인
 
 cd ..
-./gradlew :integration-test:test                            # 테스트는 호스트의 1xxxx 포트로 접근
+./gradlew :integration-test:it                              # 테스트는 호스트의 1xxxx 포트로 접근 (build.gradle 의 it 태스크)
 
 cd integration-test
 docker compose -f docker-compose-integration-tests.yml down -v
