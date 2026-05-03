@@ -3,7 +3,7 @@ title:
   ko: "Backpressure"
   en: "Backpressure"
 slug: "backpressure"
-date: 2026-04-14
+date: 2026-03-24
 tags:
   - cs
   - backend
@@ -126,7 +126,7 @@ Backpressure는 다음 세 조건 중 **둘 이상이 겹칠 때** 반드시 고
 
 ### 1. Unbounded queue
 
-<E>메모리 여유 있으니 일단 받자</E>는 판단은 backpressure를 다른 시간대로 미룰 뿐입니다. 트래픽 스파이크 때 큐는 결국 가득 차고, 그 시점에는 복구도 어렵습니다. Java의 `new LinkedBlockingQueue()`(capacity 생략)가 대표 함정입니다. 큐를 쓸 때는 항상 bounded capacity를 명시해야 backpressure가 실제로 작동합니다.
+<E>메모리 여유 있으니 일단 받자</E>는 판단은 backpressure를 다른 시간대로 미룰 뿐입니다. 트래픽 스파이크 때 큐는 결국 가득 차고, 그 시점에는 복구도 어렵습니다. Java의 `new LinkedBlockingQueue()`(capacity 생략)가 대표 패턴입니다. 큐를 쓸 때는 항상 bounded capacity를 명시해야 backpressure가 실제로 작동합니다.
 
 ### 2. Signal 신호 무시
 

@@ -3,7 +3,7 @@ title:
   ko: "Cache-Aside 패턴"
   en: "Cache-Aside Pattern"
 slug: "cache-aside-pattern"
-date: 2026-04-16
+date: 2026-03-31
 tags:
   - backend
   - cache
@@ -89,8 +89,8 @@ Cache-Aside의 위치를 이해하려면 <E>있을 때 vs 없을 때</E>를 먼�
 
 앱이 캐시 키를 만드므로 `user:123:profile`, `user:123:orders:recent`처럼 도메인에 맞는 key 설계가 자유롭습니다. 같은 user row를 서로 다른 목적의 여러 key로 캐싱할 수도 있습니다. 라이브러리가 key를 강제하지 않습니다.
 
-<Callout type="warning" title="흔한 오해: TTL만 짧게 잡으면 일관성 문제는 해결된다">
-  아닙니다. TTL은 <E>언젠가 캐시가 DB로 수렴한다</E>를 보장할 뿐, 쓰기 시점의 race condition을 막을 수 없습니다. 예를 들어 TTL 5초라도 쓰기 직후 5초 동안 잘못된 값이 캐시에 남아 있으면 그 창 안의 모든 요청이 잘못된 값을 읽습니다. 일관성 문제는 TTL이 아니라 쓰기 순서로 푸는 것이며, 이는 다음 섹션에서 다룹니다.
+<Callout type="info" title="TTL은 수렴 보장이지 일관성 보장이 아니다">
+  TTL은 <E>만료 시점이 지나면 캐시가 DB 값으로 다시 동기화된다</E>는 수렴을 보장하기 때문에 쓰기 직후 race condition을 막아주지는 않습니다. 예를 들어 TTL이 5초여도 쓰기 직후 5초 동안 잘못된 값이 캐시에 남아 있으면 그 창 안의 모든 요청이 잘못된 값을 읽습니다. 그래서 일관성은 TTL을 줄여서 푸는 것이 아니라 쓰기 시점에 캐시를 어떻게 다루는가(`Write-through`, `Write-around`, 무효화 순서)로 푸는 것이고, 이는 다음 섹션에서 다룹니다.
 </Callout>
 
 ## 내부 동작

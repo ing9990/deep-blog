@@ -3,7 +3,7 @@ title:
   ko: "도메인 주도 설계 (DDD)"
   en: "Domain-Driven Design"
 slug: "ddd-overview"
-date: 2026-03-20
+date: 2026-02-02
 tags:
   - backend
   - architecture
@@ -193,7 +193,7 @@ Bounded Context 경계와 Aggregate 경계는 한 번 잘못 그으면 되돌리
 
 ### 3. 과도한 추상화 (cargo cult DDD)
 
-가장 주의할 함정입니다. 책에서 본 용어를 조건 없이 적용해 단순 CRUD에도 Aggregate · Repository · Factory를 얹는 상황입니다. 이름과 이메일만 있는 `User`에 비즈니스 규칙이 하나도 없는데 `UserAggregate`, `UserRepository`, `UserFactory`, `UserDomainService`를 다 만든 코드베이스가 전형적입니다. 코드량은 몇 배로 늘고 새 기능 추가는 느려집니다. Evans 본인도 *<E>DDD는 복잡한 도메인에만 의미가 있다</E>*고 강조한 이유가 여기 있습니다.
+가장 흔한 오용 패턴입니다. 책에서 본 용어를 조건 없이 적용해 단순 CRUD에도 Aggregate · Repository · Factory를 얹는 상황입니다. 이름과 이메일만 있는 `User`에 비즈니스 규칙이 하나도 없는데 `UserAggregate`, `UserRepository`, `UserFactory`, `UserDomainService`를 다 만든 코드베이스가 전형적입니다. 코드량은 몇 배로 늘고 새 기능 추가는 느려집니다. Evans 본인도 *<E>DDD는 복잡한 도메인에만 의미가 있다</E>*고 강조한 이유가 여기 있습니다.
 
 <Callout type="warning" title="용어는 문제의 그림자다">
   DDD 용어를 도입했다면 항상 자문해야 합니다. <E>이 `Repository`는 어떤 문제를 해결하는가?</E> <E>이 `Aggregate` 경계는 어떤 불변식을 지키는가?</E> 답이 없으면 그 용어는 비용만 남기는 장식입니다.

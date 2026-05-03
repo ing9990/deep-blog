@@ -3,7 +3,7 @@ title:
   ko: "InnoDB EXPLAIN 소개"
   en: "InnoDB EXPLAIN Introduction"
 slug: "innodb-explain-reading"
-date: 2026-03-16
+date: 2026-01-26
 tags:
   - database
   - backend
@@ -19,7 +19,7 @@ category: database
 draft: false
 ---
 
-EXPLAIN은 슬로우 쿼리 디버깅의 출발점이지만, 12개 컬럼이 처음에는 비슷해 보여 어디부터 봐야 할지 막막합니다. 이 글은 EXPLAIN이 옵티마이저 내부에서 어떻게 만들어지는지부터 시작해, 컬럼별 의미와 자주 마주치는 함정까지 진단의 기준을 정리합니다.
+EXPLAIN은 슬로우 쿼리 디버깅의 출발점이지만, 12개 컬럼이 처음에는 비슷해 보여 어디부터 봐야 할지 막막합니다. 이 글은 EXPLAIN이 옵티마이저 내부에서 어떻게 만들어지는지부터 시작해, 컬럼별 의미와 자주 마주치는 지점까지 진단의 기준을 정리합니다.
 
 ## EXPLAIN이란
 
@@ -133,7 +133,7 @@ EXPLAIN의 12개 컬럼은 의미상 세 그룹으로 나뉩니다. 진단 우�
 
 `id`는 같은 값이면 같은 SELECT 내 JOIN으로 위에서 아래 순서로 실행되고, 다른 값이면 독립 SELECT로 id 큰 것부터 실행됩니다. UNION 결과를 합치는 가상 단계는 id가 NULL로 표시됩니다.
 
-`select_type`에서 가장 큰 함정은 **DEPENDENT SUBQUERY**입니다.
+`select_type`에서 가장 큰 한계은 **DEPENDENT SUBQUERY**입니다.
 
 <Callout type="warning" title="DEPENDENT SUBQUERY의 N×M 폭발">
   DEPENDENT SUBQUERY는 외부 컬럼을 참조하는 서브쿼리로, 외부 행마다 서브쿼리가 다시 실행됩니다. 외부 N행 × 서브쿼리 M행 = $N \times M$ 비용으로 폭발하는 패턴입니다. 가능한 한 JOIN으로 재작성하는 것이 정석이며, EXPLAIN 출력에서 `select_type: DEPENDENT SUBQUERY`가 보이면 1차 점검 대상입니다.
@@ -166,7 +166,7 @@ EXPLAIN의 12개 컬럼은 의미상 세 그룹으로 나뉩니다. 진단 우�
 
 **`eq_ref` vs `ref`**: 둘 다 인덱스 lookup이지만 `eq_ref`는 JOIN에서 PK/UNIQUE로 매번 1행이 보장되는 가장 효율적인 형태이고, `ref`는 비유니크 인덱스라 여러 행 매칭 가능입니다.
 
-**`range`의 적용 범위**: BETWEEN, `<`, `>`, IN, 같은 컬럼의 OR이 모두 `range`로 분류됩니다. 앞서 본 `eq_range_index_dive_limit` 초과 시 추정 정확도 저하 함정이 여기에 적용됩니다.
+**`range`의 적용 범위**: BETWEEN, `<`, `>`, IN, 같은 컬럼의 OR이 모두 `range`로 분류됩니다. 앞서 본 `eq_range_index_dive_limit` 초과 시 추정 정확도 저하 지점이 여기에 적용됩니다.
 
 **`type=ALL`이 항상 나쁘지 않다**: 작은 테이블이거나 결과 비율이 매우 높으면 옵티마이저가 의도적으로 풀 스캔을 선택합니다. 풀 스캔이 정상인 상황에 대한 자세한 기준은 별도 글에서 다룹니다.
 

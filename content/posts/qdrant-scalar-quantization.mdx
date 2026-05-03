@@ -3,7 +3,7 @@ title:
   ko: "Qdrant Scalar Quantization"
   en: "Qdrant Scalar Quantization"
 slug: "qdrant-scalar-quantization"
-date: 2026-04-25
+date: 2026-04-15
 tags:
   - backend
   - ai
@@ -191,7 +191,7 @@ OpenAI `text-embedding-3-*`, Cohere `embed-v3` 같은 상용 모델은 이미 �
 
 보통 `rescore=true` + `oversampling=2.0` 조합이 fp32-only recall의 98% 이상을 회복하는 타협점입니다. `rescore`를 끌 바에는 `oversampling=1.0, rescore=true`가 거의 항상 더 낫습니다. rescore의 비용은 <E>몇 개 벡터에 대한 fp32 거리 재계산</E>이라 rescoring 대상 자체가 `limit` 수준이면 부담이 크지 않습니다.
 
-### 3. 원본과 양자화를 모두 디스크에 두는 조합의 함정
+### 3. 원본과 양자화를 모두 디스크에 두는 조합의 지점
 
 메모리를 극단적으로 줄이려고 양자화 벡터까지 디스크에 두면(`always_ram=false`), HNSW 탐색 중 int8 거리 계산마다 page fault가 터집니다. SQ 도입 목적(RAM 압박 완화 + SIMD 가속)이 모두 사라지고 오히려 fp32-only보다 느려질 수 있습니다.
 
@@ -268,7 +268,7 @@ Scalar Quantization은 <E>정확도를 깎아 속도를 사는 기법</E>이 아
 
 ## 참고 자료
 
-- [Qdrant Docs — Scalar Quantization](https://qdrant.tech/documentation/guides/quantization/#scalar-quantization)
-- [Qdrant Blog — Scalar Quantization: Background, Practices & More](https://qdrant.tech/articles/scalar-quantization/)
-- [Qdrant Blog — What is Vector Quantization?](https://qdrant.tech/articles/what-is-vector-quantization/)
-- [Qdrant API Reference — ScalarQuantizationConfig](https://api.qdrant.tech/api-reference/collections/create-collection)
+- [Qdrant Docs: Scalar Quantization](https://qdrant.tech/documentation/guides/quantization/#scalar-quantization)
+- [Qdrant Blog: Scalar Quantization: Background, Practices & More](https://qdrant.tech/articles/scalar-quantization/)
+- [Qdrant Blog: What is Vector Quantization?](https://qdrant.tech/articles/what-is-vector-quantization/)
+- [Qdrant API Reference: ScalarQuantizationConfig](https://api.qdrant.tech/api-reference/collections/create-collection)

@@ -3,7 +3,7 @@ title:
   ko: "CAP 이론"
   en: "CAP Theorem"
 slug: "cap-theorem"
-date: 2026-04-13
+date: 2026-03-20
 tags:
   - cs
   - backend
@@ -50,8 +50,8 @@ CAP 이론은 UC Berkeley의 Eric Brewer가 2000년 PODC 컨퍼런스에서 제�
 
 <RelatedPost slug="single-point-of-failure" type="parallel" />
 
-<Callout type="warning" title="흔한 오해: 'CAP 중 2개를 고르는 것'">
-  Brewer 본인이 2012년 IEEE Computer에 기고한 **CAP Twelve Years Later** 에서 이를 직접 정정했습니다. <E>CAP는 three-out-of-two가 아니다. Partition은 발생하면 반드시 마주해야 하는 것이고, 평소에는 C와 A를 모두 유지할 수 있다.</E> 즉 정확한 해석은 **파티션이 발생한 순간** C와 A 중 하나를 포기해야 한다는 것이며, 평상시엔 두 속성을 모두 유지할 수 있습니다. <E>CA 시스템</E>이라는 말은 분산 시스템 맥락에서는 <E>파티션을 경험하지 않는 단일 노드</E>와 동치이므로 실질적으로 의미가 없습니다.
+<Callout type="info" title="CAP는 파티션 시점의 선택, 평상시 선택이 아니다">
+  분산 시스템에서 네트워크 파티션은 발생하면 반드시 마주해야 하는 사건이기 때문에, CAP의 진짜 선택은 <E>파티션이 발생한 순간</E> C와 A 중 무엇을 잃을 것인지입니다. 평상시에는 C와 A를 모두 유지할 수 있고, P를 <E>고르고 말고</E>의 대상으로 두면 의미가 흐려집니다. 그래서 Brewer는 2012년 *CAP Twelve Years Later*에서 직접 <E>three-out-of-two가 아니다</E>라고 정정했고, <E>CA 시스템</E>이라는 표현도 분산 환경에서는 <E>파티션을 경험하지 않는 단일 노드</E>와 같은 의미가 되어 실질적으로 사용되지 않습니다.
 </Callout>
 
 이 글을 다 읽으면 다음을 이해하게 됩니다.

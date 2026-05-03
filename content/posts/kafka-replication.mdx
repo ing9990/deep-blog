@@ -3,7 +3,7 @@ title:
   ko: "Kafka Replication"
   en: "Kafka Replication"
 slug: "kafka-replication"
-date: 2026-04-03
+date: 2026-03-03
 tags:
   - backend
   - distributed-systems
@@ -227,7 +227,7 @@ ISR 크기 = 1 → Producer 에 NotEnoughReplicasException, 쓰기 거부
 
 이 조합이 의미하는 바는 <E>세 개 중 하나가 죽어도 쓰기 계속, 두 개가 죽으면 쓰기 중단(유실 대신)</E>. 내구성을 우선한 양자택일이죠.
 
-> **흔한 오해**: <E>`acks=all` 만 주면 끝 아닌가요?</E> `min.insync.replicas=1` (기본값)에서는 `ISR` 이 Leader 하나로 쪼그라들어도 응답이 오므로 유실 창이 열립니다. **`min.insync.replicas=2` 이상으로 명시해야 `acks=all` 이 진짜 보장이 됩니다**.
+`acks=all`은 <E>현재 ISR에 들어 있는 모든 replica가 받았을 때 ack한다</E>는 의미이기 때문에, ISR이 Leader 하나로 줄어 있는 상태에서는 그 한 노드의 응답만으로도 `all`이 충족됩니다. `min.insync.replicas=1`(기본값)이면 ISR이 1까지 줄어드는 것을 허용하므로 `acks=all`을 줘도 단일 노드 장애로 메시지가 유실될 창이 생깁니다. 그래서 내구성을 보장하려면 `min.insync.replicas=2` 이상으로 명시해, ISR이 2 미만으로 줄면 차라리 쓰기를 거부하도록 두는 것이 안전합니다.
 
 ### Leader 장애와 재선출
 

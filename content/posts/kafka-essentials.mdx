@@ -3,7 +3,7 @@ title:
   ko: "Kafka 입문"
   en: "Kafka Essentials"
 slug: "kafka-essentials"
-date: 2026-03-29
+date: 2026-02-20
 tags:
   - backend
   - distributed-systems
@@ -137,7 +137,7 @@ draft: false
 
 `Topic`은 이벤트를 담는 논리적 카테고리입니다. 데이터베이스의 `테이블`, 파일 시스템의 `폴더`에 가깝습니다. 주문 이벤트는 `orders` 토픽에, 사용자 가입 이벤트는 `user-signups` 토픽에 쌓이는 식이고, `Producer`와 `Consumer` 모두 이 이름(문자열)으로 토픽을 지정합니다.
 
-주의할 점은 `Topic`이 <E>논리적 이름표</E>일 뿐 실제 저장 단위가 아니라는 사실입니다. 실제 저장 단위는 다음의 `Partition`입니다.
+유의할 점은 `Topic`이 <E>논리적 이름표</E>일 뿐 실제 저장 단위가 아니라는 사실입니다. 실제 저장 단위는 다음의 `Partition`입니다.
 
 ### Partition
 

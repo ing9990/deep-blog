@@ -3,7 +3,7 @@ title:
   ko: "ThreadLocal"
   en: "ThreadLocal"
 slug: "threadlocal-internals"
-date: 2026-04-22
+date: 2026-04-08
 tags:
   - backend
   - jvm
@@ -68,7 +68,7 @@ public class Thread implements Runnable {
 }
 ```
 
-그래서 `ThreadLocal.set(v)`는 실제로는 <E>현재 스레드를 찾아가, 그 스레드 객체의 `threadLocals` Map에 `this` (ThreadLocal 인스턴스 자기 자신) 를 키로 `v`를 저장</E>합니다. 이 한 문장이 ThreadLocal의 거의 모든 성질을 결정합니다. 저장소가 스레드 객체 안에 있으므로 **잠금이 필요 없고** (소유 스레드만 자기 필드를 만집니다), 스레드가 끝나 GC되면 Map도 같이 사라져 **자동 정리가 되는 것처럼 보입니다**. 뒤에서 이 <E>것처럼 보입니다</E>가 함정이 되는 지점이 나옵니다.
+그래서 `ThreadLocal.set(v)`는 실제로는 <E>현재 스레드를 찾아가, 그 스레드 객체의 `threadLocals` Map에 `this` (ThreadLocal 인스턴스 자기 자신) 를 키로 `v`를 저장</E>합니다. 이 한 문장이 ThreadLocal의 거의 모든 성질을 결정합니다. 저장소가 스레드 객체 안에 있으므로 **잠금이 필요 없고** (소유 스레드만 자기 필드를 만집니다), 스레드가 끝나 GC되면 Map도 같이 사라져 **자동 정리가 되는 것처럼 보입니다**. 뒤에서 이 <E>것처럼 보입니다</E>가 지점이 되는 지점이 나옵니다.
 
 <ThreadLocalMapStructure />
 
@@ -95,7 +95,7 @@ static class ThreadLocalMap {
 }
 ```
 
-두 가지 디자인 결정이 눈에 띕니다. 첫째, 키가 `WeakReference<ThreadLocal<?>>`입니다. Entry 자체가 `WeakReference`를 상속해서 referent 자리에 ThreadLocal 인스턴스를 넣습니다. 둘째, 값은 일반 참조 (strong reference) 입니다. 왜 이렇게 비대칭일까요? 이게 뒤에서 터지는 메모리 누수 함정의 정확한 진원지입니다.
+두 가지 디자인 결정이 눈에 띕니다. 첫째, 키가 `WeakReference<ThreadLocal<?>>`입니다. Entry 자체가 `WeakReference`를 상속해서 referent 자리에 ThreadLocal 인스턴스를 넣습니다. 둘째, 값은 일반 참조 (strong reference) 입니다. 왜 이렇게 비대칭일까요? 이게 뒤에서 터지는 메모리 누수 지점의 정확한 진원지입니다.
 
 <Callout type="error" title="핵심 통찰: 메모리 누수의 진원지는 키-값 참조 비대칭">
   키는 `WeakReference`로 ThreadLocal 인스턴스 GC를 허용하지만, 값은 strong reference라 Entry 배열에 강하게 붙들려 있습니다. stale entry 청소는 다음번 접근이 있어야만 실행되므로, 풀 스레드가 그 ThreadLocal을 다시 쓰지 않으면 값은 영원히 생존합니다. 그래서 `remove()`는 옵션이 아니라 구조적 필수입니다.
@@ -170,7 +170,7 @@ ThreadLocal이 자연스럽게 맞아 들어가는 공통 패턴은 <E>**한 요
 
 ### 풀 스레드에 값을 남겨두지 말 것
 
-```java title="WebFilter — 잘못된 패턴"
+```java title="WebFilter: 잘못된 패턴"
 @WebFilter
 public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
     USER_ID.set(extractFromJwt(req));
@@ -183,7 +183,7 @@ public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
 
 Section 3에서 본 메모리 누수도 같은 뿌리에서 나옵니다. `remove()` 없이 큰 객체 (버퍼, ML 모델 등) 를 `set`하면 요청이 끝나도 그 value는 스레드의 Map에 갇히고, 그 스레드가 살아있는 동안 GC에 먹히지 않습니다. 풀 스레드는 서버 재시작까지 삽니다. 그래서 try / finally는 권장이 아니라 구조적 필수입니다.
 
-```java title="WebFilter — 올바른 패턴" /try/ /finally/
+```java title="WebFilter: 올바른 패턴" /try/ /finally/
 @WebFilter
 public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain) {
     USER_ID.set(extractFromJwt(req));
@@ -237,7 +237,7 @@ ThreadLocal의 유일한 저장소는 <E>지금 실행 중인 스레드</E>의 M
 
 <RelatedPost slug="coroutine-primer" type="deep-dive" />
 
-### InheritableThreadLocal의 함정
+### InheritableThreadLocal의 동작 조건
 
 JDK는 <E>자식 스레드에 값을 전파</E>하는 변형으로 `InheritableThreadLocal`을 제공합니다. `Thread` 생성자가 호출될 때, 부모 스레드의 `inheritableThreadLocals` Map을 자식 스레드의 Map으로 복사하는 방식입니다.
 

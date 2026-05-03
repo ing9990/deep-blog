@@ -3,7 +3,7 @@ title:
   ko: "JVM 가비지 컬렉션"
   en: "JVM Garbage Collection"
 slug: "jvm-gc-intro"
-date: 2026-03-18
+date: 2026-01-29
 tags:
   - jvm
   - backend
@@ -68,7 +68,7 @@ JVM 힙은 **Young Generation**과 **Old Generation**으로 물리적으로 나�
 <Callout type="error" title="핵심 통찰: STW는 GC의 비용이자 진화의 동기">
   Mark 단계에서 객체 그래프를 추적하는 동안 애플리케이션 스레드가 참조 관계를
   바꾸면 결과가 틀어집니다. 그래서 애플리케이션을 멈춥니다. 이것이
-  Stop-the-World입니다. STW 시간을 줄이는 것이 GC 알고리즘 진화의 핵심 축입니다.
+  Stop-the-World입니다. STW 시간을 줄이는 것이 GC 알고리즘 진화의 핵심입니다.
 </Callout>
 
 모든 GC 알고리즘의 뼈대는 세 단계입니다.

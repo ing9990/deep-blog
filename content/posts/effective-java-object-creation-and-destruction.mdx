@@ -3,7 +3,7 @@ title:
   ko: "객체의 생성과 파괴"
   en: "Object Creation and Destruction"
 slug: effective-java-object-creation-and-destruction
-date: 2026-04-29
+date: 2026-04-23
 category: books
 book: effective-java
 tags:
@@ -16,7 +16,7 @@ keywords:
   - try-with-resources
 summary:
   ko: "이펙티브 자바 3판 2장 객체의 생성과 파괴에서 다섯 가지 아이템을 골라 정리합니다. 정적 팩토리, 빌더, private 생성자, 참조 해제, try-with-resources를 자바 예시 코드와 Before/After 비교로 살펴봅니다."
-  en: "A walk through five items from Effective Java 3E Chapter 2 — static factory methods, the Builder pattern, private constructors, reference nulling, and try-with-resources — with Java samples and before/after comparisons."
+  en: "A walk through five items from Effective Java 3E Chapter 2. static factory methods, the Builder pattern, private constructors, reference nulling, and try-with-resources. with Java samples and before/after comparisons."
 draft: false
 ---
 
@@ -78,7 +78,7 @@ Optional<String> some  = Optional.of("hello");
 같은 결제 수단 객체를 만드는 두 방식을 비교하면 의도 표현 차이가 분명히 드러난다.
 
 <Tabs group="static-factory-vs-ctor">
-  <Tab label="Before — 생성자">
+  <Tab label="Before: 생성자">
 ```java title="PaymentMethod.java"
 public class PaymentMethod {
     private final Type type;
@@ -95,7 +95,7 @@ public class PaymentMethod {
 }
 ```
   </Tab>
-  <Tab label="After — 정적 팩토리">
+  <Tab label="After: 정적 팩토리">
 ```java title="PaymentMethod.java"
 public class PaymentMethod {
     private final Type type;
@@ -177,7 +177,7 @@ public class NutritionFacts {
     }
 }
 
-// 호출부 — 35라는 숫자가 무엇을 의미하는지 한눈에 보이지 않는다
+// 호출부. 35라는 숫자가 무엇을 의미하는지 한눈에 보이지 않는다
 NutritionFacts cocaCola = new NutritionFacts(240, 8, 100, 0, 35, 27);
 ```
   </Tab>
@@ -201,7 +201,7 @@ public class NutritionFacts {
     public void setCarbohydrate(int v) { this.carbohydrate = v; }
 }
 
-// 호출부 — 가독성은 좋아지지만, 일관성 깨진 상태가 잠시 존재한다
+// 호출부. 가독성은 좋아지지만, 일관성 깨진 상태가 잠시 존재한다
 NutritionFacts cocaCola = new NutritionFacts();
 cocaCola.setServingSize(240);
 cocaCola.setServings(8);
@@ -256,7 +256,7 @@ public class NutritionFacts {
     }
 }
 
-// 호출부 — 각 인자의 의미가 이름으로 드러나고, 객체는 build() 시점에 한 번에 완성된다
+// 호출부. 각 인자의 의미가 이름으로 드러나고, 객체는 build() 시점에 한 번에 완성된다
 NutritionFacts cocaCola = new NutritionFacts.Builder(240, 8)
         .calories(100)
         .sodium(35)
@@ -283,7 +283,7 @@ NutritionFacts cocaCola = new NutritionFacts.Builder(240, 8)
 ### Before / After
 
 <Tabs group="utility-class">
-  <Tab label="Before — 인스턴스화 가능 (의도치 않음)">
+  <Tab label="Before: 인스턴스화 가능 (의도치 않음)">
 ```java title="StringUtils.java"
 public class StringUtils {
     // 컴파일러가 자동 생성한 public 기본 생성자가 들어간다
@@ -296,7 +296,7 @@ public class StringUtils {
 StringUtils utils = new StringUtils(); // 컴파일 통과
 ```
   </Tab>
-  <Tab label="After — private 생성자로 차단">
+  <Tab label="After: private 생성자로 차단">
 ```java title="StringUtils.java"
 public class StringUtils {
     // 인스턴스화 방지
@@ -326,7 +326,7 @@ public class StringUtils {
 ### Before / After
 
 <Tabs group="memory-leak-stack">
-  <Tab label="Before — 메모리 누수">
+  <Tab label="Before: 메모리 누수">
 ```java title="Stack.java"
 public class Stack {
     private Object[] elements;
@@ -354,7 +354,7 @@ public class Stack {
 }
 ```
   </Tab>
-  <Tab label="After — 참조 해제">
+  <Tab label="After: 참조 해제">
 ```java title="Stack.java"
 public Object pop() {
     if (size == 0) throw new EmptyStackException();
@@ -389,7 +389,7 @@ public Object pop() {
 ### Before / After
 
 ```java title="TopLine.java"
-// 1개 자원 — try-finally는 그래도 봐줄 만하다
+// 1개 자원. try-finally는 그래도 봐줄 만하다
 static String firstLineOfFile(String path) throws IOException {
     BufferedReader br = new BufferedReader(new FileReader(path));
     try {
@@ -403,7 +403,7 @@ static String firstLineOfFile(String path) throws IOException {
 자원이 둘로 늘어나면 본격적으로 무너지기 시작한다.
 
 <Tabs group="try-finally-vs-twr">
-  <Tab label="Before — try-finally (자원 2개)">
+  <Tab label="Before: try-finally (자원 2개)">
 ```java title="Copy.java"
 static void copy(String src, String dst) throws IOException {
     InputStream in = new FileInputStream(src);
@@ -424,7 +424,7 @@ static void copy(String src, String dst) throws IOException {
 }
 ```
   </Tab>
-  <Tab label="After — try-with-resources">
+  <Tab label="After: try-with-resources">
 ```java title="Copy.java"
 static void copy(String src, String dst) throws IOException {
     try (InputStream in = new FileInputStream(src);
@@ -471,5 +471,5 @@ static String firstLineOrDefault(String path, String defaults) {
 - 조슈아 블로크, 『이펙티브 자바 3판』, 인사이트, 2판→3판, 2장 객체 생성과 파괴 (Item 1, 2, 4, 7, 9).
 - Oracle Java Tutorials, [The try-with-resources Statement](https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html).
 - Oracle Java Documentation, [`AutoCloseable`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html).
-- Oracle Java Documentation, [`EnumSet.of`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/EnumSet.html#of(E)) — 매개변수에 따라 다른 구현체를 반환하는 정적 팩토리의 표준 예시.
+- Oracle Java Documentation, [`EnumSet.of`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/EnumSet.html#of(E)). 매개변수에 따라 다른 구현체를 반환하는 정적 팩토리의 표준 예시.
 - 디자인 패턴: GoF, 『Design Patterns: Elements of Reusable Object-Oriented Software』, Builder · Factory Method.

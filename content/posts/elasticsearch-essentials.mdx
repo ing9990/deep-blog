@@ -3,7 +3,7 @@ title:
   ko: "Elasticsearch 입문"
   en: "Elasticsearch Essentials"
 slug: "elasticsearch-essentials"
-date: 2026-04-17
+date: 2026-04-01
 tags:
   - backend
   - search
@@ -463,7 +463,7 @@ POST /products/_search
 | `should` | OR 부스트. 매치되면 점수 가산 | 점수에 기여 |
 | `must_not` | NOT 조건 | 점수에 기여 안 함 |
 
-<Callout type="warning" title="must vs filter — 어디에 두느냐가 성능을 좌우한다">
+<Callout type="warning" title="must vs filter: 어디에 두느냐가 성능을 좌우한다">
   검색 점수를 좌우하는 조건은 `must`, 단순히 결과를 좁히는 조건(가격대, 카테고리, 재고 있음 등)은 `filter` 에 둡니다. `filter` 는 BM25 계산을 건너뛰고 결과 캐싱까지 받기 때문에 훨씬 빠릅니다. **카테고리·가격·상태 같은 메타 조건은 항상 `filter`**.
 </Callout>
 
@@ -539,4 +539,4 @@ Elasticsearch의 동작은 거의 다 같은 한 가지 원리로 설명됩니�
 - [Elasticsearch Guide (Elastic 공식 문서)](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html)
 - [Apache Lucene Documentation](https://lucene.apache.org/core/documentation.html)
 - [Mapping concepts across SQL and Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/_mapping_concepts_across_sql_and_elasticsearch.html)
-- [Nori — Korean Analyzer Plugin](https://www.elastic.co/guide/en/elasticsearch/plugins/current/analysis-nori.html)
+- [Nori: Korean Analyzer Plugin](https://www.elastic.co/guide/en/elasticsearch/plugins/current/analysis-nori.html)

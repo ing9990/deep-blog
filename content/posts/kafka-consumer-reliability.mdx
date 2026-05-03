@@ -3,7 +3,7 @@ title:
   ko: "Kafka Interview 준비"
   en: "Kafka Interview Prep"
 slug: "kafka-consumer-reliability"
-date: 2026-05-01
+date: 2026-04-26
 tags:
   - backend
   - distributed-systems
@@ -187,7 +187,7 @@ Manual commit은 <E>처리가 끝났음을 우리가 직접 보고한다</E>는 
 리밸런스가 신뢰성 측면에서 의미 있는 이유는 따로 있습니다. **죽었다고 판단된 Consumer의 마지막 처리 결과는 commit되지 않았을 수 있고, 새 Consumer는 그 commit되지 않은 offset부터 다시 시작합니다.** 즉 리밸런스 한 번에 한 묶음의 메시지가 두 번 처리되는 일이 벌어질 수 있습니다.
 
 <Callout type="error" title="핵심 통찰: Consumer 신뢰성은 처리와 commit의 시간차에서 결정된다">
-  Kafka Consumer의 모든 신뢰성 함정은 같은 자리에서 나옵니다. 처리는 Consumer 안에서 일어나고 commit은 Broker로의 또 한 번의 네트워크 호출이며, 그 둘은 절대 같은 트랜잭션에 묶이지 않습니다. 이 시간차가 적어도 한 번 이상의 처리(at-least-once)를 강제하고, 그래서 Consumer가 멱등하지 않으면 시스템이 깨집니다.
+  Kafka Consumer의 모든 신뢰성 조건은 같은 자리에서 나옵니다. 처리는 Consumer 안에서 일어나고 commit은 Broker로의 또 한 번의 네트워크 호출이며, 그 둘은 절대 같은 트랜잭션에 묶이지 않습니다. 이 시간차가 적어도 한 번 이상의 처리(at-least-once)를 강제하고, 그래서 Consumer가 멱등하지 않으면 시스템이 깨집니다.
 </Callout>
 
 ## 실전 문제
@@ -196,7 +196,7 @@ at-least-once가 명세이므로, 앞서 본 <E>처리와 commit 사이</E>의 �
 
 ### 중복 처리와 멱등성
 
-가장 흔하면서도 가장 자주 빠뜨리는 문제입니다. 같은 메시지가 두 번 들어와도 결과가 한 번 처리한 것과 같아야 합니다.
+가장 흔하면서도 가장 자주 놓치기 쉬운 문제입니다. 같은 메시지가 두 번 들어와도 결과가 한 번 처리한 것과 같아야 합니다.
 
 ```kotlin title="NonIdempotentConsumer.kt"
 @KafkaListener(topics = ["order-paid"])
@@ -218,7 +218,7 @@ fun handle(event: OrderPaidEvent) {
 
 핵심은 **이벤트마다 글로벌 유니크한 ID**가 있어야 한다는 점입니다. 그 ID를 Consumer 측 DB에 기록해두고, 처리 진입 직전에 이미 있는지 확인합니다. 단순한 방식은 위처럼 별도 `processed_events` 테이블을 두는 것이고, 더 자연스러운 방식은 **자연 멱등 설계**(같은 입력에 같은 결과를 내는 도메인 연산)를 쓰는 것입니다.
 
-면접에서 <E>중복 막으려면 select로 확인하면 되지 않나요?</E>라고 답하면 종종 다음 질문이 따라옵니다. <E>그럼 select와 insert 사이에 다른 Consumer가 같은 처리를 하면요?</E> 이 동시성 함정을 피하려면 DB의 유니크 제약 + `INSERT ... ON DUPLICATE KEY UPDATE`(MySQL) 또는 `INSERT ... ON CONFLICT DO NOTHING`(Postgres) 같은 한 번의 atomic 연산으로 처리해야 합니다.
+면접에서 <E>중복 막으려면 select로 확인하면 되지 않나요?</E>라고 답하면 종종 다음 질문이 따라옵니다. <E>그럼 select와 insert 사이에 다른 Consumer가 같은 처리를 하면요?</E> 이 동시성 조건을 피하려면 DB의 유니크 제약 + `INSERT ... ON DUPLICATE KEY UPDATE`(MySQL) 또는 `INSERT ... ON CONFLICT DO NOTHING`(Postgres) 같은 한 번의 atomic 연산으로 처리해야 합니다.
 
 <RelatedPost slug="idempotency" type="deep-dive" />
 

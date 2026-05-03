@@ -3,7 +3,7 @@ title:
   ko: "Spring Cache 어노테이션 정리"
   en: "Spring Cache Annotations Guide"
 slug: "spring-cache-annotations"
-date: 2026-04-19
+date: 2026-04-02
 tags:
   - Backend
   - Spring
@@ -137,7 +137,7 @@ spring:
 | `sync` | true면 같은 키 동시 호출 시 메서드를 한 번만 실행 (단일 JVM 한정) |
 | `cacheManager` | 사용할 `CacheManager` 빈 이름. 멀티 캐시 매니저 환경에서 명시 |
 
-### `key` — SpEL로 키 지정
+### `key`: SpEL로 키 지정
 
 `key`를 생략하면 `SimpleKeyGenerator`가 메서드 인자 전체로 키를 만듭니다. 인자가 1개면 그 값 자체가, 여러 개면 `SimpleKey(arg1, arg2, ...)`가 키가 됩니다. 의도와 다른 키 충돌을 피하려면 SpEL로 명시하는 편이 안전합니다.
 
@@ -440,11 +440,11 @@ fun findById(productId: Long): Product { /* ... */ }
 
 각 메서드의 `value`/`cacheNames` 반복이 사라져 `key` 같은 메서드별 차이만 남습니다. 같은 클래스 안에서 여러 cache name을 섞어 써야 하면 메서드 레벨에서 `value`를 명시해 클래스 기본값을 덮어쓰면 됩니다.
 
-## TTL 설정 — `RedisCacheManager`
+## TTL 설정: `RedisCacheManager`
 
 Spring Cache 추상화 자체에는 TTL 개념이 없습니다. 만료 정책은 `CacheManager` 구현체가 결정하며, Redis를 백엔드로 쓸 때는 `RedisCacheManager`와 `RedisCacheConfiguration`으로 설정합니다.
 
-### 단일 TTL — 모든 캐시에 동일 적용
+### 단일 TTL: 모든 캐시에 동일 적용
 
 가장 단순한 형태입니다. `application.yml` 한 줄로 끝납니다.
 
@@ -464,7 +464,7 @@ spring:
 - `key-prefix`: 모든 키 앞에 붙는 prefix. 환경별 격리에 유용
 - `use-key-prefix`: cache name을 prefix로 자동 부착할지 여부 (기본 true)
 
-### cache name별 TTL — 자주 쓰는 패턴
+### cache name별 TTL: 자주 쓰는 패턴
 
 상품 상세는 10분, 카테고리 목록은 1시간, 사용자 프로필은 5분처럼 캐시별로 TTL을 달리해야 하는 경우가 많습니다. 이때는 `RedisCacheManagerBuilder`로 cache name마다 서로 다른 `RedisCacheConfiguration`을 등록합니다.
 
@@ -579,7 +579,7 @@ Spring Cache의 어노테이션은 결국 두 가지 일을 합니다. 하나는
 
 ## 참고 자료
 
-- [Spring Framework Reference — Cache Abstraction](https://docs.spring.io/spring-framework/reference/integration/cache.html)
-- [Spring Framework Reference — Declarative Annotation-based Caching](https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html)
-- [Spring Boot Reference — Caching](https://docs.spring.io/spring-boot/reference/io/caching.html)
-- [Spring Data Redis — RedisCacheManager](https://docs.spring.io/spring-data/redis/reference/redis/redis-cache.html)
+- [Spring Framework Reference: Cache Abstraction](https://docs.spring.io/spring-framework/reference/integration/cache.html)
+- [Spring Framework Reference: Declarative Annotation-based Caching](https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html)
+- [Spring Boot Reference: Caching](https://docs.spring.io/spring-boot/reference/io/caching.html)
+- [Spring Data Redis: RedisCacheManager](https://docs.spring.io/spring-data/redis/reference/redis/redis-cache.html)
