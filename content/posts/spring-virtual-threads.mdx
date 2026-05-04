@@ -1,0 +1,268 @@
+---
+title:
+  ko: "Virtual Thread"
+  en: "Virtual Thread"
+slug: "spring-virtual-threads"
+date: 2026-05-04
+tags:
+  - backend
+  - spring-boot
+  - java
+  - concurrency
+keywords:
+  - "Virtual Thread"
+  - "가상 스레드"
+  - "VThread"
+  - "ScopedValue"
+  - "Carrier Thread"
+  - "Pinning"
+summary:
+  ko: "Java 21의 Virtual Thread가 platform thread 1:1 모델의 한계를 어떻게 풀고, JVM 힙 위의 continuation으로 mount/unmount되는 N:M 스케줄링이 어떻게 동작하는지 이해할 수 있습니다. Spring Boot 3.2가 한 줄 설정으로 통합한 배경과 synchronized pinning, JDBC 풀, ThreadLocal 누수, 관찰성까지 네 가지 실전 문제를 다룹니다."
+  en: "How Java 21's Virtual Thread breaks the 1:1 platform thread model with continuations on the JVM heap and N:M mount/unmount scheduling, why Spring Boot 3.2 integrates it with one property, and the four real problems: synchronized pinning, JDBC pool limits, ThreadLocal leaks, observability."
+category: spring-boot
+draft: false
+---
+
+`spring.threads.virtual.enabled=true` 한 줄을 켰는데도 처리량이 늘지 않는 경험은 거의 모든 Virtual Thread 도입 사례에서 한 번씩 등장합니다. 가상 스레드는 단순한 옵션이 아니라 <E>JVM 힙 위에 continuation 객체로 살아 있는 새 스레드 추상</E>이기 때문에, 기존 Spring 코드의 어떤 가정이 깨지는지 알지 못한 채 켜면 효과가 사라집니다. 이 글에서는 가상 스레드가 무엇이고 내부에서 어떻게 동작하는지, 그리고 Spring Boot에서 켰을 때 마주치는 네 가지 실전 문제를 정리합니다.
+
+## Virtual Thread
+
+Virtual Thread는 **JVM이 직접 스케줄링하는 가벼운 스레드**입니다. JDK 21 LTS에 정식으로 들어갔고, 명세는 JEP 444 "Virtual Threads"입니다. 사용자 코드 입장에서는 기존 `Thread` API를 그대로 씁니다. `Thread.startVirtualThread(...)` 한 줄이면 만들어집니다. 하지만 내부적으로는 OS 스레드와 1:1로 묶이지 않습니다.
+
+전통적인 Java 스레드(이걸 이제 `platform thread`라고 부릅니다)는 OS 커널 스레드와 1:1 매핑됩니다. 스레드 하나당 보통 1MB의 stack을 잡고, 컨텍스트 스위칭은 커널 스케줄러가 합니다. 이 모델에서는 한 JVM이 동시에 띄울 수 있는 스레드 수가 수천 개 수준에서 막힙니다. 메모리도 메모리지만 커널 스케줄러의 비용이 누적됩니다.
+
+Virtual Thread는 이 1:1 매핑을 N:M 매핑으로 바꿉니다. 다수(N)의 가상 스레드가 소수(M, 보통 CPU 코어 수)의 platform thread 위에서 돌아갑니다. 가상 스레드가 I/O를 기다리거나 lock을 기다리는 등 block되는 순간 JVM은 그 가상 스레드의 실행 상태(스택)를 힙으로 떼어내고, 캐리어 platform thread에는 다른 가상 스레드를 올립니다. 이를 `mount` / `unmount`라고 부릅니다.
+
+한 줄로 정리하면 <E>가상 스레드는 스레드처럼 보이지만 실제로는 JVM 힙 위의 continuation 객체</E>입니다. 1만 개를 띄워도 OS 스레드가 1만 개 만들어지지 않습니다. 덕분에 thread-per-request 모델을 Reactive로 비틀지 않고도 다시 쓸 수 있게 됩니다.
+
+Spring Boot 3.2(2023년 11월) 이후는 `spring.threads.virtual.enabled=true` 한 줄로 Tomcat의 요청 처리 스레드, `@Async` executor, Scheduler 등을 가상 스레드로 바꿔 줍니다. 가상 스레드 자체는 JVM 기능이지만, 실전에서 만나는 곳은 거의 항상 Spring Boot 애플리케이션입니다.
+
+<RelatedPost slug="sync-async-blocking-nonblocking" type="prerequisite" />
+
+## 왜 필요한가
+
+가장 흔한 백엔드 패턴은 요청 1개당 스레드 1개입니다. 동기 코드, 직선적 호출, 자연스럽게 동작하는 ThreadLocal 도구(MDC, `@Transactional`, Security). 문제는 이 모델이 동시 요청 1만 개로 가지 못한다는 점입니다.
+
+백엔드 요청 시간의 대부분은 I/O wait입니다. DB 쿼리 100ms, 외부 API 200ms, 캐시 lookup 5ms. 이 시간 동안 platform thread는 OS의 wait queue에 누워 1MB 스택만 차지하고 있습니다. 1만 동시 요청에 platform thread 1만 개가 필요하면 stack 메모리만 10GB이고 커널 스케줄링 비용도 누적됩니다. Tomcat이 보통 200~400 스레드에서 막아두는 이유가 여기 있습니다.
+
+이 한계를 풀려고 나온 게 NIO/Reactive(Netty, Reactor, RxJava)입니다. 한 스레드가 여러 요청의 I/O를 다중화하니 처리량은 분명히 올라가지만, 대가가 큽니다.
+
+| 영역 | Platform Thread + MVC | NIO / WebFlux |
+|---|---|---|
+| 코드 모양 | 직선적 동기 코드 | callback / reactive chain |
+| ThreadLocal 도구 | 자연스럽게 동작 | Reactor Context 재설계 |
+| 스택트레이스 | 끝까지 이어짐 | 비동기 경계에서 단절 |
+| 학습 곡선 | 낮음 | 높음 |
+| 동시성 한계 | 200~400 | 거의 무제한 |
+
+가상 스레드의 약속은 <E>동기 코드의 가독성을 유지하면서 NIO 수준의 동시성을 얻는다</E>는 것입니다. `userRepo.findById(id)`가 DB I/O로 block되는 순간 JVM이 그 가상 스레드를 carrier에서 떼어내(`unmount`) 힙에 보관하고, carrier에는 다른 가상 스레드를 올립니다. 코드 작성자에게는 그냥 동기 호출이지만 JVM 입장에서는 NIO와 같은 다중화입니다.
+
+이 약속에는 두 가지 조건이 붙습니다.
+
+- block 지점이 JVM이 인식 가능한 형태여야 합니다. 대부분의 표준 I/O는 인식되지만 `synchronized` 블록 안에서 block되면 unmount가 일어나지 않습니다 (`Pinning`, §실전 문제 참조).
+- CPU-bound 작업에는 이점이 없습니다. block이 없으면 unmount 기회가 없으니 carrier 수만큼만 동시에 돌아갑니다.
+
+Spring Boot 입장에서는 `application.properties`에 한 줄 추가로 Tomcat 워커 풀이 사실상 무한대가 되고, 기존 코드는 그대로 둡니다. Spring Boot 3.2가 가상 스레드를 우선 통합한 배경입니다.
+
+## 내부 동작
+
+<Callout type="warning" title="이 글의 핵심 포인트">
+  Virtual Thread는 OS 스레드의 더 가벼운 버전이 아니라, **JVM 힙 위의 continuation 객체**입니다. block은 OS 스레드를 멈추는 게 아니라 가상 스레드를 carrier에서 떼어내(`unmount`) 힙에 보관하는 신호입니다. 이 한 가지 사실이 가상 스레드의 모든 동작을 결정합니다.
+</Callout>
+
+가상 스레드는 두 부품으로 분해됩니다. **continuation**과 **N:M 스케줄러**.
+
+핵심 기술은 OpenJDK 내부의 `Continuation`입니다 (`jdk.internal.vm.Continuation`, internal API). 한 줄로 말하면 <E>호출 스택 전체를 객체로 포장해 힙에 저장했다가 그 자리부터 이어서 실행하는 메커니즘</E>입니다. 보통 stack은 OS 스레드 고유 영역이지만, Continuation은 이 stack을 <E>언제든지 떼어낼 수 있는 객체</E>로 다룹니다. JVM이 가상 스레드를 unmount하면 다음이 일어납니다.
+
+1. 현재 carrier platform thread의 stack에 쌓여 있는 가상 스레드의 모든 frame을 JVM 힙으로 복사합니다. 이 영역을 `stack chunk`라고 부릅니다.
+2. carrier의 OS stack은 비워집니다.
+3. carrier는 다른 가상 스레드의 stack chunk를 힙에서 가져다 자기 OS stack에 복원하고(=`mount`), 그 가상 스레드를 실행합니다.
+
+다시 말해, <E>가상 스레드의 스택은 OS 스택이 아니라 JVM 힙에 있는 객체 그래프</E>입니다. OS 스택은 carrier가 잠시 빌려주는 작업 공간일 뿐입니다.
+
+가상 스레드를 OS 스레드 위에서 돌려주는 건 JVM 내장 `ForkJoinPool`(가상 스레드 전용 풀)입니다. worker 개수는 기본 `Runtime.getRuntime().availableProcessors()` (CPU 코어 수)이고, 이 worker가 곧 `carrier thread`입니다. 가상 스레드가 mount될 준비가 되면 스케줄러가 가용 carrier에 올리고, block되면 unmount되어 힙으로 돌아갑니다. carrier는 다음 가상 스레드를 가져옵니다. 사용자 코드는 그대로입니다.
+
+남는 질문은 <E>JVM이 block을 어떻게 알아채는가</E>입니다. 답은 <E>JDK 표준 라이브러리의 block 지점이 가상 스레드를 인식하도록 패치되어 있다</E>는 것입니다. `Socket.read()`, `Thread.sleep()`, `LockSupport.park()`, `BlockingQueue.take()`, `CompletableFuture.get()` 같은 호출은 가상 스레드일 때 다른 분기로 가서 OS 스레드를 block하는 대신 unmount를 트리거합니다. 반대로 <E>JDK가 인식하지 못하는 형태로 block되면 carrier 전체가 함께 묶입니다</E>. 이게 §실전 문제의 핵심입니다.
+
+가상 스레드 1만 개가 동시에 `userRepo.findById(id)`를 호출하는 상황(carrier 8개)을 다이어그램으로 따라가 봅니다.
+
+<Diagram caption="가상 스레드 8 carrier × 1만 vthread × JDBC 호출 시나리오">
+{`sequenceDiagram
+    participant Sched as 스케줄러 (ForkJoinPool)
+    participant Carrier as carrier (8개)
+    participant VT as virtual thread
+    participant Heap as JVM 힙 (stack chunk)
+    participant OS as OS / DB
+
+    Sched->>Carrier: 8 vthread를 mount
+    Carrier->>VT: 실행 시작
+    VT->>OS: Socket.read() 호출
+    Note over VT,OS: JDK가 vthread 감지
+    VT->>Heap: stack을 chunk로 저장 (unmount)
+    Carrier->>Sched: 즉시 풀림
+    Sched->>Carrier: 다음 vthread를 mount
+    OS-->>Sched: epoll/kqueue 알림 (DB 응답)
+    Sched->>Heap: 가용 carrier가 stack chunk 가져옴
+    Heap->>Carrier: OS stack에 복원 (mount)
+    Carrier->>VT: 실행 재개`}
+</Diagram>
+
+8개의 carrier가 1만 개의 I/O를 다중화하는 그림입니다. 진짜 동시에 일을 하는 건 8개고, 나머지 9992개는 힙 위에서 I/O 완료를 기다리는 객체일 뿐입니다. NIO와 사실상 같은 효과입니다.
+
+<Callout type="error" title="핵심 통찰: 가상 스레드는 OS 스레드 추상이 아니라 힙 위의 continuation이다">
+  가상 스레드가 가볍다는 표현은 가상 스레드 객체 자체가 가볍다는 뜻이 아닙니다. <E>동시에 실행 중인 OS 스레드 수가 적게 유지된다</E>는 뜻입니다. 가상 스레드 1만 개를 띄우면 OS 스레드는 carrier 수(보통 8 to 16)만 살아 있고, JVM 힙에는 1만 개의 stack chunk가 추가로 쌓입니다. 이 비대칭이 가상 스레드의 모든 행동(빠른 mount/unmount, pinning의 위험성, ThreadLocal 누수의 폭발)을 만듭니다.
+</Callout>
+
+`spring.threads.virtual.enabled=true`가 켜지면 Spring Boot 3.2 이상이 자동으로 갈아끼우는 빈은 다음과 같습니다. Tomcat의 경우 `TomcatProtocolHandlerCustomizer`가 protocol handler의 executor를 `Executors.newVirtualThreadPerTaskExecutor()`로 교체합니다. 결과적으로 매 HTTP 요청이 새 가상 스레드에서 처리됩니다. `@Async`는 `applicationTaskExecutor` 빈이 `SimpleAsyncTaskExecutor`를 가상 스레드 모드로 사용하도록 바뀝니다. `@Scheduled`도 마찬가지로 가상 스레드 풀로 교체됩니다. 핵심은 사용자 코드 변경 없이 빈 교체만으로 가상 스레드화한다는 점입니다. 이게 가능한 이유는 가상 스레드가 기존 `java.lang.Thread`의 자식 클래스이기 때문입니다. Tomcat, Spring, 어느 쪽도 가상 스레드 전용 API를 알 필요가 없습니다.
+
+## 실전 문제
+
+가상 스레드는 한 줄 켜면 끝처럼 보이지만, 실제로는 네 가지 점검을 통과한 후 켜는 기능입니다. 거의 모든 프로덕션 도입 사례에서 한 번씩은 등장합니다.
+
+### 핀닝 문제
+
+가상 스레드의 약속은 <E>block 시 unmount</E>입니다. 그런데 이 약속에는 큰 예외가 있습니다. `synchronized` 블록 안에서 block되면 unmount가 일어나지 않습니다. 가상 스레드가 carrier에 고정(`pinned`)됩니다. 다른 가상 스레드가 그 carrier를 못 씁니다.
+
+이유는 JVM의 monitor 구현 때문입니다. `synchronized`는 JVM 내부에서 OS 스레드 단위의 monitor lock을 잡습니다. monitor lock은 lock을 획득한 OS 스레드와 묶이는데, 가상 스레드가 unmount되면 다른 OS 스레드(다른 carrier)에서 다시 mount될 수 있고, 그러면 monitor lock과 OS 스레드 매핑이 깨집니다. 이걸 막기 위해 JVM은 `synchronized` 블록 진입 시 unmount를 금지합니다.
+
+증상이 직관적이지 않다는 점이 핵심입니다. `application.properties`에 `spring.threads.virtual.enabled=true`를 켰는데 처리량이 별로 안 늘어납니다. carrier 8개가 어느 순간 모두 pinned 상태가 되면 나머지 가상 스레드 9992개는 mount될 곳이 없어서 큐에 쌓입니다. <E>가상 스레드 모델이 사실상 작동을 멈춥니다.</E> 흔히 만나는 케이스는 다음과 같습니다.
+
+- `Connection`을 `synchronized`로 보호한 레거시 DB 헬퍼
+- HTTP client 라이브러리 내부의 `synchronized` 블록 (구버전 Apache HttpClient)
+- 로깅 라이브러리(특정 Logback appender 설정)
+- `Collections.synchronizedMap()`이 들고 있는 monitor
+
+완화 방법은 `synchronized`를 `ReentrantLock`으로 교체하는 것입니다. `ReentrantLock`은 JDK 21에서 가상 스레드 인식이 되도록 패치되어 있어서 lock 대기 중 unmount가 정상 작동합니다.
+
+```java title="LegacyHelper.java"
+// Before: pinning 위험
+private final Object lock = new Object();
+public void doWork() {
+    synchronized (lock) {
+        externalApi.call();  // [!code highlight]
+    }
+}
+```
+
+```java title="VThreadFriendlyHelper.java"
+// After: vthread-friendly
+private final Lock lock = new ReentrantLock();
+public void doWork() {
+    lock.lock();
+    try {
+        externalApi.call();  // [!code highlight]
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+자기 코드의 `synchronized`를 다 바꿔도 의존하는 라이브러리 내부에서 발생하는 pinning은 본인이 못 막습니다. JDK 24에서는 `synchronized` pinning이 해결될 예정(JEP 491)이지만, 21 LTS 사용 중이면 `-Djdk.tracePinnedThreads=full` JVM 옵션으로 pinning 발생 위치를 stack trace로 받아 보고 케이스별로 대응해야 합니다.
+
+<Callout type="info" title="JDK 24 (JEP 491)">
+  JDK 24부터는 `synchronized` 안에서 block되어도 unmount가 가능하도록 monitor 구현이 재작성됩니다. 즉 이 절의 핀닝 문제는 JDK 24 이상에서 자연스럽게 해소됩니다. 21 LTS에 머무르는 동안만 `ReentrantLock` 마이그레이션이 필요합니다.
+</Callout>
+
+### JDBC 풀의 한계
+
+가상 스레드를 1만 개 띄울 수 있다고 해서 <E>DB가 1만 개의 동시 쿼리를 받아주지 않습니다.</E> Spring Boot의 기본 HikariCP 풀 크기는 10입니다. 가상 스레드 1만 개가 동시에 `userRepo.findById()`를 호출하면, 10개만 DB에 닿고 나머지 9990개는 HikariCP의 커넥션 wait queue에서 대기합니다.
+
+여기서 두 지점이 미묘합니다.
+
+- HikariCP의 `getConnection()` 대기는 `LockSupport.park()` 기반이라 wait 시점에 unmount됩니다. carrier가 묶이지는 않습니다.
+- 그러나 9990개의 가상 스레드가 힙 위에서 커넥션을 기다립니다. 응답 시간은 `(9990 / 10) × 평균_쿼리_시간`만큼 늘어납니다.
+
+도입 전에는 Tomcat thread 200에서 막혀 일찍 503으로 거절되던 요청이, 이제는 거절되지 않고 DB 응답 대기로 시간이 늘어집니다. 처리량 한계가 Tomcat 스레드 풀에서 DB 풀로 옮겨갈 뿐입니다.
+
+완화는 HikariCP 풀 크기와 DB `max_connections` 증가, Read replica나 캐시 도입으로 동시 쿼리 수 자체를 줄이는 것입니다. 가상 스레드는 병목을 다른 층으로 이동시키는 도구이지 그 자체로 처리량을 늘리지 않습니다.
+
+### ThreadLocal 누수 폭발
+
+Spring 생태계는 ThreadLocal에 깊이 의존합니다. `RequestContextHolder`, `TransactionSynchronizationManager`, `SecurityContextHolder`, MDC가 모두 ThreadLocal 위에 올라갑니다. 이 도구들은 platform thread 풀(Tomcat 200개) 위에서는 큰 비용이 아니었습니다. 한 스레드가 1MB stack과 약간의 ThreadLocal 데이터를 들고 있어도 200 × 작은 값 = 미미했습니다.
+
+가상 스레드는 다릅니다. `Thread.currentThread()`가 가상 스레드일 때, ThreadLocal은 각 가상 스레드에 따로 저장됩니다. 동시 요청 1만 = 가상 스레드 1만 = ThreadLocal Map 1만 개. 각 ThreadLocal이 50KB짜리 보안 컨텍스트를 들고 있으면 1만 × 50KB = 500MB가 힙에 추가로 잡힙니다.
+
+거기에 더 큰 문제가 있습니다. ThreadLocal은 명시적으로 `remove()`를 호출하지 않으면 GC 대상이 안 될 수 있습니다. Platform thread는 풀에서 재사용되어 다음 요청에서 같은 ThreadLocal Map을 덮어쓰지만, 가상 스레드는 요청마다 새로 만들어지고 끝나면 GC됩니다. 정상 케이스는 OK이지만, ThreadLocal에 저장한 객체가 다른 long-lived 객체를 참조하고 있으면 그 참조 그래프가 끊기지 않아 누수로 이어집니다.
+
+JDK 21은 이 문제를 위해 `ScopedValue`(JEP 446)를 도입했습니다. ThreadLocal과 의미는 비슷하지만 불변이고 범위가 한정됩니다. `ScopedValue.where(VALUE, "x").run(() -> { ... })` 블록 안에서만 유효하고, 블록을 빠져나오면 자동으로 사라집니다. 가상 스레드 환경에서 ThreadLocal을 점진적으로 대체하는 권장 패턴입니다.
+
+```java title="ScopedValueExample.java"
+private static final ScopedValue<String> USER_ID = ScopedValue.newInstance();
+
+public void handleRequest(String userId) {
+    ScopedValue.where(USER_ID, userId).run(() -> {
+        orderService.place(order);
+        // USER_ID.get() 가능, 블록 종료 시 자동 정리  // [!code highlight]
+    });
+}
+```
+
+ThreadLocal의 내부 구조와 누수 메커니즘은 별도로 깊이 다룬 글이 있습니다.
+
+<RelatedPost slug="threadlocal-internals" type="deep-dive" />
+
+### 관찰성 변화
+
+운영 중 응답이 느려서 thread dump를 떴는데 수만 줄의 가상 스레드 stack이 출력됩니다. 기존 `jstack` 출력은 platform thread 200에서 400개 분량을 가정합니다. 가상 스레드가 1만 개면 출력이 50배가 되고, 사람이 눈으로 읽을 수 있는 형태가 아닙니다.
+
+JDK 21은 이를 위해 `jcmd <pid> Thread.dump_to_file -format=json <file>` 명령을 추가했습니다. 가상 스레드를 그룹화한 JSON으로 떨어집니다. 하지만 Spring Boot Actuator의 `/actuator/threaddump` 엔드포인트는 여전히 옛 텍스트 포맷이라 가상 스레드 비중이 높으면 응답 자체가 느려집니다.
+
+APM 도구도 비슷합니다. Datadog, New Relic 같은 도구는 platform thread 단위 sampling을 가정합니다. 가상 스레드가 carrier를 빠르게 갈아탄다는 사실이 thread profile 해석을 어렵게 만듭니다. 하나의 carrier에서 1초 동안 100개의 다른 가상 스레드가 mount/unmount된 stack 정보가 섞여 보입니다.
+
+완화는 도구 스택 업데이트입니다. Micrometer와 OpenTelemetry는 가상 스레드를 인식하도록 업데이트되고 있고, Spring Boot 3.2 이상의 Actuator는 `application.properties`에 `management.observations.annotations.enabled=true` 등 새 설정으로 가상 스레드 메트릭을 추출할 수 있습니다. 다만 운영 도구 스택 전체의 호환성을 점검 후 도입해야 합니다.
+
+### 도입 전 점검
+
+가상 스레드는 Spring Boot 3.2와 한 줄 설정이 아니라 네 가지 시스템 점검을 통과한 후 켜는 기능입니다.
+
+| 항목 | 점검 질문 | 점검 도구 |
+|---|---|---|
+| `synchronized` pinning | 자기 코드와 의존성에 얼마나 있는가 | `-Djdk.tracePinnedThreads=full` |
+| DB 풀 한계 | 풀 크기와 DB `max_connections`가 늘어난 동시 쿼리를 받을 수 있는가 | HikariCP 메트릭, `SHOW PROCESSLIST` |
+| ThreadLocal 의존성 | ThreadLocal에 무거운 객체가 저장되는가, `remove()`가 잘 호출되는가 | 힙 덤프 분석, `ThreadLocalRandom` 외 사용처 정리 |
+| 관찰성 도구 | thread dump, APM, profiler가 가상 스레드를 이해하는가 | Actuator, Datadog/New Relic 호환성 매트릭스 |
+
+## 트레이드오프
+
+가상 스레드를 켤지 말지의 기준은 한 줄입니다. <E>워크로드가 I/O-bound인가 CPU-bound인가.</E>
+
+전형적인 백엔드 API(DB 쿼리, 외부 API 호출, 직렬화)는 요청 시간의 90% 이상이 I/O 대기입니다. 이 환경에서는 Tomcat 200~400 한계가 풀리면서 코드는 그대로 둘 수 있고 WebFlux의 학습 곡선·운영 부담도 없습니다. Spring Boot 3.2가 가상 스레드를 기본 통합한 이유입니다.
+
+반대로 가상 스레드가 의미 없거나 해가 되는 경우는 다음과 같습니다.
+
+- **CPU-bound 워크로드** (이미지 처리, 암호 연산, 대용량 JSON 파싱, ML 추론): block이 거의 없으니 unmount 기회가 없고, carrier(=CPU 코어 수)만큼만 동시에 돌아갑니다. 가상 스레드 객체 생성과 관리 오버헤드만 추가됩니다.
+- **아주 짧은 요청** (캐시 hit 1ms): platform thread 풀 재사용이 더 효율적입니다. 가상 스레드는 매 요청마다 새 객체를 만들어 GC 대상이 됩니다.
+- **ThreadLocal 의존성 큰 레거시**: §ThreadLocal 누수 문제부터 해결되어야 합니다.
+
+운영 비용도 있습니다. JDK 21 LTS 이상이 필수이므로 JDK 17/11/8에 머무르는 조직이라면 그것 자체가 큰 마이그레이션입니다. APM 벤더의 가상 스레드 지원 수준도 도구마다 달라 도입 직후 운영 가시성이 일시적으로 떨어질 수 있습니다.
+
+<E>가상 스레드가 나왔으니 WebFlux는 끝났다</E>는 결론은 단순합니다. WebFlux는 두 영역에서 여전히 우세합니다.
+
+- **Backpressure** (Reactive Streams 명세 기반 제어): 가상 스레드는 직접 제공하지 않습니다. `Semaphore`로 수동 제어해야 합니다.
+- **무한 stream** (SSE, 실시간 메시징): Reactor 연산자의 표현력이 강합니다. 가상 스레드는 1회 요청·응답에 최적화되어 있습니다.
+
+일반 CRUD API는 가상 스레드 + MVC, 실시간 파이프라인은 WebFlux가 더 적합합니다. 두 모델은 공존합니다.
+
+| 조건 | Virtual Thread | Platform Thread | WebFlux |
+|---|---|---|---|
+| I/O-bound CRUD API | ✅ | △ | △ |
+| CPU-bound 계산 | △ | ✅ | ❌ |
+| 실시간 스트리밍 / SSE | △ | △ | ✅ |
+| ThreadLocal 의존 레거시 | ⚠️ | ✅ | ❌ |
+| JDK 21 미만 | ❌ | ✅ | ✅ |
+
+<RelatedPost slug="coroutine-primer" type="parallel" />
+
+## 마무리
+
+Virtual Thread는 <E>스레드처럼 보이지만 JVM 힙 위의 continuation 객체</E>입니다. block은 OS 스레드를 멈추는 게 아니라 가상 스레드를 carrier에서 떼어내 힙에 보관하는 신호이고, 1만 개의 가상 스레드는 carrier 수(보통 8~16)만큼의 OS 스레드에서 다중화됩니다.
+
+Spring Boot 3.2의 `spring.threads.virtual.enabled=true`는 빈 교체일 뿐입니다. 효과를 보려면 `synchronized` pinning, JDBC 풀, ThreadLocal 누수, 관찰성 네 가지 점검을 통과하고 워크로드가 I/O-bound여야 합니다. 동기 코드의 가독성을 유지하면서 NIO 수준의 동시성을 얻는다는 약속은 이 조건이 충족됐을 때만 지켜집니다.
+
+## 참고 자료
+
+- [JEP 444: Virtual Threads](https://openjdk.org/jeps/444)
+- [JEP 446: Scoped Values](https://openjdk.org/jeps/446)
+- [JEP 491: Synchronize Virtual Threads without Pinning](https://openjdk.org/jeps/491)
+- [Spring Boot 3.2 Release Notes: Virtual Threads](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-3.2-Release-Notes)
+- [Inside Java: Virtual Threads, New Foundations for High-Scale Java Applications](https://inside.java/2023/11/30/virtual-threads/)

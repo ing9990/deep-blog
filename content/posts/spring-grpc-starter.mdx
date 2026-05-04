@@ -1,7 +1,7 @@
 ---
 title:
-  ko: "spring-grpc"
-  en: "spring-grpc"
+  ko: "Spring gRPC"
+  en: "Spring gRPC"
 slug: "spring-grpc-starter"
 date: 2026-04-11
 tags:
@@ -25,13 +25,19 @@ spring-grpc는 gRPC를 다시 구현한 프레임워크가 아니라, `grpc-java
 
 <RelatedPost slug="grpc-essentials" type="prerequisite" />
 
-## spring-grpc란
+## Spring gRPC란
 
 spring-grpc는 [Spring 공식 프로젝트](https://github.com/spring-projects/spring-grpc)로 만들어진 gRPC 통합 스타터입니다. Spring Boot 3.x(특히 3.5+)를 타겟으로 하며, 내장 Netty 기반 gRPC 서버와 Servlet 컨테이너에 공존하는 gRPC 서버 두 변형을 starter 아티팩트로 나눠 제공합니다.
 
 이 이름을 쓰는 라이브러리는 두 계열이 있습니다. 오랫동안 사실상 표준 역할을 해 온 커뮤니티판 `net.devh:grpc-spring-boot-starter`와, 2024년부터 GA한 Spring 공식판 `org.springframework.grpc:spring-grpc-*`. 이 글은 공식판 기준입니다. 두 라이브러리는 어노테이션 패키지, 프로퍼티 키, 자동설정 구조가 달라 서로 호환되지 않으므로 한 프로젝트에 하나만 씁니다.
 
-구조적으로 spring-grpc는 세 부분으로 나뉩니다. (1) 서버 사이드로 `@GrpcService` 빈을 찾아 내장 서버에 등록, (2) 클라이언트 사이드로 protoc가 생성한 스텁 클래스를 Spring 빈으로 자동 등록, (3) `SslBundles`, Micrometer Observation, Actuator Health 같은 Spring Boot 공용 인프라 훅이 gRPC 쪽에도 연결. 이 세 축을 아래에서 순서대로 풀어냅니다.
+구조적으로 spring-grpc는 세 부분으로 나뉩니다.
+
+- **서버 사이드**: `@GrpcService` 빈을 모아 내장 서버에 등록
+- **클라이언트 사이드**: protoc가 생성한 스텁 클래스를 Spring 빈으로 자동 등록
+- **공용 인프라 연결**: `SslBundles`, Micrometer Observation, Actuator Health를 gRPC 쪽에도 그대로 연결
+
+아래에서 순서대로 풀어냅니다.
 
 ## 왜 필요한가
 
@@ -213,9 +219,9 @@ class TestStubConfig {
 }
 ```
 
-## 기능 소개
+## 주요 기능
 
-스타터가 `grpc-java` 위에 얹어 둔 훅 중 실무에서 자주 켜는 네 가지를 훑어봅니다. 전부 빈 하나 추가 또는 프로퍼티 한 줄로 활성화됩니다.
+스타터가 제공하는 통합 기능 중 실무에서 자주 켜는 네 가지입니다. 전부 빈 하나 추가 또는 프로퍼티 한 줄로 활성화됩니다.
 
 ### 인터셉터
 
@@ -274,29 +280,29 @@ management.endpoints.web.exposure.include=health,metrics,prometheus
 management.observations.annotations.enabled=true
 ```
 
-## Gotchas
+## 자주 마주치는 문제
 
-처음 붙일 때 반복적으로 부딪히는 다섯 가지입니다. 전부 <E>사용법 앵커</E> 성격으로, 에러 메시지와 해결책을 함께 두었습니다.
+처음 붙일 때 반복해서 부딪히는 다섯 가지를 에러 메시지와 해결책을 함께 정리합니다.
 
-<Callout type="warning" title="Netty 스타터와 Servlet 스타터 동시 선언">
-  `spring-grpc-spring-boot-starter`(Netty)와 `spring-grpc-server-web-spring-boot-starter`(Servlet) 둘 다 있으면 자동설정이 경쟁해 `GrpcServerFactory`가 두 개 생기거나 포트 바인딩 시점에 의도하지 않은 쪽이 선택됩니다. 프로세스당 하나만 남겨야 합니다.
-</Callout>
+### 스타터 중복 선언
 
-<Callout type="warning" title="@ImportGrpcClients base package가 스텁을 포함하지 못함">
-  protoc 출력 디렉터리(`build/generated/source/proto/main/grpc`)가 `@SpringBootApplication` 패키지와 다른 루트에 만들어지면 자동 스캔이 스텁을 찾지 못합니다. `No qualifying bean of type 'GreeterBlockingStub'` 에러가 뜨면 의심해 볼 지점입니다. `@ImportGrpcClients(basePackages = "com.example.grpc.generated")`로 생성 패키지를 명시하거나 생성 경로를 앱 base package 하위로 맞춥니다.
-</Callout>
+`spring-grpc-spring-boot-starter`(Netty)와 `spring-grpc-server-web-spring-boot-starter`(Servlet)를 둘 다 선언하면 자동설정이 경쟁해 `GrpcServerFactory`가 두 개 생기거나 포트 바인딩 시점에 의도하지 않은 쪽이 선택됩니다. 프로세스당 하나만 남겨야 합니다.
 
-<Callout type="warning" title="@LocalGrpcPort 주입 빈에 @Lazy 누락">
-  `spring.grpc.server.port=0`은 `ApplicationContext`가 살아난 뒤에야 포트를 결정합니다. 스텁 빈이 일반 싱글톤이면 포트 결정 전에 생성되어 고정된 잘못된 값을 받거나 `UNAVAILABLE: io exception`으로 실패합니다. 스텁 빈에 `@Lazy`를 붙여 사용 시점에 포트를 읽도록 해야 합니다.
-</Callout>
+### 스텁 패키지 불일치
 
-<Callout type="warning" title="클라이언트 negotiation-type과 서버 TLS 설정 불일치">
-  서버는 `spring.grpc.server.ssl.bundle`로 TLS를 켜 놨는데 클라이언트가 `negotiation-type=plaintext`로 붙으면 채널이 열리자마자 `UNAVAILABLE: Network closed for unknown reason` 또는 SSL handshake 실패로 떨어집니다. 반대 방향도 같은 증상입니다. 양쪽이 동일 번들 이름을 공유하도록 맞추는 게 안전합니다.
-</Callout>
+protoc 출력 디렉터리(`build/generated/source/proto/main/grpc`)가 `@SpringBootApplication` 패키지와 다른 루트에 만들어지면 자동 스캔이 스텁을 찾지 못합니다. `No qualifying bean of type 'GreeterBlockingStub'` 에러가 떠오르는 케이스입니다. `@ImportGrpcClients(basePackages = "com.example.grpc.generated")`로 생성 패키지를 명시하거나, 생성 경로를 앱 base package 하위로 맞추면 해결됩니다.
 
-<Callout type="warning" title="Reflection 의존성 없이 grpcurl 호출">
-  `io.grpc:grpc-services`가 없는 상태에서 `grpcurl localhost:9090 list`를 치면 `server does not support the reflection API`로 거절됩니다. 로컬, 개발 환경에서만 의존성을 포함하는 profile 분리가 가장 흔한 해법입니다.
-</Callout>
+### 동적 포트와 `@Lazy`
+
+`spring.grpc.server.port=0`은 `ApplicationContext`가 살아난 뒤에야 포트를 결정합니다. 스텁 빈이 일반 싱글톤이면 포트 결정 전에 생성되어 잘못된 값을 받거나 `UNAVAILABLE: io exception`으로 실패합니다. 스텁 빈에 `@Lazy`를 붙여 사용 시점에 포트를 읽도록 합니다.
+
+### TLS 설정 불일치
+
+서버는 `spring.grpc.server.ssl.bundle`로 TLS를 켰는데 클라이언트가 `negotiation-type=plaintext`로 붙으면 채널이 열리자마자 `UNAVAILABLE: Network closed for unknown reason`이나 SSL handshake 실패로 떨어집니다. 반대 방향도 같은 증상입니다. 양쪽이 동일 번들 이름을 공유하도록 맞추는 게 안전합니다.
+
+### Reflection 의존성 누락
+
+`io.grpc:grpc-services`가 없는 상태에서 `grpcurl localhost:9090 list`를 치면 `server does not support the reflection API`로 거절됩니다. 로컬·개발 환경 profile에서만 의존성을 포함하는 분리가 가장 흔한 해법입니다.
 
 ## 마무리
 
