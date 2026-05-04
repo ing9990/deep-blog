@@ -9,9 +9,9 @@ import {
   type ReactNode,
 } from 'react'
 
-export type CardLayout = 'editorial' | 'timeline' | 'floating'
+export type CardLayout = 'timeline' | 'floating'
 export type Language = 'en' | 'ko'
-export type FontSize = 'small' | 'normal' | 'large'
+export type FontSize = 'small' | 'large'
 export type CodeTheme = 'flat' | 'floating'
 export type SyntaxTheme = 'atom' | 'github' | 'vitesse'
 
@@ -24,9 +24,9 @@ export interface Settings {
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  cardLayout: 'timeline',
+  cardLayout: 'floating',
   language: 'ko',
-  fontSize: 'normal',
+  fontSize: 'small',
   codeTheme: 'flat',
   syntaxTheme: 'github',
 }
@@ -54,15 +54,11 @@ function normalizeLanguage(value: unknown): Language {
 }
 
 function normalizeCardLayout(value: unknown): CardLayout {
-  return value === 'editorial' || value === 'timeline' || value === 'floating'
-    ? value
-    : 'timeline'
+  return value === 'timeline' || value === 'floating' ? value : 'floating'
 }
 
 export function normalizeFontSize(value: unknown): FontSize {
-  return value === 'small' || value === 'normal' || value === 'large'
-    ? value
-    : 'normal'
+  return value === 'small' || value === 'large' ? value : 'small'
 }
 
 export function normalizeCodeTheme(value: unknown): CodeTheme {

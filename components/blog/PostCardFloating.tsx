@@ -17,7 +17,7 @@ export function PostCardFloating({ post }: { post: Post }) {
   return (
     <Link
       href={`/posts/${post.slug}`}
-      className="group grid grid-cols-[44px_1fr] items-start gap-4 rounded-[var(--radius-panel)] border border-border bg-background p-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
+      className="group grid grid-cols-[44px_1fr] items-center gap-4 rounded-[var(--radius-panel)] border border-border bg-background p-5 transition-all hover:-translate-y-px hover:border-border-strong hover:shadow-[var(--shadow-card-hover)]"
     >
       {/* Icon area */}
       <span

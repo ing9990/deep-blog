@@ -21,9 +21,8 @@ interface SettingsPanelProps {
 }
 
 const LAYOUT_OPTIONS: { value: CardLayout; labelKey: MessageKey }[] = [
-  { value: 'timeline',  labelKey: 'settings.layout.timeline' },
-  { value: 'editorial', labelKey: 'settings.layout.editorial' },
-  { value: 'floating',  labelKey: 'settings.layout.floating' },
+  { value: 'floating', labelKey: 'settings.layout.floating' },
+  { value: 'timeline', labelKey: 'settings.layout.timeline' },
 ]
 
 const LANGUAGE_OPTIONS: { value: Language; labelKey: MessageKey }[] = [
@@ -32,9 +31,8 @@ const LANGUAGE_OPTIONS: { value: Language; labelKey: MessageKey }[] = [
 ]
 
 const FONT_SIZE_OPTIONS: { value: FontSize; labelKey: MessageKey }[] = [
-  { value: 'small',  labelKey: 'settings.font.small' },
-  { value: 'normal', labelKey: 'settings.font.normal' },
-  { value: 'large',  labelKey: 'settings.font.large' },
+  { value: 'small', labelKey: 'settings.font.small' },
+  { value: 'large', labelKey: 'settings.font.large' },
 ]
 
 const CODE_THEME_OPTIONS: { value: CodeTheme; labelKey: MessageKey }[] = [
@@ -251,18 +249,6 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 function LayoutMiniIcon({ layout, active }: { layout: CardLayout; active: boolean }) {
   const barColor = active ? 'bg-primary' : 'bg-muted-foreground/30'
   const dotColor = active ? 'bg-primary' : 'bg-muted-foreground/30'
-
-  if (layout === 'editorial') {
-    return (
-      <div className="flex h-7 w-9 items-stretch overflow-hidden rounded">
-        <div className={cn('w-[3px] shrink-0 rounded-l', barColor)} />
-        <div className="flex flex-1 flex-col justify-center gap-1 pl-1.5 pr-1">
-          <div className={cn('h-[3px] w-full rounded-full', barColor)} />
-          <div className={cn('h-[2px] w-3/4 rounded-full', barColor, 'opacity-50')} />
-        </div>
-      </div>
-    )
-  }
 
   if (layout === 'timeline') {
     return (
