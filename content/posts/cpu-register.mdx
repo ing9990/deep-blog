@@ -1,0 +1,215 @@
+---
+title:
+  ko: "CPU Register"
+  en: "CPU Register"
+slug: "cpu-register"
+date: 2026-05-04
+tags:
+  - cs
+  - cpu
+keywords:
+  - "CPU Register"
+  - "레지스터"
+  - "Register Allocation"
+  - "Calling Convention"
+summary:
+  ko: "CPU Register가 왜 CPU 칩 안에 박혀야 했는지(RAM과의 약 100배 속도 격차)부터, 어떤 종류가 있고 어떻게 일하는지, 왜 갯수가 적게 정해졌는지, 그리고 그 사실이 JIT, GC, 컨텍스트 스위칭의 비용을 어떻게 만드는지를 학부 전공서 수준에서 따라갑니다."
+  en: "Why CPU registers had to be embedded inside the CPU chip itself (the ~100x gap with RAM), the main register categories, why the count is intentionally small, and how that single fact drives the costs of JIT, GC, and context switching."
+category: computer-science
+draft: false
+---
+
+CPU 클럭은 1초에 수십억 번 뛰지만, RAM 한 번 다녀오는 데는 그중 수백 cycle이 걸립니다. 이 단순한 격차가 CPU 칩 안에 작은 저장소를 박게 만들었고, 그것이 <E>Register</E>입니다. 이 글은 Register가 왜 거기에 있어야 했는지부터, 어떤 종류가 있고 어떻게 일하는지, 그리고 그 사실이 JIT, GC, 컨텍스트 스위칭 같은 개발자가 매일 만나는 개념의 비용을 어떻게 만드는지를 따라갑니다.
+
+## 왜 존재하는가
+
+현대 CPU의 클럭은 3–5 GHz입니다. 한 cycle은 약 0.2–0.3 나노초. 같은 시간에 RAM 한 번 다녀오는 데 걸리는 시간은 80–120 나노초 정도입니다. CPU 입장에서 RAM은 한 번 갔다 오면 **수백 cycle을 그냥 버린다**는 뜻입니다.
+
+> 비유 한 번. 1초에 30번 망치질을 할 수 있는 목수가 못을 가지러 매번 200미터 떨어진 창고를 다녀와야 한다고 생각해봅시다. 망치질 한 번에 못 가지러 가는 시간이 수백 배 더 깁니다. 그러면 손이 빠른 게 의미가 없습니다.
+
+해결은 단순합니다. CPU 옆에, 정확히는 CPU 칩 그 자체 안에, 아주 작은 저장소를 박는 것. 그게 Register입니다. Register 접근은 **1 cycle** 안에 끝나서, RAM의 약 백 배 빠릅니다. 대신 갯수가 매우 적습니다. 일반 목적 Register는 보통 **10여 개에서 수십 개** 수준입니다.
+
+RAM이 왜 그렇게 느린가는 학부 컴퓨터 구조의 메모리 계층에서 답을 줍니다. RAM은 CPU 칩과 별도의 칩에 있고, 메인보드의 메모리 버스를 통해 신호가 왕복해야 합니다. 물리적 거리와 신호 동기화 비용이 합쳐져 수십 나노초가 됩니다. L1/L2/L3 캐시는 이 격차를 메우려고 CPU와 RAM 사이에 끼워 넣은 중간층입니다. 별도 글의 주제이므로 여기서는 "Register는 메모리 계층의 맨 꼭대기에 있다" 정도로만 자리잡아 두겠습니다.
+
+## 작업대 비유
+
+수치는 봤으니 이제 그림으로 자리잡을 차례입니다. 목공방이 하나 있다고 합시다.
+
+> **창고 (RAM)** 는 공방 끝에 있는 큰 창고입니다. 모든 자재(나사, 못, 판자, 도료)가 다 여기 있습니다. 용량은 크지만 가지러 가려면 공방을 가로질러 걸어가야 합니다. 한 번 다녀오면 작업이 한참 멈춥니다.
+>
+> **작업대 (Register)** 는 지금 망치질하고 있는 그 위입니다. 그 위에는 지금 손에 든 망치, 옆에 둔 나사 한 줌, 작업 중인 판자 정도만 있습니다. 손만 뻗으면 닿습니다. 단, 자리가 좁아서 동시에 올려둘 수 있는 게 딱 몇 개뿐입니다.
+>
+> CPU가 명령어를 실행한다는 건 작업대 위의 도구로 작업한다는 뜻입니다. 작업대 위에 없는 자재가 필요하면 창고까지 다녀와야 합니다. 가져온 다음에야 작업이 재개됩니다.
+
+<Diagram caption="메모리 계층, Register는 작업대 · RAM은 창고">{`flowchart TB
+    subgraph CPU["CPU 칩"]
+        REG["Register<br/>1 cycle, 약 16개"]
+    end
+    subgraph BOARD["메인보드"]
+        RAM["RAM<br/>수백 cycle, 무제한"]
+    end
+    REG <-->|"load / store"| RAM
+`}</Diagram>
+
+이 그림이 박히면 다음 4가지가 자명해집니다. 외울 필요가 없습니다.
+
+1. **왜 빠른가**: 작업대가 CPU 칩 안에 같이 박혀 있어서 손만 뻗으면 닿습니다.
+2. **왜 갯수가 적은가**: 작업대가 좁습니다.
+3. **왜 컴파일러가 신경 쓰는가**: 작업대 위에 어떤 도구를 둘지가 작업 속도를 결정합니다.
+4. **왜 컨텍스트 스위칭이 비싼가**: 다른 작업으로 넘어가려면 작업대 위 모든 걸 정리해서 보관함에 넣고, 새 작업의 도구를 다시 꺼내 와야 합니다.
+
+마지막 항목이 특히 중요합니다. 컨텍스트 스위칭 비용의 큰 부분이 "작업대 정리·재배치"에서 나옵니다. Register라는 자리감각이 없으면 컨텍스트 스위칭이 왜 비싼지 단순 암기로 떨어집니다. 다음 글에서 이 주제를 그대로 이어받을 예정입니다.
+
+## Register 종류
+
+종류는 크게 다섯 갈래입니다. 학부 수준에서 알아야 할 것은 **각 종류가 어떤 일을 위한 자리인가** 정도입니다. 구체적인 이름은 어셈블리를 직접 다룰 때 들여다보면 됩니다.
+
+### 일반 목적 Register
+
+산술 연산의 피연산자, 함수 인자, 지역 변수 보관에 쓰이는 가장 자주 등장하는 자리입니다. x86-64에서는 16개, ARM과 RISC-V에서는 32개가 표준. 컴파일러는 함수 안의 변수들을 이 자리에 어떻게 할당할지를 두고 고민합니다. 이게 [갯수의 한계](#갯수의-한계) 섹션에서 다룰 register allocation 문제의 출발점.
+
+### Instruction Pointer
+
+지금 실행 중인 명령어가 어디 있는지를 가리킵니다. CPU는 매 cycle 이 값을 읽어 그 주소의 명령어를 가져와 실행하고, 다음 명령어 주소로 자동으로 옮깁니다. 분기·점프·함수 호출은 결국 이 값을 다른 주소로 강제로 바꾸는 일입니다.
+
+이 자리는 프로그래머가 직접 쓰는 Register가 **아닙니다**. CPU가 자동으로 관리합니다. 다만 컨텍스트 스위칭이 발생하면 OS는 "어디까지 실행했는지"를 잃지 않으려고 이 값을 보존했다가 복원해야 합니다. 다음 글에서 다시 등장할 핵심 자리.
+
+### Status Flags
+
+직전 연산의 부산물(자리올림이 있었는지, 결과가 0인지, 음수인지 같은 것)을 기록하는 1비트 깃발들의 모음입니다. 조건 분기가 이걸 사용합니다.
+
+`if (a == b)` 같은 코드는 어셈블리에서 두 단계로 풀립니다. 먼저 두 값을 빼서 결과는 버리고 "0인지" 플래그만 갱신하고, 그 다음 "0이면 점프" 명령으로 분기합니다. 결과값을 일반 Register에 두면 자리만 차지하고 매번 비교 코드가 길어지므로, 부산물 정보를 따로 모아둔 자리입니다.
+
+### Segment Register
+
+32비트 시절 메모리 보호와 멀티태스킹의 기반이었지만, 64비트에서는 페이지 테이블 기반 가상 메모리가 그 역할을 흡수해 거의 유물이 되었습니다. 다만 일부가 살아남아 **스레드별 데이터**(TLS, Thread-Local Storage)를 가리키는 데 쓰입니다.
+
+이 부분이 다른 글로 이어지는 자리입니다. Java의 `ThreadLocal`도 결국 OS 스레드별 메모리 영역에 도달하는 메커니즘이고, 그 출발점이 Segment Register입니다.
+
+<RelatedPost slug="threadlocal-internals" type="deep-dive" />
+
+### SIMD / Vector Register
+
+한 명령어로 여러 데이터를 한꺼번에 처리(Single Instruction Multiple Data)하기 위한 자리입니다. 일반 Register가 한 번에 정수 하나를 다룬다면, SIMD Register는 한 번에 정수 여러 개를 더하거나 곱할 수 있습니다.
+
+> "Register인데 한 번에 여러 값"이 어색하게 느껴진다면, 작업대 위에 여러 개를 한 번에 다룰 수 있는 큰 도구가 추가로 놓여 있다고 생각하면 됩니다.
+
+영상 처리, 행렬 곱, JSON 파싱처럼 같은 연산을 대량으로 반복하는 작업에서 핵심.
+
+## 동작 원리
+
+<Callout type="warning" title="이 구조를 이해하는 핵심">
+  CPU와 RAM 사이의 약 100배 속도 격차라는 단일 사실이 Register라는 1-cycle 작업대를 CPU 칩 안에 박게 만들었습니다. 이 격차를 이해하면 명령어 사이클과 함수 호출 비용이 모두 같은 인과로 따라옵니다.
+</Callout>
+
+CPU는 매 cycle 같은 일을 반복합니다.
+
+<Diagram caption="명령어 실행 사이클에서 Register의 위치">{`flowchart LR
+    F["Fetch<br/>다음 명령어 가져오기"] --> D["Decode<br/>어느 Register인지 해석"]
+    D --> E["Execute<br/>Register 값으로 연산"]
+    E --> W["Writeback<br/>결과를 Register에 저장"]
+    W -.다음 cycle.-> F
+`}</Diagram>
+
+각 단계에서 Register가 어떻게 끼는지 정리하면 다음과 같습니다.
+
+1. **Fetch**: Instruction Pointer가 가리키는 주소에서 명령어 바이트를 가져옵니다.
+2. **Decode**: 명령어 비트를 해석합니다. "이 명령어는 Register A와 Register B를 더해 Register A에 저장하라" 같은 형태로 풀어냅니다.
+3. **Execute**: ALU(Arithmetic Logic Unit)가 Register에서 값을 직접 읽어 연산합니다.
+4. **Writeback**: 결과를 다시 Register에 씁니다. 동시에 부산물(0인지, 자리올림이 있었는지)이 Status Flags에 자동으로 갱신됩니다.
+
+핵심 관찰. **연산은 Register 안에서만 일어납니다.** RAM 값은 절대 직접 연산되지 않고 반드시 Register로 한 번 옮겨와야 합니다. RAM 값을 더하려면 먼저 `load`로 Register에 옮기고, 더하고, 필요하면 `store`로 다시 RAM에 쓰는 3단 구조가 됩니다.
+
+### 함수 호출의 비용
+
+함수를 호출한다는 건 작업대 위 도구를 잠깐 다른 작업으로 바꾸는 일입니다.
+
+> 호출자가 작업대 위에 둔 도구를 호출된 함수가 덮어쓰면, 호출자가 돌아왔을 때 자기 도구가 사라져 있습니다.
+
+해결은 <E>호출 규약(calling convention)</E>입니다. "어느 Register는 호출 전후로 보존하고, 어느 Register는 자유롭게 덮어써도 되는가"를 미리 약속합니다. 함수가 보존해야 하는 Register를 사용하려면 시작할 때 스택에 백업하고 끝날 때 복원해야 합니다. 호출자가 보존을 책임지는 Register는 호출 전에 직접 백업합니다.
+
+핵심 관찰. **함수 호출 한 번은 Register 백업·복원의 묶음**입니다. 호출이 깊어질수록 이 비용이 누적됩니다. 그래서 작은 함수를 호출 지점에 풀어 넣는 인라이닝(inlining)이 컴파일러 최적화의 핵심이 됩니다.
+
+## 갯수의 한계
+
+이제 미리 미뤘던 질문에 답할 차례. 작업대 위에 도구를 더 많이 놓을 수 있으면 좋을 것 같은데, 왜 일반 목적 Register가 16개 또는 32개일까요? 두 가지가 합쳐진 결과입니다.
+
+### 명령어 인코딩의 비트 제약
+
+명령어 한 줄 안에 "어느 Register를 쓸지"를 표현하려면 비트가 필요합니다. Register가 16개면 4비트, 32개면 5비트, 256개면 8비트입니다. 두 피연산자 명령어는 Register를 두 번 가리키므로 비트가 두 배 듭니다.
+
+명령어가 비대해지면 같은 프로그램을 표현하는 데 메모리가 더 듭니다. 명령어를 RAM에서 끌어오는 것도 비용이므로 명령어 캐시 효율이 떨어집니다. ISA(Instruction Set Architecture)를 설계할 때 한 번 정해지면 호환성 때문에 바꾸기 어려우므로, 처음부터 적절한 갯수로 균형을 잡습니다.
+
+### Register Pressure와 Spill
+
+작업대가 좁다는 사실은 컴파일러에게 떠넘겨지는 문제가 됩니다. 함수 안에 변수가 50개 있다면 어떻게 할까요? 16개에 다 넣을 수 없습니다.
+
+해법은 <E>Spill</E>입니다. Register에 다 들어가지 않는 변수를 스택에 잠시 내려놓고, 필요할 때 다시 Register로 끌어올립니다. 이게 곧 RAM 액세스이므로 spill이 많을수록 함수가 느려집니다.
+
+<Diagram caption="Register Pressure가 spill을 만든다">{`flowchart LR
+    subgraph "변수 수가 적을 때"
+        V1["변수 16개 이하"] -->|모두 들어감| R1["Register 16개"]
+    end
+    subgraph "변수 수가 많을 때"
+        V2["변수 50개"] -->|일부만| R2["Register 16개"]
+        V2 -->|나머지| ST["스택 (RAM)"]
+        R2 <-->|"spill (load/store)"| ST
+    end
+`}</Diagram>
+
+컴파일러가 "어떤 변수를 Register에 둘지"를 결정하는 작업이 register allocation입니다. 컴파일러 강의에서 그래프 색칠 문제로 환원되는 것으로 자주 등장합니다. 정확한 최적해를 매번 구하기는 어렵지만, 휴리스틱으로 충분히 좋은 답을 빠르게 찾는 알고리즘이 GCC, LLVM, JIT 같은 현대 컴파일러 안에 들어 있습니다.
+
+### 트레이드오프
+
+| 결정 | 이득 | 대가 |
+|---|---|---|
+| Register 갯수를 적게 (16–32) | 1-cycle 액세스, 명령어 짧음 | spill 발생, 컴파일러 부담 |
+| Register 갯수를 늘림 | 큰 함수의 spill 감소 | 명령어 길어짐, 1-cycle 보장 어려움 |
+
+## 어디로 이어지는가
+
+지금까지 본 Register의 사실들이 개발자가 매일 쓰는 도구 안에서 어디로 흘러 들어가는지 봅니다. 이게 빠지면 이 글은 그냥 CS 지식으로 끝납니다.
+
+### JIT 컴파일러
+
+JVM HotSpot, V8, .NET CLR 같은 JIT 컴파일러가 매일 하는 일의 큰 부분은 register allocation입니다. 같은 자바 메서드라도 변수가 Register 갯수 안에 들어가면 모두 빠르게 동작하고, 그 이상이면 spill이 발생해 갑자기 느려집니다.
+
+JIT가 인라이닝을 적극적으로 하는 이유 중 하나도 여기 있습니다. 작은 함수가 여러 개로 나뉘어 있으면 매 호출마다 Register 백업·복원이 발생하지만, 인라이닝으로 합치면 그 백업이 사라집니다. 단, 합친 코드가 너무 커지면 다시 spill이 늘어 역효과가 납니다.
+
+### GC가 살아있는 객체를 찾는 출발점
+
+GC가 멈춰 있는 시점에 살아있는 객체를 찾는 작업의 출발점이 **Register와 스택**입니다. 어떤 객체에 대한 참조가 Register 안에 들어 있다면 그 객체는 살아 있는 것으로 간주됩니다. 따라서 GC는 모든 스레드의 Register를 통째로 훑습니다.
+
+여기서 한 가지 미묘한 문제가 따라옵니다. 컴파일러가 어느 Register에 객체 참조를 두었는지에 대한 정보를 따로 기록해두지 않으면, GC는 Register 안의 비트가 객체 주소인지 그냥 정수인지 구분할 수 없습니다. 그래서 현대 GC는 컴파일러가 만들어준 "어느 Register가 참조를 들고 있는지"의 지도를 함께 사용합니다.
+
+<RelatedPost slug="jvm-gc-intro" type="parallel" />
+
+### 동기 vs 비동기 I/O
+
+OS의 system call이 호출될 때 사용자 Register를 모두 보존했다가 복원해야 합니다. 동기 `read()`는 호출이 많아질수록 이 보존 비용이 누적됩니다. `epoll`이나 `io_uring` 같은 비동기 방식은 한 번의 호출로 여러 작업을 묶어 보냄으로써 보존 횟수를 줄입니다.
+
+<RelatedPost slug="sync-async-blocking-nonblocking" type="parallel" />
+
+### 컨텍스트 스위칭 (다음 글)
+
+이게 본 글의 가장 큰 연결점입니다. 컨텍스트 스위칭이 비싼 이유를 한 문장으로 정리하면 "실행 중이던 스레드의 모든 Register를 저장하고, 새 스레드의 Register를 복원하고, 가상 메모리 주소 공간을 바꾸는 일련의 작업"입니다. 이 문장의 첫 번째 절(Register 보존·복원)이 본 글에서 설명한 그대로의 일입니다. 두 번째 절(주소 공간 전환)은 다음 글의 주제입니다.
+
+### 디버거에서 직접 보기
+
+`gdb`나 `lldb`에서 `info registers`를 치면 지금까지 본 Register 값들이 그대로 보입니다. 함수 호출 직전·직후를 비교하면 호출 규약이 어떻게 작동하는지 눈으로 확인할 수 있습니다. 한 번 직접 쳐 보면 위에서 본 그림이 입체적으로 박힙니다.
+
+## 마무리
+
+<Callout type="error" title="핵심 통찰: Register는 RAM과의 물리적 거리가 만든 회로 설계의 답이다">
+  CPU와 RAM의 거리는 물리적 사실이고, Register는 그 사실에 대한 회로 설계의 답입니다. 작업대가 좁은 이유, 함수 호출이 비용을 만드는 이유, 컨텍스트 스위칭이 무거운 이유 모두 이 한 사실에서 따라옵니다.
+</Callout>
+
+Register는 CPU 칩 안에 박힌 1-cycle 작업대입니다. 작업대가 좁으니 도구는 적고, 다른 작업으로 넘어갈 때마다 통째로 정리해야 합니다. 이 한 문장이 이 글의 §왜 존재하는가부터 §어디로 이어지는가까지를 한 번에 인덱싱합니다.
+
+이 글이 다음 글로 이어지는 다리는 마지막 절에 있습니다. 작업대를 통째로 정리·재배치하는 비용, 그게 컨텍스트 스위칭의 큰 부분입니다. 나머지 절반인 가상 메모리 주소 공간 전환이 다음 글의 주제가 될 예정입니다.
+
+## 참고 자료
+
+- [Computer Organization and Design: The Hardware/Software Interface (Patterson & Hennessy)](https://www.elsevier.com/books/computer-organization-and-design/patterson/978-0-12-820109-1)
+- [What every programmer should know about memory (Ulrich Drepper, 2007)](https://www.akkadia.org/drepper/cpumemory.pdf)
+- [Operating System Concepts (Silberschatz, Galvin, Gagne)](https://www.os-book.com/)
