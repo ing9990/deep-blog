@@ -4,7 +4,6 @@
 import type { Post } from '@/lib/posts'
 import { useSettings } from '@/components/providers/SettingsProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { PostCardEditorial } from './PostCardEditorial'
 import { PostCardTimeline } from './PostCardTimeline'
 import { PostCardFloating } from './PostCardFloating'
 
@@ -43,9 +42,7 @@ export function RecentPostsSection({ posts }: RecentPostsSectionProps) {
                 />
               )
             })
-          : settings.cardLayout === 'floating'
-            ? posts.map((post) => <PostCardFloating key={post.slug} post={post} />)
-            : posts.map((post) => <PostCardEditorial key={post.slug} post={post} />)
+          : posts.map((post) => <PostCardFloating key={post.slug} post={post} />)
         }
       </div>
     </section>

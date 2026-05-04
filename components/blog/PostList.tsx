@@ -3,7 +3,6 @@
 
 import { useSettings } from '@/components/providers/SettingsProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { PostCardEditorial } from './PostCardEditorial'
 import { PostCardTimeline } from './PostCardTimeline'
 import { PostCardFloating } from './PostCardFloating'
 import type { Post } from '@/lib/posts'
@@ -47,13 +46,10 @@ export function PostList({ posts }: { posts: Post[] }) {
     )
   }
 
-  const Card =
-    settings.cardLayout === 'floating' ? PostCardFloating : PostCardEditorial
-
   return (
     <div className="mt-6 space-y-3">
       {posts.map((post) => (
-        <Card key={post.slug} post={post} />
+        <PostCardFloating key={post.slug} post={post} />
       ))}
     </div>
   )
