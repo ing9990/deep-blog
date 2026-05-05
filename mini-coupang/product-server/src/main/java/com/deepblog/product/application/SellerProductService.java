@@ -5,6 +5,7 @@ import static java.util.Optional.ofNullable;
 
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
+import com.deepblog.common.money.Money;
 import com.deepblog.product.application.command.RegisterProductCommand;
 import com.deepblog.product.application.result.ListMyProductsResult;
 import com.deepblog.product.application.result.RegisterProductResult;
@@ -59,7 +60,7 @@ public class SellerProductService {
                 p.getId(),
                 p.getCategoryId(),
                 p.getName(),
-                p.getBasePrice(),
+                p.getBasePrice().toLong(),
                 p.getStatus().name(),
                 p.getOptions() == null ? 0 : p.getOptions().size(),
                 p.getImages() == null ? 0 : p.getImages().size(),
@@ -86,12 +87,12 @@ public class SellerProductService {
             command.categoryId(),
             command.name(),
             command.description(),
-            command.basePrice()
+            Money.of(command.basePrice())
         );
         of(optionCommands)
             .filter(list -> !list.isEmpty())
             .ifPresentOrElse(
-                list -> list.forEach(c -> product.addOption(c.optionName(), c.sku(), c.additionalPrice())),
+                list -> list.forEach(c -> product.addOption(c.optionName(), c.sku(), Money.of(c.additionalPrice()))),
                 product::addDefaultOption
             );
         imageCommands.forEach(c -> product.addImage(c.url(), c.primary()));

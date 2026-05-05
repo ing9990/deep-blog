@@ -224,6 +224,150 @@ class MoneyTest {
     }
 
     @Nested
+    @DisplayName("multiply(BigDecimal) 정률")
+    class MultiplyRate {
+
+        @Test
+        @DisplayName("정률 곱셈 결과는 10원 단위로 자동 반올림된다")
+        void roundsAfterRateMultiply() {
+            // 1500 * 0.1 = 150 → 150 (정렬됨)
+            assertThat(Money.of(1500L).multiply(new BigDecimal("0.1")))
+                .isEqualTo(Money.of(150L));
+            // 생성 시 1525 → 1530, * 0.5 = 765, HALF_UP scale -1 (760 vs 770 등거리) → 770
+            assertThat(Money.of(1525L).multiply(new BigDecimal("0.5")))
+                .isEqualTo(Money.of(770L));
+        }
+
+        @Test
+        @DisplayName("0 비율은 0원이 된다")
+        void zeroRateIsZero() {
+            // expect
+            assertThat(Money.of(1500L).multiply(BigDecimal.ZERO)).isEqualTo(Money.ZERO);
+        }
+
+        @Test
+        @DisplayName("1 비율은 자기 자신과 같다 (반올림 정합 범위에서)")
+        void oneRateIsIdentity() {
+            // given
+            Money money = Money.of(1520L);
+
+            // expect
+            assertThat(money.multiply(BigDecimal.ONE)).isEqualTo(money);
+        }
+
+        @Test
+        @DisplayName("음수 비율은 IllegalArgumentException 을 던진다")
+        void rejectsNegativeRate() {
+            // expect
+            assertThatThrownBy(() -> Money.of(1000L).multiply(new BigDecimal("-0.1")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("비율은 0 이상");
+        }
+
+        @Test
+        @DisplayName("null 비율은 IllegalArgumentException 을 던진다")
+        void rejectsNullRate() {
+            // expect
+            assertThatThrownBy(() -> Money.of(1000L).multiply((BigDecimal) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("비율은 null");
+        }
+    }
+
+    @Nested
+    @DisplayName("subtractOrZero(Money)")
+    class SubtractOrZero {
+
+        @Test
+        @DisplayName("할인이 가격 이하면 차감 결과를 반환한다")
+        void normalSubtract() {
+            // expect
+            assertThat(Money.of(3000L).subtractOrZero(Money.of(1000L)))
+                .isEqualTo(Money.of(2000L));
+        }
+
+        @Test
+        @DisplayName("할인이 가격을 초과하면 0원이 된다")
+        void clampsToZeroWhenExceeds() {
+            // expect
+            assertThat(Money.of(500L).subtractOrZero(Money.of(1000L)))
+                .isEqualTo(Money.ZERO);
+        }
+
+        @Test
+        @DisplayName("할인이 가격과 동일하면 0원이 된다")
+        void exactMatchIsZero() {
+            // expect
+            assertThat(Money.of(1000L).subtractOrZero(Money.of(1000L)))
+                .isEqualTo(Money.ZERO);
+        }
+    }
+
+    @Nested
+    @DisplayName("min / max")
+    class MinMax {
+
+        @Test
+        @DisplayName("min 은 더 작은 금액을 반환한다 (캡 적용)")
+        void minReturnsSmaller() {
+            // given
+            Money discount = Money.of(7000L);
+            Money cap = Money.of(5000L);
+
+            // expect
+            assertThat(Money.min(discount, cap)).isEqualTo(cap);
+            assertThat(Money.min(cap, discount)).isEqualTo(cap);
+        }
+
+        @Test
+        @DisplayName("max 는 더 큰 금액을 반환한다 (하한 적용)")
+        void maxReturnsLarger() {
+            // expect
+            assertThat(Money.max(Money.of(1000L), Money.of(2000L)))
+                .isEqualTo(Money.of(2000L));
+        }
+
+        @Test
+        @DisplayName("같은 금액이면 어느 쪽을 반환해도 동등하다")
+        void tieReturnsEqual() {
+            // expect
+            assertThat(Money.min(Money.of(1000L), Money.of(1000L)))
+                .isEqualTo(Money.of(1000L));
+            assertThat(Money.max(Money.of(1000L), Money.of(1000L)))
+                .isEqualTo(Money.of(1000L));
+        }
+    }
+
+    @Nested
+    @DisplayName("sum(Iterable)")
+    class Sum {
+
+        @Test
+        @DisplayName("여러 금액을 합산한다")
+        void sumsMultiple() {
+            // expect
+            assertThat(Money.sum(java.util.List.of(
+                Money.of(1000L), Money.of(2000L), Money.of(500L))))
+                .isEqualTo(Money.of(3500L));
+        }
+
+        @Test
+        @DisplayName("빈 컬렉션은 0원을 반환한다")
+        void emptyIsZero() {
+            // expect
+            assertThat(Money.sum(java.util.List.of())).isEqualTo(Money.ZERO);
+        }
+
+        @Test
+        @DisplayName("단일 항목은 그 값을 반환한다")
+        void singleReturnsItself() {
+            // expect
+            assertThat(Money.sum(java.util.List.of(Money.of(1500L))))
+                .isEqualTo(Money.of(1500L));
+        }
+    }
+
+    @Nested
     @DisplayName("동등성 (record equals/hashCode)")
     class Equality {
 

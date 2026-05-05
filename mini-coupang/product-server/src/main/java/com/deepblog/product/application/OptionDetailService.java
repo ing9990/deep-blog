@@ -2,6 +2,7 @@ package com.deepblog.product.application;
 
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
+import com.deepblog.common.money.Money;
 import com.deepblog.product.application.result.OptionDetailResult;
 import com.deepblog.product.domain.Product;
 import com.deepblog.product.domain.ProductOption;
@@ -21,7 +22,7 @@ public class OptionDetailService {
         ProductOption option = productOptionRepository.findByIdWithProduct(optionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.OPTION_NOT_FOUND));
         Product product = option.getProduct();
-        long unitPrice = product.getBasePrice() + option.getAdditionalPrice();
+        Money unitPrice = product.getBasePrice().add(option.getAdditionalPrice());
         return new OptionDetailResult(
             product.getId(),
             product.getName(),
@@ -29,7 +30,7 @@ public class OptionDetailService {
             option.getId(),
             option.getOptionName(),
             option.getSku(),
-            unitPrice,
+            unitPrice.toLong(),
             product.getStatus().name()
         );
     }

@@ -39,6 +39,36 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
         return new Money(this.amount.multiply(BigDecimal.valueOf(quantity)));
     }
 
+    public Money multiply(BigDecimal rate) {
+        if (rate == null) {
+            throw new IllegalArgumentException("비율은 null 이 될 수 없습니다.");
+        }
+        if (rate.signum() < 0) {
+            throw new IllegalArgumentException("비율은 0 이상이어야 합니다. rate=" + rate);
+        }
+        return new Money(this.amount.multiply(rate));
+    }
+
+    public Money subtractOrZero(Money other) {
+        return this.isLessThan(other) ? ZERO : this.subtract(other);
+    }
+
+    public static Money min(Money a, Money b) {
+        return a.compareTo(b) <= 0 ? a : b;
+    }
+
+    public static Money max(Money a, Money b) {
+        return a.compareTo(b) >= 0 ? a : b;
+    }
+
+    public static Money sum(Iterable<Money> values) {
+        Money total = ZERO;
+        for (Money value : values) {
+            total = total.add(value);
+        }
+        return total;
+    }
+
     public long toLong() {
         return amount.longValueExact();
     }

@@ -7,8 +7,11 @@ import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
+import com.deepblog.common.money.Money;
 import com.deepblog.common.persistence.BaseEntity;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -44,14 +47,15 @@ public class ProductOption extends BaseEntity {
     @Column(name = "sku", nullable = false, length = 50, unique = true)
     private String sku;
 
-    @Column(name = "additional_price", nullable = false)
-    private Long additionalPrice;
+    @Embedded
+    @AttributeOverride(name = "amount", column = @Column(name = "additional_price", nullable = false))
+    private Money additionalPrice;
 
     static ProductOption forProduct(
         Product product,
         String optionName,
         String sku,
-        Long additionalPrice
+        Money additionalPrice
     ) {
         validateOptionName(optionName);
         validateSku(sku);
@@ -83,12 +87,9 @@ public class ProductOption extends BaseEntity {
         }
     }
 
-    private static void validateAdditionalPrice(Long additionalPrice) {
+    private static void validateAdditionalPrice(Money additionalPrice) {
         if (additionalPrice == null) {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT, "추가 가격 정보가 필요합니다.");
-        }
-        if (additionalPrice < 0) {
-            throw new BusinessException(ErrorCode.INVALID_PRODUCT, "추가 가격은 0 이상이어야 합니다.");
         }
     }
 

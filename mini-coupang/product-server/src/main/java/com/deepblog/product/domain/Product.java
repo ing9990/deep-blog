@@ -8,8 +8,11 @@ import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
+import com.deepblog.common.money.Money;
 import com.deepblog.common.persistence.BaseEntity;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -57,8 +60,9 @@ public class Product extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "base_price", nullable = false)
-    private Long basePrice;
+    @Embedded
+    @AttributeOverride(name = "amount", column = @Column(name = "base_price", nullable = false))
+    private Money basePrice;
 
     @Enumerated(STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -77,7 +81,7 @@ public class Product extends BaseEntity {
         Long categoryId,
         String name,
         String description,
-        Long basePrice
+        Money basePrice
     ) {
         validateSellerId(sellerId);
         validateCategoryId(categoryId);
@@ -115,12 +119,9 @@ public class Product extends BaseEntity {
         }
     }
 
-    private static void validateBasePrice(Long basePrice) {
+    private static void validateBasePrice(Money basePrice) {
         if (basePrice == null) {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT, "가격 정보가 필요합니다.");
-        }
-        if (basePrice < 0) {
-            throw new BusinessException(ErrorCode.INVALID_PRODUCT, "가격은 0 이상이어야 합니다.");
         }
     }
 
@@ -145,7 +146,7 @@ public class Product extends BaseEntity {
         this.status = ProductStatus.SOLD_OUT;
     }
 
-    public ProductOption addOption(String optionName, String sku, Long additionalPrice) {
+    public ProductOption addOption(String optionName, String sku, Money additionalPrice) {
         ProductOption option = ProductOption.forProduct(this, optionName, sku, additionalPrice);
         if (!this.options.add(option)) {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT, "이미 등록된 SKU입니다: " + sku);
@@ -155,7 +156,7 @@ public class Product extends BaseEntity {
 
     public ProductOption addDefaultOption() {
         String sku = "DEFAULT-" + UUID.randomUUID().toString().replace("-", "").toUpperCase();
-        return addOption("기본", sku, 0L);
+        return addOption("기본", sku, Money.ZERO);
     }
 
     public void addImage(String url, boolean isPrimary) {
