@@ -4,6 +4,7 @@ import com.deepblog.common.event.EventTopic;
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
 import com.deepblog.common.id.TsidGenerator;
+import com.deepblog.common.money.Money;
 import com.deepblog.order.application.event.OrderConfirmedEvent;
 import com.deepblog.order.application.event.OrderPaymentFailedEvent;
 import com.deepblog.order.application.port.out.dto.OptionSnapshot;
@@ -50,7 +51,7 @@ public class OrderService {
             snapshot.sku(),
             snapshot.productName(),
             snapshot.optionName(),
-            snapshot.unitPrice(),
+            Money.of(snapshot.unitPrice()),
             quantity
         );
         Order saved = orderRepository.save(order);
@@ -112,7 +113,7 @@ public class OrderService {
             order.getMemberId(),
             item.getOptionId(),
             item.getQuantity(),
-            order.getTotalAmount()
+            order.getTotalAmount().toLong()
         );
     }
 }

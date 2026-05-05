@@ -212,6 +212,15 @@ class MoneyTest {
             assertThat(Money.of(0L).isZero()).isTrue();
             assertThat(Money.of(10L).isZero()).isFalse();
         }
+
+        @Test
+        @DisplayName("toLong 은 long 으로 변환한다 (반올림 결과 기준)")
+        void toLongReturnsRoundedValue() {
+            // expect
+            assertThat(Money.of(1521L).toLong()).isEqualTo(1520L);
+            assertThat(Money.of(1999L).toLong()).isEqualTo(2000L);
+            assertThat(Money.ZERO.toLong()).isZero();
+        }
     }
 
     @Nested

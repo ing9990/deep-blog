@@ -39,6 +39,10 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
         return new Money(this.amount.multiply(BigDecimal.valueOf(quantity)));
     }
 
+    public long toLong() {
+        return amount.longValueExact();
+    }
+
     public boolean isZero() {
         return amount.signum() == 0;
     }

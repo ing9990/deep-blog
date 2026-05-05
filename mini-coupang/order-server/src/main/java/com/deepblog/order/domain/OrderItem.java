@@ -7,8 +7,11 @@ import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
+import com.deepblog.common.money.Money;
 import com.deepblog.common.persistence.BaseEntity;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -52,14 +55,16 @@ public class OrderItem extends BaseEntity {
     @Column(name = "option_name", nullable = false, length = 100)
     private String optionName;
 
-    @Column(name = "unit_price", nullable = false)
-    private Long unitPrice;
+    @Embedded
+    @AttributeOverride(name = "amount", column = @Column(name = "unit_price", nullable = false))
+    private Money unitPrice;
 
     @Column(name = "quantity", nullable = false)
     private Long quantity;
 
-    @Column(name = "line_amount", nullable = false)
-    private Long lineAmount;
+    @Embedded
+    @AttributeOverride(name = "amount", column = @Column(name = "line_amount", nullable = false))
+    private Money lineAmount;
 
     static OrderItem forOrder(
         Order order,
@@ -68,7 +73,7 @@ public class OrderItem extends BaseEntity {
         String sku,
         String productName,
         String optionName,
-        Long unitPrice,
+        Money unitPrice,
         Long quantity
     ) {
         validateOrder(order);
@@ -80,7 +85,7 @@ public class OrderItem extends BaseEntity {
         validateUnitPrice(unitPrice);
         validateQuantity(quantity);
 
-        long lineAmount = unitPrice * quantity;
+        Money lineAmount = unitPrice.multiply(quantity);
         return OrderItem.builder()
             .order(order)
             .productId(productId)
@@ -130,9 +135,9 @@ public class OrderItem extends BaseEntity {
         }
     }
 
-    private static void validateUnitPrice(Long unitPrice) {
-        if (unitPrice == null || unitPrice < 0L) {
-            throw new BusinessException(ErrorCode.INVALID_ORDER, "단가는 0 이상이어야 합니다.");
+    private static void validateUnitPrice(Money unitPrice) {
+        if (unitPrice == null) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER, "단가가 없습니다.");
         }
     }
 
