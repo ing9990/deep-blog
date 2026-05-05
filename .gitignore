@@ -29,9 +29,6 @@ coverage/
 .claude/
 CLAUDE.md
 
-# Backend convention rule — moved to .claude/rule/CONVENTIONS.md (local-only)
-mini-coupang/CONVENTIONS.md
-
 # Backend sandbox local volumes (Postgres data, Redis state, etc.)
 services/.volumes/
 
