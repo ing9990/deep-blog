@@ -20,8 +20,13 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
     producer:
+      acks: all
+      retries: 10
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
 
 server:
   port: 8083

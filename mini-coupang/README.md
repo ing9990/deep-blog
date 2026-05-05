@@ -67,13 +67,14 @@ mini-coupang/
 ├── order-server/          # 주문 오케스트레이션 (8084)
 ├── notification-server/   # 알림 (consumer-only) (8085)
 │
-├── ml/                    # Python gRPC 서비스 (bge-m3 임베딩 + Qdrant 클라이언트)
 ├── integration-test/      # 멀티 서비스 통합 테스트 (재고 보상, 동시성 시나리오)
+│   └── docker-compose-integration-tests.yml
 │
 └── shared/
-    ├── docker/            # docker-compose (Kafka KRaft + MySQL × 5 schemas + Redis + Qdrant + Prometheus + Grafana)
-    ├── proto/             # gRPC .proto 정의
+    ├── docker/            # docker-compose-local.yml (전체 풀 스택), mysql-init, prometheus, grafana
     └── k6/                # 부하 시나리오 (상품 등록 / 검색)
+
+각 서비스 모듈 root에는 단독 개발용 `docker-compose-{service}-dev.yml` 이 있습니다 (인프라만 컨테이너로 띄우고 서비스는 호스트에서 `bootRun`).
 ```
 
 ---
@@ -82,11 +83,10 @@ mini-coupang/
 
 | Category        | Stack                                                      |
 |-----------------|------------------------------------------------------------|
-| Language        | Java 21 / Python 3.11 (ml)                                 |
-| Framework       | Spring Boot 3.5.9 · Spring Cloud OpenFeign 2025.0.0 · gRPC |
+| Language        | Java 21                                                    |
+| Framework       | Spring Boot 3.5.9 · Spring Cloud OpenFeign 2025.0.0        |
 | Database        | MySQL 8.4 (서비스별 스키마 분리)                                    |
 | Cache / 세션 / 재고 | Redis 7 · Lua Script · Spring Session Redis                |
-| Vector Search   | Qdrant 1.12 · bge-m3 (sentence embedding)                  |
 | Message Broker  | Apache Kafka (KRaft 단일 노드, JSON String) · Outbox Relay     |
 | 인증              | HttpSession + Spring Session Redis 외부 저장 · BCrypt          |
 | ID 생성           | TSID Creator (이벤트 ID, 주문 PK)                               |
@@ -97,90 +97,59 @@ mini-coupang/
 
 ## 실행
 
-```bash
-# 1) 인프라 (Kafka KRaft + MySQL × 5 schemas + Redis + Qdrant + Prometheus + Grafana)
-cd mini-coupang/shared/docker
-docker compose up -d
+세 가지 시나리오에 따라 compose 파일을 골라 씁니다.
 
-# 2) 서비스 5종 (각각 별도 셸에서)
-./gradlew :member-server:bootRun        # :8081
-./gradlew :product-server:bootRun       # :8082
-./gradlew :payment-server:bootRun       # :8083
-./gradlew :order-server:bootRun         # :8084
-./gradlew :notification-server:bootRun  # :8085
+| 시나리오 | compose 파일 | 위치 |
+|---|---|---|
+| 단일 서비스 개발 (인프라만 컨테이너, 서비스는 `bootRun`) | `docker-compose-{service}-dev.yml` | 각 서비스 모듈 root |
+| 통합 테스트 (전체 컨테이너 + 1xxxx 호스트 포트) | `docker-compose-integration-tests.yml` | `integration-test/` |
+| 로컬 풀 스택 (스테이징 유사, 표준 포트 8081-8085) | `docker-compose-local.yml` | `shared/docker/` |
 
-# 3) 통합 테스트 (선택)
-./gradlew :integration-test:test
-```
+전 서비스가 Kafka 를 쓰므로 모든 dev compose 에 Kafka UI(`http://localhost:18099`)가 함께 뜹니다. Redis 를 쓰는 서비스(member / product / order)에는 RedisInsight(`http://localhost:5540`)가 함께 뜹니다.
 
-헬스체크: `curl http://localhost:8081/actuator/health` (각 포트 동일 패턴).
-대시보드: Grafana `http://localhost:3000` (admin/admin), Prometheus `http://localhost:9090`.
-
----
-
-## 통합 테스트 실행
-
-`integration-test` 모듈은 모든 서비스(member / product / payment / order / notification)와 인프라(MySQL × 5 schemas, Redis, Kafka)를 단일 docker compose 로 띄운 뒤 시나리오 테스트를 돌립니다. 재고 정합성·결제 실패 보상·컨슈머 멱등성 같은 멀티 서비스 흐름을 검증할 때 사용합니다.
-
-### compose 파일
-
-| 파일 | 역할 |
-|---|---|
-| `shared/docker/docker-integration-test.yml` | MySQL · Redis · Kafka · 5개 서비스 정의 (이미지 빌드 포함, healthcheck 포함) |
-| `shared/docker/docker-integration-test.override.yml` | 호스트 포트 매핑 (mysql `13306`, redis `16379`, kafka `19092`, 서비스 `1808x`). 로컬 디버깅·k6·테스트 코드의 host 접근용 |
-
-### 기동
+### 단일 서비스 개발
 
 ```bash
-cd mini-coupang/shared/docker
-
-# 백그라운드 기동 (이미지 빌드 + 헬스체크 통과까지 기다림)
-docker compose \
-  -f docker-integration-test.yml \
-  -f docker-integration-test.override.yml \
-  up -d
-
-# 모든 서비스 healthy 인지 확인
-docker compose \
-  -f docker-integration-test.yml \
-  -f docker-integration-test.override.yml \
-  ps
+# 예: product-server 개발
+cd mini-coupang/product-server
+docker compose -f docker-compose-product-server-dev.yml up -d
+./gradlew :product-server:bootRun
 ```
 
-`order-server` 까지 모두 `healthy` 가 되면 준비 완료입니다.
+서비스가 호스트에서 표준 포트(3306/6379/9092)로 인프라에 붙으므로 다른 dev 스택과 동시 기동은 가정하지 않습니다 (충돌 시 한쪽 `down` 후 기동).
 
-### 테스트 실행
+### 통합 테스트
 
 ```bash
-cd mini-coupang
-./gradlew :integration-test:test
+cd mini-coupang/integration-test
+docker compose -f docker-compose-integration-tests.yml up -d --build
+docker compose -f docker-compose-integration-tests.yml ps   # 모든 서비스 healthy 확인
+
+cd ..
+./gradlew :integration-test:it                              # 테스트는 호스트의 1xxxx 포트로 접근 (build.gradle 의 it 태스크)
+
+cd integration-test
+docker compose -f docker-compose-integration-tests.yml down -v
 ```
 
-테스트 코드는 호스트 매핑 포트(`localhost:18084` 등)로 접근하므로 override 파일이 같이 떠 있어야 합니다.
+`-v` 로 볼륨까지 삭제하면 다음 기동에서 MySQL 초기화 스크립트(`shared/docker/mysql-init/`)가 다시 적용됩니다.
 
-### 종료
+### 로컬 풀 스택 (스테이징 유사)
 
 ```bash
 cd mini-coupang/shared/docker
-docker compose \
-  -f docker-integration-test.yml \
-  -f docker-integration-test.override.yml \
-  down -v
+docker compose -f docker-compose-local.yml up -d --build
 ```
 
-`-v` 로 볼륨까지 삭제하면 다음 기동에서 MySQL 초기화 스크립트(`mysql-init/`)가 다시 적용됩니다.
+서비스 5종 + Kafka **3-broker KRaft 클러스터** + Kafka UI + RedisInsight + Prometheus + Grafana 모두 기동. 다중 브로커는 leader fail-over, ISR shrink·expand, partition rebalance 같은 시나리오를 학습할 수 있도록 RF=3 / MIN_ISR=2 로 구성됩니다 (dev / integration-tests 는 단일 브로커 유지).
 
-### 관찰 도구 추가 (선택)
-
-Kafka UI 와 RedisInsight 를 같이 띄우려면 `docker-compose.observability.yml` 도 함께 사용합니다.
-
-```bash
-docker compose \
-  -f docker-integration-test.yml \
-  -f docker-integration-test.override.yml \
-  -f docker-compose.observability.yml \
-  up -d
-```
-
+- 서비스: `http://localhost:8081` ~ `http://localhost:8085`
+- Kafka brokers (호스트 접근): `localhost:29092`, `localhost:29192`, `localhost:29292`
 - Kafka UI: `http://localhost:18099`
 - RedisInsight: `http://localhost:15540`
+- Grafana: `http://localhost:3000` (admin/admin)
+- Prometheus: `http://localhost:9090`
+
+헬스체크: `curl http://localhost:8081/actuator/health` (각 포트 동일 패턴).
+
+> RF 효과를 보려면 producer 설정에 `acks=all` + `enable.idempotence=true` 가 필요합니다. acks=1 이면 leader 만 받고 응답하므로 다중 브로커가 무의미.

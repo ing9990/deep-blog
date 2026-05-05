@@ -18,7 +18,7 @@ public record ConfirmOrderResult(
             order.getId(),
             order.getMemberId(),
             order.getStatus().name(),
-            order.getTotalAmount(),
+            order.getTotalAmount().toLong(),
             paymentId
         );
     }

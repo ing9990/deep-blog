@@ -20,7 +20,7 @@ public record PrepareOrderResult(
             order.getId(),
             order.getMemberId(),
             order.getStatus().name(),
-            order.getTotalAmount(),
+            order.getTotalAmount().toLong(),
             optionId,
             quantity
         );

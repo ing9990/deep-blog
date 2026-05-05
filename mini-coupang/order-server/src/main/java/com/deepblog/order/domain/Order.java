@@ -7,8 +7,11 @@ import static lombok.AccessLevel.PROTECTED;
 
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
+import com.deepblog.common.money.Money;
 import com.deepblog.common.persistence.BaseEntity;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -52,8 +55,9 @@ public class Order extends BaseEntity implements Persistable<Long> {
     @Column(name = "status", nullable = false, length = 20)
     private OrderStatus status;
 
-    @Column(name = "total_amount", nullable = false)
-    private Long totalAmount;
+    @Embedded
+    @AttributeOverride(name = "amount", column = @Column(name = "total_amount", nullable = false))
+    private Money totalAmount;
 
     @OneToMany(mappedBy = "order", cascade = ALL, orphanRemoval = true)
     @Builder.Default
@@ -70,7 +74,7 @@ public class Order extends BaseEntity implements Persistable<Long> {
             .id(id)
             .memberId(memberId)
             .status(OrderStatus.PENDING)
-            .totalAmount(0L)
+            .totalAmount(Money.ZERO)
             .items(new ArrayList<>())
             .newEntity(true)
             .build();
@@ -94,13 +98,13 @@ public class Order extends BaseEntity implements Persistable<Long> {
         String sku,
         String productName,
         String optionName,
-        Long unitPrice,
+        Money unitPrice,
         Long quantity
     ) {
         OrderItem item = OrderItem.forOrder(
             this, productId, optionId, sku, productName, optionName, unitPrice, quantity);
         this.items.add(item);
-        this.totalAmount = this.totalAmount + item.getLineAmount();
+        this.totalAmount = this.totalAmount.add(item.getLineAmount());
         return item;
     }
 

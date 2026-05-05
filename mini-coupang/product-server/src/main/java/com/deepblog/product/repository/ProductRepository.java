@@ -27,8 +27,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))
           AND p.status = :status
           AND (:categoryId IS NULL OR p.categoryId = :categoryId)
-          AND (:minPrice IS NULL OR p.basePrice >= :minPrice)
-          AND (:maxPrice IS NULL OR p.basePrice <= :maxPrice)
+          AND (:minPrice IS NULL OR p.basePrice.amount >= :minPrice)
+          AND (:maxPrice IS NULL OR p.basePrice.amount <= :maxPrice)
         ORDER BY p.id ASC
         """)
     List<Long> searchIdsByKeyword(

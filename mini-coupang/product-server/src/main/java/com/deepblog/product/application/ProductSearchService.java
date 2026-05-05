@@ -64,7 +64,7 @@ public class ProductSearchService {
             p.getCategoryId(),
             p.getName(),
             p.getDescription(),
-            p.getBasePrice(),
+            p.getBasePrice().toLong(),
             p.getStatus().name(),
             1.0
         );

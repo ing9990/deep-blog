@@ -19,7 +19,7 @@ public record RegisterProductResult(
             product.getSellerId(),
             product.getCategoryId(),
             product.getName(),
-            product.getBasePrice(),
+            product.getBasePrice().toLong(),
             product.getStatus().name(),
             product.getOptions().size(),
             product.getImages().size()

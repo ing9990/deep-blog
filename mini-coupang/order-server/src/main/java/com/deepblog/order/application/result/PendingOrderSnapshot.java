@@ -23,7 +23,7 @@ public record PendingOrderSnapshot(
             order.getMemberId(),
             item.getOptionId(),
             item.getQuantity(),
-            order.getTotalAmount()
+            order.getTotalAmount().toLong()
         );
     }
 }
