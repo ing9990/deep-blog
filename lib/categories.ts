@@ -64,7 +64,10 @@ export const CATEGORIES: readonly CategoryMeta[] = [
   {
     id: 'computer-science',
     label:       { en: 'Computer Science', ko: '컴퓨터 과학' },
-    description: { en: 'OS, algorithms, data structures', ko: 'OS, 알고리즘, 자료구조' },
+    description: {
+      en: 'Narrow single-concept CS posts (OS, network, algorithms, data structures) interlinked into a textbook',
+      ko: '하나의 개념 단위로 좁힌 CS 글(OS·네트워크·알고리즘·자료구조)이 서로 연결되며 누적되는 전공 서적',
+    },
   },
 ]
 
