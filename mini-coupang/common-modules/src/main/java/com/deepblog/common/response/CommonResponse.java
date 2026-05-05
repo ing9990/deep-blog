@@ -1,18 +1,27 @@
 package com.deepblog.common.response;
 
-/**
- * 모든 서비스가 공유하는 표준 성공 응답 봉투. 실패는 ErrorResponse 가 별도로 담당한다.
- *
- * 단일 자원: {@link #success(Object)}
- * 자원 없음 (예: 204): {@link #ok()}
- */
-public record CommonResponse<T>(boolean success, T data) {
+import com.deepblog.common.exception.ErrorCode;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
-    public static <T> CommonResponse<T> success(T data) {
-        return new CommonResponse<>(true, data);
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record CommonResponse<T>(String code, String message, T data) {
+
+    public static <T> CommonResponse<T> success() {
+        return new CommonResponse<>(null, null, null);
     }
 
-    public static CommonResponse<Void> ok() {
-        return new CommonResponse<>(true, null);
+    public static <T> CommonResponse<T> success(T data) {
+        return new CommonResponse<>(null, null, data);
+    }
+
+    public static <T> CommonResponse<T> failure(ErrorCode errorCode) {
+        return new CommonResponse<>(errorCode.name(), errorCode.defaultMessage(), null);
+    }
+
+    public static <T> CommonResponse<T> failure(ErrorCode errorCode, String message) {
+        String resolved = (message == null || message.isBlank())
+            ? errorCode.defaultMessage()
+            : message;
+        return new CommonResponse<>(errorCode.name(), resolved, null);
     }
 }
