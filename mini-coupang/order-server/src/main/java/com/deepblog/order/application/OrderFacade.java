@@ -1,5 +1,7 @@
 package com.deepblog.order.application;
 
+import static com.deepblog.common.exception.ErrorCode.PAYMENT_FAILED;
+
 import com.deepblog.common.exception.BusinessException;
 import com.deepblog.common.exception.ErrorCode;
 import com.deepblog.order.application.command.ConfirmOrderCommand;
@@ -58,12 +60,8 @@ public class OrderFacade {
     }
 
     public ConfirmOrderResult confirm(ConfirmOrderCommand command) {
-        PendingOrderSnapshot pending = orderService.findPendingOwned(command.orderId(), command.memberId());
-
-        if (!pending.totalAmount().equals(command.amount())) {
-            cancelAndCompensate(pending, "AMOUNT_MISMATCH");
-            throw new BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
-        }
+        PendingOrderSnapshot pending = orderService.findPendingOwned(command.orderId(),
+            command.memberId());
 
         PaymentConfirmOutcome outcome = paymentConfirmPort.confirm(
             new PaymentConfirmRequest(
@@ -76,15 +74,17 @@ public class OrderFacade {
 
         if (!outcome.paid()) {
             cancelAndCompensate(pending, outcome.reason());
-            throw new BusinessException(ErrorCode.PAYMENT_FAILED);
+            throw new BusinessException(PAYMENT_FAILED);
         }
 
-        return orderService.confirmOrder(command.orderId(), command.memberId(), outcome.paymentId());
+        return orderService.confirmOrder(command.orderId(), command.memberId(),
+            outcome.paymentId());
     }
 
     private void cancelAndCompensate(PendingOrderSnapshot pending, String reason) {
         orderService.cancelOrder(pending.orderId(), pending.memberId(), reason);
-        log.info("payment failed; cancel + compensation outbox INSERT done. orderId={}, optionId={}, reason={}",
+        log.info(
+            "payment failed; cancel + compensation outbox INSERT done. orderId={}, optionId={}, reason={}",
             pending.orderId(), pending.optionId(), reason);
     }
 
