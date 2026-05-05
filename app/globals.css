@@ -537,9 +537,17 @@ body {
 }
 
 .prose-kr a {
-  color: var(--primary);
+  color: var(--keyword);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.prose-kr a:hover {
+  color: var(--keyword);
   text-decoration: underline;
   text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
 }
 
 /* Keyword auto-link — internal reference. Color + footnote-style asterisk

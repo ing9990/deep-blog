@@ -89,11 +89,7 @@ export const mdxComponents: MDXComponents = {
       return <KeywordLink href={href}>{children}</KeywordLink>
     }
     return (
-      <a
-        href={href}
-        className="text-primary underline decoration-dotted underline-offset-4"
-        {...props}
-      >
+      <a href={href} {...props}>
         {children}
       </a>
     )
