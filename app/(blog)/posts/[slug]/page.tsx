@@ -12,6 +12,7 @@ import { DocShell } from '@/components/layout/DocShell'
 import { PostTitle } from '@/components/blog/PostTitle'
 import { BookContextPill } from '@/components/blog/BookContextPill'
 import { BookSiblingNav } from '@/components/blog/BookSiblingNav'
+import { PostAttachments } from '@/components/blog/PostAttachments'
 
 export function generateStaticParams() {
   return getAllSlugs().map((slug) => ({ slug }))
@@ -71,6 +72,7 @@ export default async function PostPage({
         <PostMeta tags={post.tags} date={post.date} readingTime={post.readingTime} />
         <PostTitle title={post.title} />
         {bookPosition && <BookContextPill position={bookPosition} />}
+        <PostAttachments items={post.attachments} />
         <hr className="my-8 border-border" />
         <div className="prose-kr min-w-0">
           <MDXContent code={post.body} />

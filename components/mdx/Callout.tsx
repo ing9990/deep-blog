@@ -9,28 +9,24 @@ interface CalloutProps {
   children: ReactNode
 }
 
-// Colors are defined as CSS variables in app/globals.css (--callout-<type>-<slot>),
-// one set per theme. This keeps both light and dark mode values explicit and
-// predictable without relying on Tailwind palette utilities (which can drift
-// when consumed inside .prose-kr or be mis-extracted from template literals).
 const VARIANTS: Record<
   CalloutType,
-  { icon: typeof Info; cssPrefix: string; defaultTitle: string }
+  { icon: typeof Info; cssPrefix: string }
 > = {
-  info:    { icon: Info,          cssPrefix: 'info',    defaultTitle: '참고' },
-  warning: { icon: AlertTriangle, cssPrefix: 'warning', defaultTitle: '주의' },
-  error:   { icon: AlertCircle,   cssPrefix: 'error',   defaultTitle: '경고' },
-  success: { icon: CheckCircle2,  cssPrefix: 'success', defaultTitle: '팁' },
+  info:    { icon: Info,          cssPrefix: 'info' },
+  warning: { icon: AlertTriangle, cssPrefix: 'warning' },
+  error:   { icon: AlertCircle,   cssPrefix: 'error' },
+  success: { icon: CheckCircle2,  cssPrefix: 'success' },
 }
 
 export function Callout({ type = 'info', title, children }: CalloutProps) {
   const variant = VARIANTS[type]
   const Icon = variant.icon
-  const displayTitle = title ?? variant.defaultTitle
+  const accentVar = `var(--callout-${variant.cssPrefix}-border)`
 
   const surface: CSSProperties = {
-    backgroundColor: `var(--callout-${variant.cssPrefix}-bg)`,
-    borderLeftColor: `var(--callout-${variant.cssPrefix}-border)`,
+    borderColor: `color-mix(in oklab, ${accentVar} 35%, var(--border))`,
+    backgroundColor: `color-mix(in oklab, ${accentVar} 5%, transparent)`,
   }
   const iconColor: CSSProperties = {
     color: `var(--callout-${variant.cssPrefix}-icon)`,
@@ -41,20 +37,22 @@ export function Callout({ type = 'info', title, children }: CalloutProps) {
 
   return (
     <aside
-      className="my-6 flex gap-3 rounded-[var(--radius-panel)] border border-border border-l-4 p-4 text-[length:var(--text-callout-body)] leading-[var(--leading-relaxed)] text-foreground"
+      className="my-5 flex items-start gap-2.5 rounded-[var(--radius-card)] border px-4 py-3 text-[length:var(--text-callout-body)] leading-[var(--leading-normal)] text-foreground"
       style={surface}
       role="note"
     >
       <Icon
-        className="mt-0.5 h-5 w-5 flex-shrink-0"
+        className="mt-1 h-4 w-4 flex-shrink-0"
         style={iconColor}
         aria-hidden="true"
       />
-      <div className="min-w-0 flex-1">
-        <p className="mb-1 font-semibold" style={titleColor}>
-          {displayTitle}
-        </p>
-        <div className="[&>p]:my-0 [&>p+p]:mt-2">{children}</div>
+      <div className="min-w-0 flex-1 [&>p]:my-0 [&>p+p]:mt-1.5">
+        {title ? (
+          <span className="mr-1.5 font-semibold" style={titleColor}>
+            {title}
+          </span>
+        ) : null}
+        {children}
       </div>
     </aside>
   )

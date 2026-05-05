@@ -11,6 +11,7 @@ import { Callout } from '@/components/mdx/Callout'
 import { CodeFigure } from '@/components/mdx/CodeFigure'
 import { Diagram } from '@/components/mdx/Diagram'
 import { Emphasis } from '@/components/mdx/Emphasis'
+import { FileDownload } from '@/components/mdx/FileDownload'
 import { Note } from '@/components/mdx/Note'
 import { Tab, Tabs } from '@/components/mdx/Tabs'
 import { CacheStampedeDefenseTimeline } from '@/components/visualizations/CacheStampedeDefenseTimeline'
@@ -88,11 +89,7 @@ export const mdxComponents: MDXComponents = {
       return <KeywordLink href={href}>{children}</KeywordLink>
     }
     return (
-      <a
-        href={href}
-        className="text-primary underline decoration-dotted underline-offset-4"
-        {...props}
-      >
+      <a href={href} {...props}>
         {children}
       </a>
     )
@@ -149,6 +146,7 @@ export const mdxComponents: MDXComponents = {
   DualWriteFailureWindows,
   E: Emphasis,
   EventLoopDance,
+  FileDownload,
   IdempotencyCausalityChain,
   IdempotencyKeyFlow,
   IOModelMatrix,
