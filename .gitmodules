@@ -1,0 +1,4 @@
+[submodule "mini-coupang"]
+	path = mini-coupang
+	url = https://github.com/ing9990/cutepang.git
+	branch = develop
