@@ -2,6 +2,7 @@ package com.deepblog.payment.application;
 
 import com.deepblog.common.event.EventTopic;
 import com.deepblog.common.id.TsidGenerator;
+import com.deepblog.common.money.Money;
 import com.deepblog.payment.application.command.PaymentConfirmCommand;
 import com.deepblog.payment.application.event.PaymentCompletedEvent;
 import com.deepblog.payment.application.port.out.PgClient;
@@ -62,7 +63,7 @@ public class PaymentConfirmService {
 
         String paymentId = "PAY-" + tsidGenerator.nextString();
         paymentRepository.save(Payment.success(
-            paymentId, command.paymentKey(), command.orderRef(), command.amount()));
+            paymentId, command.paymentKey(), command.orderRef(), Money.of(command.amount())));
         PaymentCompletedEvent event = new PaymentCompletedEvent(
             paymentId, command.orderRef(), command.amount());
         outboxEventStore.save(

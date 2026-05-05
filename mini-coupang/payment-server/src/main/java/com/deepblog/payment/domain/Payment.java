@@ -1,6 +1,9 @@
 package com.deepblog.payment.domain;
 
+import com.deepblog.common.money.Money;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -45,13 +48,14 @@ public class Payment {
     @Column(nullable = false, length = 64)
     private String orderRef;
 
-    @Column(nullable = false)
-    private long amount;
+    @Embedded
+    @AttributeOverride(name = "amount", column = @Column(name = "amount", nullable = false))
+    private Money amount;
 
     @Column(nullable = false)
     private LocalDateTime chargedAt;
 
-    private Payment(String paymentId, String paymentKey, String orderRef, long amount) {
+    private Payment(String paymentId, String paymentKey, String orderRef, Money amount) {
         this.paymentId = paymentId;
         this.paymentKey = paymentKey;
         this.orderRef = orderRef;
@@ -59,7 +63,7 @@ public class Payment {
         this.chargedAt = LocalDateTime.now();
     }
 
-    public static Payment success(String paymentId, String paymentKey, String orderRef, long amount) {
+    public static Payment success(String paymentId, String paymentKey, String orderRef, Money amount) {
         return new Payment(paymentId, paymentKey, orderRef, amount);
     }
 }
