@@ -3,6 +3,7 @@ package com.deepblog.common.money;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,7 @@ class MoneyTest {
             Money money = Money.of(input);
 
             // then
-            assertThat(money.amount()).isEqualTo(expected);
+            assertThat(money).isEqualTo(Money.of(expected));
         }
 
         @Test
@@ -47,7 +48,7 @@ class MoneyTest {
             Money money = Money.of(1520L);
 
             // then
-            assertThat(money.amount()).isEqualTo(1520L);
+            assertThat(money.amount()).isEqualByComparingTo(BigDecimal.valueOf(1520));
         }
 
         @ParameterizedTest
@@ -61,18 +62,20 @@ class MoneyTest {
         }
 
         @Test
-        @DisplayName("won(long) 은 of(long) 과 동일하게 동작한다")
-        void wonBehavesAsAlias() {
+        @DisplayName("null 금액이면 IllegalArgumentException 을 던진다")
+        void rejectsNull() {
             // expect
-            assertThat(Money.won(1521L)).isEqualTo(Money.of(1521L));
+            assertThatThrownBy(() -> new Money(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("null");
         }
 
         @Test
-        @DisplayName("zero() 는 0원을 반환한다")
-        void zeroReturnsZero() {
+        @DisplayName("ZERO 상수는 0원이다")
+        void zeroConstantIsZero() {
             // expect
-            assertThat(Money.zero().amount()).isZero();
-            assertThat(Money.zero()).isEqualTo(Money.ZERO);
+            assertThat(Money.ZERO.isZero()).isTrue();
+            assertThat(Money.ZERO).isEqualTo(Money.of(0L));
         }
     }
 
@@ -101,7 +104,7 @@ class MoneyTest {
             Money money = Money.of(1520L);
 
             // expect
-            assertThat(money.add(Money.zero())).isEqualTo(money);
+            assertThat(money.add(Money.ZERO)).isEqualTo(money);
         }
     }
 
@@ -157,7 +160,7 @@ class MoneyTest {
         @DisplayName("0배는 0원이 된다")
         void multiplyByZeroIsZero() {
             // expect
-            assertThat(Money.of(1500L).multiply(0L)).isEqualTo(Money.zero());
+            assertThat(Money.of(1500L).multiply(0L)).isEqualTo(Money.ZERO);
         }
 
         @Test
@@ -205,7 +208,7 @@ class MoneyTest {
         @DisplayName("isZero 는 0원일 때만 true 를 반환한다")
         void isZeroOnlyForZero() {
             // expect
-            assertThat(Money.zero().isZero()).isTrue();
+            assertThat(Money.ZERO.isZero()).isTrue();
             assertThat(Money.of(0L).isZero()).isTrue();
             assertThat(Money.of(10L).isZero()).isFalse();
         }
