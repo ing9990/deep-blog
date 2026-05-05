@@ -58,6 +58,18 @@ const postFrontmatterShape = s.object({
     .optional(),
   // 같은 book 안에서의 명시적 정렬 순서. 미지정 시 publishedAt 오름차순.
   bookOrder: s.number().int().positive().optional(),
+  // 글 헤더(제목과 본문 사이)에 작은 파일 칩으로 노출되는 첨부 자료.
+  // 책 카테고리의 BookContextPill과 같은 위치에 렌더된다.
+  attachments: s
+    .array(
+      s.object({
+        name: s.string().min(1).max(120),
+        href: s.string().min(1),
+        size: s.string().optional(),
+      }),
+    )
+    .max(5)
+    .optional(),
   // project-backed 포스트가 참조하는 services/*  도메인 서비스 이름들.
   // Mode C 포스트가 서비스 샌드박스와 양방향 링크를 만들 때 사용.
   // 값: lowercase-kebab-case, 실제 /services/<name>-service/ 디렉토리 이름과 일치.
