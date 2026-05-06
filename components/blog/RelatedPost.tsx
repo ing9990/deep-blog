@@ -27,7 +27,7 @@ const VARIANTS: Record<
   prerequisite: {
     icon: BookOpen,
     defaultLabel: '먼저 읽어야 할 글',
-    surfaceClass: 'border-l-4 border-l-primary',
+    surfaceClass: '',
     iconClass: 'text-primary',
   },
   'deep-dive': {
