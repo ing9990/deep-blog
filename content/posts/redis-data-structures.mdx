@@ -1,0 +1,486 @@
+---
+title:
+  ko: "Redis 자료구조"
+  en: "Redis Data Structures"
+slug: "redis-data-structures"
+date: 2026-05-06
+tags:
+  - Backend
+  - Redis
+  - Infrastructure
+  - data-structure
+keywords:
+  - Redis 자료구조
+  - Sorted Set
+  - Skiplist
+  - HyperLogLog
+  - Bitmap
+  - Redis Stream
+  - listpack
+  - intset
+  - ZADD
+  - PFADD
+  - SETBIT
+  - XADD
+summary:
+  ko: "Redis가 제공하는 String·List·Hash·Set·Sorted Set·Bitmap·HyperLogLog·Stream 8가지 자료구조를 내부 표현·명령·적합한 시나리오로 정리합니다. 각 명령은 redis-cli와 Kotlin RedisTemplate 두 가지 모습으로 동시에 살펴봅니다."
+  en: "An overview of the eight data structures Redis exposes (String, List, Hash, Set, Sorted Set, Bitmap, HyperLogLog, Stream), covering internal encodings, command sets, and best-fit scenarios. Each command is shown side-by-side as redis-cli and Kotlin RedisTemplate."
+category: redis
+draft: false
+---
+
+Redis는 단일 스레드 기반으로 처리 속도가 매우 빠르고 다양한 자료구조를 제공한다는 장점이 있습니다.
+
+이 글은 Redis가 제공하는 자료구조를 정리합니다.
+
+<RelatedPost slug="redis-essentials" type="prerequisite" />
+
+## Redis가 제공하는 자료구조
+
+Redis가 지원하는 자료구조는 다음 8가지입니다.
+
+| 자료구조 | 한 줄 정의 | 대표 시나리오 |
+|---|---|---|
+| String | 바이트열 한 개 | 캐시·카운터·플래그 |
+| List | 양방향 큐 | 작업 큐·최근 N건 |
+| Hash | 필드-값 맵 | 객체 저장·통계 누적 |
+| Set | 중복 없는 집합 | 태그·교집합 |
+| Sorted Set | score로 정렬된 집합 | 리더보드·우선순위 |
+| Bitmap | String 위 비트 연산 | 출석·플래그 1억 개 |
+| HyperLogLog | 확률적 카디널리티 | 대규모 유니크 카운트 |
+| Stream | append-only 로그 | 이벤트·메시징 |
+
+## 자료구조별 사용법
+
+### String
+
+가장 단순한 자료구조입니다. 키 하나에 바이트열 한 개를 매핑합니다. 이 바이트열은 텍스트(JSON, 토큰), 숫자(카운터), 바이너리(이미지 일부) 무엇이든 될 수 있습니다.
+
+내부 표현은 길이와 형태에 따라 셋으로 갈립니다. 정수로만 이루어진 짧은 값은 `int`로, 44바이트 이하 문자열은 `embstr`(SDS 헤더와 데이터를 한 메모리 블록에 박은 형태)로, 그보다 크면 `raw`로 저장됩니다. `embstr`은 alloc 횟수를 1번으로 줄여 작은 캐시 entry에 특히 유리합니다.
+
+대표 명령은 다음과 같습니다.
+
+<Tabs group="redis-client">
+  <Tab label="redis-cli">
+    ```bash title="String 명령"
+    SET user:42 "{\"id\":42,\"name\":\"Sang\"}" EX 600
+    GET user:42
+    INCR page:view:home
+    INCRBY balance:42 1500
+    EXPIRE user:42 300
+    MSET k1 v1 k2 v2
+    MGET k1 k2
+    ```
+  </Tab>
+  <Tab label="Kotlin (RedisTemplate)">
+    ```kotlin title="String 명령"
+    val ops: ValueOperations<String, String> = redisTemplate.opsForValue()
+
+    ops.set("user:42", userJson, Duration.ofMinutes(10))
+    val cached: String? = ops.get("user:42")
+
+    val views: Long? = ops.increment("page:view:home")            // INCR
+    val balance: Long? = ops.increment("balance:42", 1500)        // INCRBY
+
+    redisTemplate.expire("user:42", Duration.ofMinutes(5))
+    ops.multiSet(mapOf("k1" to "v1", "k2" to "v2"))
+    val values: List<String?> = ops.multiGet(listOf("k1", "k2")) ?: emptyList()
+    ```
+  </Tab>
+</Tabs>
+
+String 자료구조가 사용되는 대표적인 시나리오입니다.
+
+- 단순 캐시
+- 멱등키 응답 저장
+- 카운터
+
+`INCR` 명령은 연산의 원자성을 보장하기 때문에 정확한 집계가 가능하다는 이점이 있어, Rate Limiting이나 재고 같은 원자적 연산을 보장해야 하는 곳에 쓰입니다.
+
+토큰 블랙리스트나 분산 플래그처럼 <E>한 명령 안에서 검사·설정·TTL을 원자적으로 처리해야 하는 시나리오</E>에서도 String이 쓰입니다. `SET` 명령은 다음 옵션들을 지원합니다.
+
+| 옵션 | 의미 |
+|---|---|
+| `NX` | Not eXists. 키가 존재하지 않을 때만 SET 합니다. 이미 있으면 아무 일도 일어나지 않습니다. |
+| `XX` | eXists. 키가 이미 있을 때만 SET 합니다. NX와 정반대로 동작합니다. |
+| `EX <초>` | 초 단위 TTL을 함께 설정합니다. |
+| `PX <ms>` | 밀리초 단위 TTL을 함께 설정합니다. |
+
+이 옵션들을 결합한 `SET lock:order:42 worker-id NX EX 10`을 풀면 <E>이 키가 없으면 worker-id로 세팅하고 10초 TTL을 걸되, 이미 있으면 실패</E>가 됩니다. 만약 NX 없이 `SET`과 `EXPIRE`를 두 명령으로 나누면 사이에 다른 클라이언트가 끼어들 수 있어 락 의미가 깨집니다. 분산 락의 Redlock도 본질은 String 위에 NX·EX·고유값을 얹은 패턴입니다.
+
+### List
+
+양방향 큐입니다. 양 끝의 push/pop이 $O(1)$이라 Producer-Consumer 패턴에 자연스럽게 들어맞습니다.
+
+내부 표현은 quicklist입니다. 작은 listpack 노드들을 doubly linked list로 이은 형태로, 크기가 작을 때는 listpack 한 개로 끝나고 커지면 자동으로 노드가 늘어납니다. 그래서 작은 큐는 메모리를 거의 쓰지 않고, 큰 큐는 메모리 단편화를 줄이면서 양 끝 push/pop을 $O(1)$로 유지합니다.
+
+대표 명령은 다음과 같습니다.
+
+<Tabs group="redis-client">
+  <Tab label="redis-cli">
+    ```bash title="List 명령"
+    LPUSH queue:jobs "job-001" "job-002"
+    RPUSH queue:jobs "job-003"
+    RPOP queue:jobs
+    LRANGE queue:jobs 0 9
+    LLEN queue:jobs
+    LTRIM logs:recent 0 99
+    BLPOP queue:jobs 5
+    ```
+  </Tab>
+  <Tab label="Kotlin (RedisTemplate)">
+    ```kotlin title="List 명령"
+    val ops: ListOperations<String, String> = redisTemplate.opsForList()
+
+    ops.leftPushAll("queue:jobs", "job-001", "job-002")
+    ops.rightPush("queue:jobs", "job-003")
+
+    val job: String? = ops.rightPop("queue:jobs")
+    val recent: List<String> = ops.range("queue:jobs", 0, 9) ?: emptyList()
+    val size: Long = ops.size("queue:jobs") ?: 0
+
+    ops.trim("logs:recent", 0, 99)
+    val blocking: String? = ops.leftPop("queue:jobs", Duration.ofSeconds(5))
+    ```
+  </Tab>
+</Tabs>
+
+List 자료구조가 사용되는 대표적인 시나리오입니다.
+
+- **작업 큐**: 한쪽에서 `LPUSH`로 넣고 반대쪽에서 `BLPOP`으로 꺼내면 그대로 동작합니다. 다만 ack가 필요한 작업은 Stream 쪽이 더 안전합니다.
+- **최근 N건 로그**: `LPUSH`로 새 항목을 앞에 넣고 `LTRIM 0 99`로 뒤를 잘라내면 항상 최근 100건이 유지됩니다.
+- **타임라인**: 사용자별 알림 목록 같은 짧은 리스트에 들어맞습니다.
+
+### Hash
+
+필드-값 맵입니다. 한 키 안에 여러 필드를 두고, 필드 단위로 읽고 쓸 수 있습니다.
+
+내부 표현은 listpack(작을 때)과 hashtable(커진 후) 두 가지입니다. 필드 수가 `hash-max-listpack-entries`(기본 128) 이하이면서 모든 값이 `hash-max-listpack-value`(기본 64바이트) 이하이면 listpack 한 개에 모든 필드를 연속해 저장하므로, 작은 객체에 대해 메모리 사용이 String 여러 개보다도 적습니다. 임계를 넘으면 hashtable로 전환되고 메모리 풋프린트가 늘어납니다.
+
+대표 명령은 다음과 같습니다.
+
+<Tabs group="redis-client">
+  <Tab label="redis-cli">
+    ```bash title="Hash 명령"
+    HSET user:42 name "Sang" age "30" tier "gold"
+    HGET user:42 name
+    HMGET user:42 name age
+    HGETALL user:42
+    HINCRBY user:42 visits 1
+    HDEL user:42 tier
+    HEXISTS user:42 name
+    ```
+  </Tab>
+  <Tab label="Kotlin (RedisTemplate)">
+    ```kotlin title="Hash 명령"
+    val ops: HashOperations<String, String, String> = redisTemplate.opsForHash()
+
+    ops.putAll("user:42", mapOf(
+        "name" to "Sang",
+        "age" to "30",
+        "tier" to "gold",
+    ))
+
+    val name: String? = ops.get("user:42", "name")
+    val partial: List<String?> = ops.multiGet("user:42", listOf("name", "age"))
+    val all: Map<String, String> = ops.entries("user:42")
+
+    ops.increment("user:42", "visits", 1)
+    ops.delete("user:42", "tier")
+    val hasName: Boolean? = ops.hasKey("user:42", "name")
+    ```
+  </Tab>
+</Tabs>
+
+Hash가 가장 자주 쓰이는 시나리오는 **객체 저장과 부분 갱신**입니다. JSON 문자열을 String에 넣으면 한 필드만 바꾸려 해도 전체를 다시 직렬화하고 저장해야 하지만, Hash라면 `HSET user:42 tier silver` 한 줄로 끝납니다. 사용자 프로필이나 상품 정보 같은 엔티티 캐시가 대표적입니다.
+
+또 다른 시나리오는 **필드별 통계 누적**입니다. 일별 시간대별 PV를 한 키에 모으면 `HINCRBY pv:2026-05-06 12 1` 한 명령으로 끝나고, 한 번의 `HGETALL`으로 24개 시간대를 모두 가져옵니다.
+
+### Set
+
+중복 없는 컬렉션입니다. 멤버 추가, 존재 확인, 집합 연산이 핵심입니다.
+
+내부 표현은 intset(모두 정수일 때), listpack(작은 비정수 컬렉션), hashtable(커진 후) 세 가지입니다. intset은 정렬된 정수 배열이라 `SISMEMBER`가 $O(\log N)$ 이진 탐색이며, 메모리 풋프린트가 매우 작습니다. 비정수가 들어오는 순간 listpack 또는 hashtable로 승격됩니다.
+
+대표 명령은 다음과 같습니다.
+
+<Tabs group="redis-client">
+  <Tab label="redis-cli">
+    ```bash title="Set 명령"
+    SADD tags:post:1 java kotlin spring
+    SMEMBERS tags:post:1
+    SISMEMBER tags:post:1 kotlin
+    SCARD tags:post:1
+    SINTER tags:post:1 tags:post:2
+    SUNION tags:post:1 tags:post:2
+    SDIFF tags:post:1 tags:post:2
+    SRANDMEMBER tags:post:1 2
+    ```
+  </Tab>
+  <Tab label="Kotlin (RedisTemplate)">
+    ```kotlin title="Set 명령"
+    val ops: SetOperations<String, String> = redisTemplate.opsForSet()
+
+    ops.add("tags:post:1", "java", "kotlin", "spring")
+    val members: Set<String> = ops.members("tags:post:1") ?: emptySet()
+    val isMember: Boolean = ops.isMember("tags:post:1", "kotlin") ?: false
+    val size: Long = ops.size("tags:post:1") ?: 0
+
+    val intersect: Set<String> = ops.intersect("tags:post:1", "tags:post:2") ?: emptySet()
+    val union: Set<String> = ops.union("tags:post:1", "tags:post:2") ?: emptySet()
+    val diff: Set<String> = ops.difference("tags:post:1", "tags:post:2") ?: emptySet()
+
+    val sample: List<String> = ops.randomMembers("tags:post:1", 2) ?: emptyList()
+    ```
+  </Tab>
+</Tabs>
+
+Set이 가장 자주 쓰이는 시나리오는 **집합 연산이 핵심인 데이터**입니다. 게시물 태그나 관심사 태그 처리에서 `SINTER`로 공통 태그를 가진 사용자를 찾는 추천, 일별 활성 사용자 집합을 모아 `SUNION`으로 주간 합집합과 `SINTER`로 N일 연속 접속자를 구하는 사용자 분석이 대표적입니다.
+
+**중복 제거 카운팅**에도 적합합니다. 다만 멤버 수가 수백만 단위로 커지면 메모리 비용이 큽니다. 정확한 멤버 명단이 필요하지 않다면 HyperLogLog가 더 효율적입니다.
+
+### Sorted Set
+
+score로 정렬된 멤버 집합입니다. 같은 멤버는 한 번만 들어가고, score가 갱신되면 자동으로 자리가 바뀝니다.
+
+내부 표현은 listpack(작을 때)과 skiplist + hashtable(커진 후)입니다. 후자는 순위·범위 조회를 위한 skiplist와 멤버에서 score 직접 조회를 위한 hashtable을 함께 둔 이중 인덱스로, 삽입·삭제·범위 조회가 모두 $O(\log N)$입니다.
+
+skiplist는 정렬된 linked list를 다단 레이어로 쌓은 자료구조입니다. 각 노드가 확률적으로 상위 레이어 포인터를 가지므로 평균 $O(\log N)$ 탐색이 가능하면서, B+Tree 같은 디스크 자료구조보다 구현이 단순합니다. Redis 설계자는 메모리 위에서 단순 구현과 충분히 빠른 성능 사이의 균형을 위해 skiplist를 골랐습니다.
+
+대표 명령은 다음과 같습니다.
+
+<Tabs group="redis-client">
+  <Tab label="redis-cli">
+    ```bash title="Sorted Set 명령"
+    ZADD lb:season:5 1500 "user:42" 1320 "user:7" 1820 "user:99"
+    ZINCRBY lb:season:5 50 "user:42"
+    ZRANGE lb:season:5 0 9 REV WITHSCORES
+    ZRANGE lb:season:5 1000 1500 BYSCORE
+    ZRANK lb:season:5 "user:42" REV
+    ZSCORE lb:season:5 "user:42"
+    ZREMRANGEBYSCORE lb:season:5 -inf 999
+    ```
+  </Tab>
+  <Tab label="Kotlin (RedisTemplate)">
+    ```kotlin title="Sorted Set 명령"
+    val ops: ZSetOperations<String, String> = redisTemplate.opsForZSet()
+
+    ops.add("lb:season:5", "user:42", 1500.0)
+    ops.add("lb:season:5", "user:7", 1320.0)
+    ops.incrementScore("lb:season:5", "user:42", 50.0)
+
+    val top10: Set<ZSetOperations.TypedTuple<String>> =
+        ops.reverseRangeWithScores("lb:season:5", 0, 9) ?: emptySet()
+    val band: Set<String> =
+        ops.rangeByScore("lb:season:5", 1000.0, 1500.0) ?: emptySet()
+
+    val rank: Long? = ops.reverseRank("lb:season:5", "user:42")
+    val score: Double? = ops.score("lb:season:5", "user:42")
+
+    ops.removeRangeByScore(
+        "lb:season:5",
+        Double.NEGATIVE_INFINITY,
+        999.0,
+    )
+    ```
+  </Tab>
+</Tabs>
+
+Sorted Set이 가장 자주 쓰이는 시나리오는 **정렬이 핵심인 데이터**입니다. 게임 리더보드(score=점수)는 가장 정통적인 사례이고, 우선순위 큐(score=우선순위)나 시간순 인덱스(score=epoch ms)로도 쓰입니다.
+
+**지연 큐**로도 자주 쓰입니다. score를 <E>실행할 시각의 epoch ms</E>로 두고, 워커가 주기적으로 `ZRANGEBYSCORE -inf <now>`로 만기 작업을 꺼내 처리합니다. 외부 스케줄러 없이 Redis 한 곳에서 시간 기반 작업 큐를 만드는 가장 단순한 패턴입니다.
+
+### Bitmap
+
+별도 자료형이 아니라 String 위에서 비트 단위로 동작하는 명령군입니다. 키 하나에 최대 512MB(약 40억 비트)까지 담을 수 있습니다.
+
+표현은 String 그대로이며, `SETBIT key offset 0|1`이 곧 String의 특정 바이트 안의 비트 하나를 켜고 끄는 명령입니다.
+
+대표 명령은 다음과 같습니다.
+
+<Tabs group="redis-client">
+  <Tab label="redis-cli">
+    ```bash title="Bitmap 명령"
+    SETBIT login:2026-05-06 42 1
+    SETBIT login:2026-05-06 7 1
+    GETBIT login:2026-05-06 42
+    BITCOUNT login:2026-05-06
+    BITOP AND login:streak:2 login:2026-05-05 login:2026-05-06
+    BITPOS login:2026-05-06 1
+    ```
+  </Tab>
+  <Tab label="Kotlin (RedisTemplate)">
+    ```kotlin title="Bitmap 명령"
+    val ops: ValueOperations<String, String> = redisTemplate.opsForValue()
+
+    ops.setBit("login:2026-05-06", 42, true)
+    ops.setBit("login:2026-05-06", 7, true)
+    val isOn: Boolean = ops.getBit("login:2026-05-06", 42) ?: false
+
+    val count: Long = redisTemplate.execute<Long> { conn ->
+        conn.stringCommands().bitCount("login:2026-05-06".toByteArray())
+    } ?: 0
+
+    redisTemplate.execute<Long> { conn ->
+        conn.stringCommands().bitOp(
+            BitOperation.AND,
+            "login:streak:2".toByteArray(),
+            "login:2026-05-05".toByteArray(),
+            "login:2026-05-06".toByteArray(),
+        )
+    }
+    ```
+  </Tab>
+</Tabs>
+
+Bitmap이 가장 자주 쓰이는 시나리오는 **사용자 ID를 offset으로 쓸 수 있는 boolean 데이터**입니다. 일별 출석이나 로그인 추적에서 user_id를 offset으로 쓰면 사용자 1억 명도 키 한 개당 약 12.5MB로 압축됩니다. `BITCOUNT`로 일일 활성 사용자(DAU)를 한 명령에 구하고, `BITOP AND`로 N일 연속 접속자를 즉시 계산할 수 있습니다.
+
+**feature flag 1억 개**나 **A/B 테스트 분기 기억** 같은 거대 boolean 매트릭스에도 적합합니다. 키를 실험 ID로, offset을 user_id로 두는 구도가 그대로 동작합니다.
+
+### HyperLogLog
+
+확률적 자료구조입니다. 멤버 자체를 저장하지 않고 카디널리티(중복 제외 개수)만 12KB 고정 메모리에 추정합니다. 표준 오차는 약 0.81%입니다.
+
+내부적으로는 입력값의 해시 비트 패턴을 분석해 카디널리티를 추정합니다. 멤버 수가 1만이든 10억이든 메모리는 12KB로 같습니다.
+
+대표 명령은 단 세 개입니다.
+
+<Tabs group="redis-client">
+  <Tab label="redis-cli">
+    ```bash title="HyperLogLog 명령"
+    PFADD uv:2026-05-06 user:42 user:7 user:99
+    PFADD uv:2026-05-06 user:42
+    PFCOUNT uv:2026-05-06
+    PFCOUNT uv:2026-05-06 uv:2026-05-05
+    PFMERGE uv:2026-05 uv:2026-05-06 uv:2026-05-05
+    ```
+  </Tab>
+  <Tab label="Kotlin (RedisTemplate)">
+    ```kotlin title="HyperLogLog 명령"
+    val ops: HyperLogLogOperations<String, String> = redisTemplate.opsForHyperLogLog()
+
+    ops.add("uv:2026-05-06", "user:42", "user:7", "user:99")
+    ops.add("uv:2026-05-06", "user:42")  // 중복은 자동으로 무시
+
+    val daily: Long = ops.size("uv:2026-05-06")
+    val twoDayUnion: Long = ops.size("uv:2026-05-06", "uv:2026-05-05")
+
+    ops.union("uv:2026-05", "uv:2026-05-06", "uv:2026-05-05")
+    ```
+  </Tab>
+</Tabs>
+
+적합한 시나리오는 **정확도보다 메모리와 속도가 중요한 대규모 유니크 카운트**입니다. 일/월 unique visitor, unique IP, unique 검색어 같은 지표가 대표적입니다. 1억 명의 unique user를 Set으로 저장하면 멤버당 수십 바이트씩 GB 단위 메모리가 들지만, HyperLogLog는 12KB로 끝납니다.
+
+대신 멤버 자체를 꺼낼 수는 없습니다. <E>오늘 방문한 사용자 명단</E>이 필요하다면 Set이 맞고, <E>오늘 방문한 사용자 수</E>만 필요하다면 HyperLogLog가 맞습니다.
+
+### Stream
+
+append-only 로그입니다. 각 entry는 자동 생성되는 ms 단위 ID와 임의의 field-value 맵을 갖습니다. consumer group을 붙이면 ack 기반 메시징처럼 동작합니다.
+
+내부 표현은 radix tree 기반의 macro node 구조이며, 시간순 ID로 정렬된 영구 로그를 효율적으로 보관합니다. 같은 흐름을 List로 흉내 낼 수도 있지만, Stream은 partial consumption(중간부터 읽기), consumer group, 자동 ack 추적, pending entry 관리 같은 메시징 기능을 내장한다는 점에서 다릅니다.
+
+대표 명령은 다음과 같습니다.
+
+<Tabs group="redis-client">
+  <Tab label="redis-cli">
+    ```bash title="Stream 명령"
+    XADD events * type "order.placed" orderId "42" amount "1500"
+    XLEN events
+    XRANGE events - +
+    XREAD COUNT 10 STREAMS events 0
+
+    XGROUP CREATE events workers $ MKSTREAM
+    XREADGROUP GROUP workers worker-1 COUNT 10 STREAMS events ">"
+    XACK events workers 1714980000000-0
+    XPENDING events workers
+    ```
+  </Tab>
+  <Tab label="Kotlin (RedisTemplate)">
+    ```kotlin title="Stream 명령"
+    val ops: StreamOperations<String, String, String> = redisTemplate.opsForStream()
+
+    val record: MapRecord<String, String, String> =
+        MapRecord.create("events", mapOf(
+            "type" to "order.placed",
+            "orderId" to "42",
+            "amount" to "1500",
+        ))
+    val id: RecordId? = ops.add(record)
+
+    val len: Long = ops.size("events") ?: 0
+    val all: List<MapRecord<String, String, String>>? =
+        ops.range("events", Range.unbounded())
+
+    ops.createGroup("events", ReadOffset.from("$"), "workers")
+    val pulled: List<MapRecord<String, String, String>>? = ops.read(
+        Consumer.from("workers", "worker-1"),
+        StreamReadOptions.empty().count(10),
+        StreamOffset.create("events", ReadOffset.lastConsumed()),
+    )
+
+    ops.acknowledge("events", "workers", "1714980000000-0")
+    ```
+  </Tab>
+</Tabs>
+
+적합한 시나리오는 **이벤트 로그와 가벼운 메시징**입니다. 이벤트 소싱(주문 상태 전이를 시간순으로 기록), 도메인 이벤트 발행과 구독, 작업 큐(consumer group과 ack로 at-least-once) 같은 패턴이 자연스럽게 들어맞습니다.
+
+Kafka와 비교했을 때 Stream은 단일 Redis 노드에 종속된다는 한계가 있습니다. Cluster 모드에서도 한 stream key는 하나의 hash slot에 묶이므로, 수평 확장의 단위가 키이지 partition이 아닙니다. 처리량이 분당 수십만 메시지 이상으로 커지면 Kafka로 옮기는 편이 적합합니다.
+
+## 자료구조 선택 가이드
+
+여기까지 8가지 자료구조를 한 묶음씩 살펴봤습니다. 새 데이터를 Redis에 넣을 때, 다음 표를 첫 번째 후보로 사용할 수 있습니다.
+
+| 데이터 패턴 | 자료구조 | 이유 |
+|---|---|---|
+| 단일 값 (캐시·카운터·플래그) | String | 가장 단순, `INCR`이 원자적 |
+| 양 끝 push/pop이 핵심 | List | $O(1)$ 양 끝 접근 |
+| 객체의 필드 부분 갱신 | Hash | listpack에 컴팩트 저장, 필드 단위 ops |
+| 중복 없는 멤버와 집합 연산 | Set | `SINTER`/`SUNION`/`SDIFF` 서버 측 처리 |
+| score로 정렬·범위·순위 | Sorted Set | skiplist $O(\log N)$ |
+| 거대 boolean 매트릭스 | Bitmap | 비트당 1비트, `BITCOUNT`/`BITOP` |
+| 멤버 저장 없이 카디널리티만 | HyperLogLog | 12KB 고정, 0.81% 오차 |
+| append-only 이벤트 로그와 ack | Stream | consumer group과 pending |
+
+이 표는 정답이 아니라 출발점입니다. 실제 선택은 데이터 양, 읽기와 쓰기 비율, 정확도 요구에 따라 달라집니다. 예를 들어 **유니크 사용자 카운트**는 정확한 명단이 필요하면 Set, 추정값으로 충분하면 HyperLogLog로 갈립니다. **시간순 이벤트**는 ack가 필요하면 Stream, 단순 최근 N건이면 List와 `LTRIM`으로 충분합니다.
+
+## 트레이드오프
+
+자료구조가 풍부하다는 것은 메모리 위에서 모든 처리가 끝난다는 뜻이고, 그만큼 메모리 사용량과 단일 스레드 점유에 대한 고려가 필요합니다.
+
+**Big Key 문제**가 가장 흔합니다. Hash, Set, Sorted Set 자료구조에서 멤버 수가 수만 개 이상으로 커지면 단일 명령이 이벤트 루프 스레드를 수백 ms 동안 점유합니다. 같은 시간 다른 모든 명령은 큐에 쌓입니다.
+
+- `HGETALL key` : Hash의 모든 필드와 값을 한 번에 반환합니다. 필드가 10만 개라면 응답을 직렬화하고 네트워크로 보내는 동안 다른 명령이 모두 대기합니다.
+- `SMEMBERS key` : Set의 모든 멤버를 한 번에 반환합니다. 멤버 수에 비례해 시간이 늘어나며, 메모리 위에서 전체 컬렉션을 복사해 응답 버퍼로 옮깁니다.
+- `ZRANGE key 0 -1` : Sorted Set의 처음부터 끝까지 전체 멤버를 정렬 순서대로 반환합니다. score 기반 범위 조회가 아니라 전체 스캔이라 컬렉션 크기 그대로의 비용이 듭니다.
+
+큰 컬렉션 전체를 훑어야 한다면 `HSCAN`, `SSCAN`, `ZSCAN`으로 cursor 기반 분할 조회를 사용하는 편이 적합합니다. 한 번에 수백 개씩만 받아오므로 이벤트 루프 점유 시간이 일정 수준 아래로 유지됩니다.
+
+**인코딩 승격**은 임계점에서 갑작스러운 메모리 증가를 만듭니다. Hash가 listpack일 때 필드 한 개당 차지하는 바이트는 매우 작지만, hashtable로 승격되는 순간 entry 메타데이터 비용이 더해져 메모리 사용량이 5–10배 늘기도 합니다. 임계는 `redis.conf`의 `hash-max-listpack-entries` 같은 설정으로 조절할 수 있고, 대규모 객체를 다룰 때는 이 임계를 키워 listpack을 유지하기도 합니다. 다만 listpack은 검색이 $O(N)$이라 필드 수가 매우 많으면 hashtable이 빠릅니다.
+
+**Cluster 모드의 multi-key 명령**은 키들이 같은 hash slot에 있어야 합니다. `SINTER set1 set2`나 `ZUNIONSTORE dst 2 a b`는 Cluster에서 두 키가 다른 slot에 있으면 `CROSSSLOT` 에러가 납니다. 같은 slot에 묶고 싶다면 `{tag}` 표기로 hash tag를 지정합니다. `user:{42}:friends`와 `user:{42}:tags`는 `42`만 해싱되어 같은 slot에 들어갑니다.
+
+**HyperLogLog의 비결정성**은 알고리즘 자체의 특성입니다. 같은 입력에 대해 같은 결과가 나오긴 하지만 0.81% 오차는 줄일 수 없으므로, 정산이나 과금처럼 정확한 수가 필요한 영역에는 부적합합니다.
+
+<Callout type="error" title="핵심 통찰: 자료구조는 데이터 패턴에 대한 선택">
+  Redis 자료구조의 진짜 가치는 <E>이 데이터를 어떻게 표현할까</E>의 답을 서버 측 자료구조로 옮긴다는 점에 있습니다. 누적은 Hash, 정렬은 Sorted Set, 시퀀스는 Stream, 카디널리티는 HyperLogLog입니다. 같은 데이터를 String만으로도 흉내 낼 수 있지만, 적합한 자료구조를 고르면 명령 한 줄과 $O(N)$의 차이를 만듭니다.
+</Callout>
+
+다중 명령을 원자적으로 묶고 싶다면 Lua 스크립팅이 자료구조 명령 위에 한 층을 더합니다. 자세한 내용은 별도 글에서 다룹니다.
+
+<RelatedPost slug="redis-lua-scripting" type="deep-dive" />
+<RelatedPost slug="lettuce-vs-redisson" type="parallel" />
+
+## 마무리
+
+Redis의 8가지 자료구조는 단순 사용법의 묶음이 아니라, 메모리 위에서 데이터 패턴을 어떻게 표현할지에 대한 8가지 답입니다. String의 카운터, Sorted Set의 리더보드, Stream의 이벤트 로그, HyperLogLog의 12KB 카디널리티가 각각 다른 역할을 맡습니다. 클라이언트가 직접 구현하면 수십 줄과 여러 RTT가 드는 작업이 명령 한두 줄로 끝납니다.
+
+새로운 데이터가 들어왔을 때 가장 먼저 던질 질문은 <E>이 데이터의 패턴이 무엇인가</E>입니다. 누적인지 정렬인지 집합 연산인지 시퀀스인지 카디널리티인지를 먼저 정하면, 자료구조는 거의 자동으로 따라옵니다.
+
+## 참고 자료
+
+- [Redis Data types](https://redis.io/docs/latest/develop/data-types/)
+- [Redis Streams 가이드](https://redis.io/docs/latest/develop/data-types/streams/)
+- [Spring Data Redis Reference](https://docs.spring.io/spring-data/redis/reference/)
+- [Redis 7 listpack 인코딩](https://redis.io/blog/redis-7-2/)
