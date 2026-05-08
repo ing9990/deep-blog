@@ -1,11 +1,9 @@
 'use client'
 
-import Link from 'next/link'
-import { ArrowLeft, Layers } from 'lucide-react'
+import { Layers } from 'lucide-react'
 import { CATEGORIES, groupPostsByCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { getCategoryColor } from '@/lib/category-colors'
-import { useCrossHostUrls } from '@/lib/cross-host-context'
 import { cn } from '@/lib/utils'
 import { useIndexFilter } from './IndexFilterContext'
 import type { Post } from '@/lib/posts'
@@ -19,7 +17,6 @@ interface IndexCategoryNavProps {
 export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
   const { t, lang } = useTranslation()
   const { category, setCategory } = useIndexFilter()
-  const { apex } = useCrossHostUrls()
 
   const groups = useMemo(() => groupPostsByCategory(allPosts, lang), [allPosts, lang])
 
@@ -72,14 +69,6 @@ export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {
           </button>
         )
       })}
-
-      <Link
-        href={apex}
-        className="mt-3 flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-[length:var(--text-nav-item)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-        <span>랜딩 페이지로</span>
-      </Link>
     </nav>
   )
 }

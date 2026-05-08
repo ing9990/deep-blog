@@ -1,6 +1,6 @@
 /**
- * Cross-host URL resolution for navigating between the three deployed surfaces
- * (apex landing, blog, books).
+ * Cross-host URL resolution for navigating between the deployed surfaces
+ * (blog, books).
  *
  * Resolution depends on the current request host:
  *   - Production canonical hosts (ing9990.com / deep.ing9990.com / books.ing9990.com /
@@ -9,7 +9,7 @@
  *     (matches middleware.ts behavior).
  *   - Anything else (LAN IP like 192.168.x.x:3010, custom domain, ngrok host, etc):
  *     stay on the current host. Middleware falls through there, so all surfaces
- *     coexist via filesystem path prefixes (/landing, /books).
+ *     coexist via filesystem path prefixes (/books).
  *
  * Use {@link getCrossHostUrls} from server components / route handlers.
  * Use {@link resolveCrossHostUrls} when you already have a host string.
@@ -29,13 +29,11 @@ const WWW_HOST = `www.${APEX_HOST}`
 const PROD_HOSTS = new Set([APEX_HOST, BLOG_HOST, BOOKS_HOST, WWW_HOST])
 
 export interface CrossHostUrls {
-  apex: string
   blog: string
   books: string
 }
 
 const PROD_URLS: CrossHostUrls = {
-  apex: `https://${APEX_HOST}`,
   blog: `https://${BLOG_HOST}`,
   books: `https://${BOOKS_HOST}`,
 }
@@ -50,14 +48,12 @@ export function resolveCrossHostUrls(rawHost: string | null | undefined): CrossH
 
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     return {
-      apex: `http://localhost${portSuffix}/landing`,
       blog: `http://blog.localhost${portSuffix}`,
       books: `http://books.localhost${portSuffix}`,
     }
   }
 
   return {
-    apex: `http://${rawHost}/landing`,
     blog: `http://${rawHost}`,
     books: `http://${rawHost}/books`,
   }

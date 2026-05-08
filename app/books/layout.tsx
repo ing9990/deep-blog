@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 }
 
 export default async function BooksLayout({ children }: { children: React.ReactNode }) {
-  const { apex: apexUrl, blog: blogUrl } = await getCrossHostUrls()
+  const { blog: blogUrl } = await getCrossHostUrls()
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
@@ -32,12 +32,6 @@ export default async function BooksLayout({ children }: { children: React.ReactN
           <span className="text-sm font-medium text-muted-foreground">/ 책</span>
         </Link>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Link
-            href={apexUrl}
-            className="rounded-md px-3 py-1.5 transition-colors hover:bg-accent hover:text-foreground"
-          >
-            홈
-          </Link>
           <Link
             href={blogUrl}
             className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-primary-foreground transition-opacity hover:opacity-90"
