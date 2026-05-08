@@ -50,18 +50,9 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 301)
   }
 
-  // Apex (ing9990.com): landing at root, blog/books traffic redirected out.
+  // Apex (ing9990.com): all traffic redirects to blog, except /books which
+  // canonicalizes onto the books host.
   if (hostname === APEX_HOST) {
-    if (pathname === '/landing' || pathname.startsWith('/landing/')) {
-      const url = new URL(req.url)
-      url.pathname = '/'
-      return NextResponse.redirect(url, 301)
-    }
-    if (pathname === '/') {
-      const url = req.nextUrl.clone()
-      url.pathname = '/landing'
-      return NextResponse.rewrite(url)
-    }
     if (pathname === '/books' || pathname.startsWith('/books/')) {
       return redirectToBooksHost(req, pathname)
     }
@@ -70,14 +61,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 301)
   }
 
-  // Blog (deep.ing9990.com): landing/books should not be reachable here.
+  // Blog (deep.ing9990.com): books should not be reachable here.
   if (hostname === BLOG_HOST) {
-    if (pathname === '/landing' || pathname.startsWith('/landing/')) {
-      const url = new URL(req.url)
-      url.host = APEX_HOST
-      url.pathname = '/'
-      return NextResponse.redirect(url, 301)
-    }
     if (pathname === '/books' || pathname.startsWith('/books/')) {
       return redirectToBooksHost(req, pathname)
     }
@@ -85,12 +70,6 @@ export function middleware(req: NextRequest) {
 
   // Books (books.ing9990.com): only book routes; everything else canonicalizes.
   if (hostname === BOOKS_HOST) {
-    if (pathname === '/landing' || pathname.startsWith('/landing/')) {
-      const url = new URL(req.url)
-      url.host = APEX_HOST
-      url.pathname = '/'
-      return NextResponse.redirect(url, 301)
-    }
     if (pathname.startsWith('/posts/') || pathname.startsWith('/tags/')) {
       const url = new URL(req.url)
       url.host = BLOG_HOST
