@@ -21,6 +21,7 @@ import { CardinalitySpectrum } from '@/components/visualizations/CardinalitySpec
 import { CardinalityTradeoff } from '@/components/visualizations/CardinalityTradeoff'
 import { CompositeIndexLeaf } from '@/components/visualizations/CompositeIndexLeaf'
 import { CoroutineLayers } from '@/components/visualizations/CoroutineLayers'
+import { CryptoParadigmTradeoff } from '@/components/visualizations/CryptoParadigmTradeoff'
 import { BTreeInsert } from '@/components/visualizations/BTreeInsert'
 import { DDDAggregate } from '@/components/visualizations/DDDAggregate'
 import { DDDBoundedContext } from '@/components/visualizations/DDDBoundedContext'
@@ -67,6 +68,7 @@ import { SequentialVsRandomIO } from '@/components/visualizations/SequentialVsRa
 import { SoaVsKafkaTopology } from '@/components/visualizations/SoaVsKafkaTopology'
 import { SyscallFlow } from '@/components/visualizations/SyscallFlow'
 import { ThreadLocalMapStructure } from '@/components/visualizations/ThreadLocalMapStructure'
+import { TlsHybridHandshake } from '@/components/visualizations/TlsHybridHandshake'
 import { TrieBuilder } from '@/components/visualizations/TrieBuilder'
 import { TrieDeleteSnapshot } from '@/components/visualizations/TrieDeleteSnapshot'
 import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
@@ -141,6 +143,7 @@ export const mdxComponents: MDXComponents = {
   CardinalityTradeoff,
   CompositeIndexLeaf,
   CoroutineLayers,
+  CryptoParadigmTradeoff,
   DDDAggregate,
   DDDBoundedContext,
   DDDTermConfusion,
@@ -188,6 +191,7 @@ export const mdxComponents: MDXComponents = {
   SyscallFlow,
   Tab,
   ThreadLocalMapStructure,
+  TlsHybridHandshake,
   TrieBuilder,
   TrieDeleteSnapshot,
   TwoGeneralsMessenger,
