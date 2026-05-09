@@ -1,0 +1,79 @@
+---
+title:
+  ko: "Kubernetes Cheatsheet"
+  en: "Kubernetes Cheatsheet"
+slug: kubernetes-cheatsheet
+date: 2026-05-09
+tags:
+  - Backend
+  - Infrastructure
+  - Kubernetes
+  - CKAD
+  - Cheatsheet
+keywords:
+  - Kubernetes Cheatsheet
+  - kubectl 명령어
+  - 쿠버네티스 치트시트
+summary:
+  ko: "쿠버네티스 명령어와 YAML 템플릿을 리소스별로 한 자리에서 찾을 수 있는 색인입니다. 각 항목은 한 줄 명령과 최소 YAML, 그리고 깊은 설명 글 링크로 구성되어 CKAD 시험 준비와 실무 운영에서 빠른 룩업이 가능합니다."
+  en: "A reference index of Kubernetes commands and minimal YAML templates organized by resource. Each entry pairs one-line commands with the smallest viable YAML and links to in-depth concept posts, supporting both CKAD prep and day-to-day lookups."
+category: kubernetes
+draft: false
+---
+
+이 글은 쿠버네티스 명령어와 YAML 템플릿의 누적 색인입니다. 깊은 동작·트레이드오프는 다루지 않고, 한 줄 명령과 최소 YAML로 빠르게 찾을 수 있는 자리에 둡니다. 새 쿠버네티스 개념 글이 추가될 때마다 해당 리소스 섹션이 한 묶음씩 늘어납니다.
+
+## 사용법
+
+- 좌측 목차에서 리소스명으로 점프합니다.
+- 각 리소스 섹션은 (1) 핵심 명령 표, (2) 최소 YAML, (3) 깊은 설명 글 링크의 3 부분으로 구성됩니다.
+- 깊은 동작·옵션 전체·트레이드오프는 이 글에서 다루지 않습니다. 각 섹션 끝의 `<RelatedPost>` 링크를 따라가면 개념 글에서 확인할 수 있습니다.
+- 명령 표의 `<...>` 표기는 사용자가 채울 자리입니다.
+
+## CKAD 도메인 색인
+
+| 도메인 | 비중 | 다루는 리소스 |
+|---|---|---|
+| Application Design and Build | 20% | (추가 예정) |
+| Application Deployment | 20% | (추가 예정) |
+| Observability and Maintenance | 15% | (추가 예정) |
+| Environment, Configuration and Security | 25% | (추가 예정) |
+| Services and Networking | 20% | (추가 예정) |
+
+리소스가 여러 도메인에 걸쳐 등장하면 가장 비중이 큰 도메인 한 곳에 표기합니다. 리소스 자체의 깊은 설명 글 링크는 본문 각 섹션에 둡니다.
+
+## kubectl 기본
+
+리소스 종류와 무관하게 자주 쓰는 명령입니다. 모든 리소스 섹션에서 공통으로 사용합니다.
+
+| 명령 | 설명 | 비고 |
+|---|---|---|
+| `kubectl cluster-info` | 클러스터 엔드포인트 확인 | 첫 연결 점검 |
+| `kubectl get <resource>` | 리소스 목록 조회 | `-A`로 모든 namespace |
+| `kubectl get nodes` | 노드 목록 조회 | `-o wide`로 IP·OS 표시 |
+| `kubectl get <resource> <name> -o yaml` | 한 객체의 YAML 덤프 | 디버깅 시작점 |
+| `kubectl describe <resource> <name>` | 객체 상세와 이벤트 | 실패 원인 추적 |
+| `kubectl run <name> --image=<image>` | Pod 즉석 생성 | demo·디버깅용. 실서비스는 Deployment |
+| `kubectl apply -f <file>.yaml` | YAML로 리소스 생성·갱신 | 멱등 적용 |
+| `kubectl delete <resource> <name>` | 객체 삭제 | `--grace-period=0 --force`로 강제 |
+| `kubectl edit <resource> <name>` | 클러스터의 객체 즉시 편집 | `EDITOR` 환경변수 사용 |
+| `kubectl logs <pod>` | 컨테이너 로그 | `-f` 추적, `-c <name>` 컨테이너 지정 |
+| `kubectl exec -it <pod> -- <cmd>` | 컨테이너 안에서 명령 실행 | `-c`로 컨테이너 지정 |
+| `kubectl port-forward <pod> <local>:<remote>` | 로컬 포트로 터널 | 로컬 디버깅 |
+| `kubectl config use-context <name>` | 클러스터 컨텍스트 전환 | `kubectl config get-contexts`로 목록 |
+
+### 출력 형식 옵션
+
+| 옵션 | 효과 |
+|---|---|
+| `-o yaml` | 객체 전체 YAML |
+| `-o json` | JSON. `jq`와 결합해 필터 |
+| `-o wide` | 추가 칼럼 (노드, IP) |
+| `-o jsonpath='{.spec.x}'` | 특정 필드 한 값 |
+| `--watch` | 변경 스트림 |
+
+## 참고 자료
+
+- [kubectl Cheat Sheet (공식)](https://kubernetes.io/docs/reference/kubectl/quick-reference/)
+- [Kubernetes API Reference](https://kubernetes.io/docs/reference/kubernetes-api/)
+- [CKAD Curriculum (CNCF)](https://github.com/cncf/curriculum)

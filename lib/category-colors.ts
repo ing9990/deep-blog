@@ -15,6 +15,7 @@ export const CATEGORY_COLORS: Partial<Record<CategoryId, string>> = {
   books: 'text-violet-600 dark:text-violet-400',
   database: 'text-sky-600 dark:text-sky-400',
   kafka: 'text-cyan-600 dark:text-cyan-400',
+  kubernetes: 'text-blue-600 dark:text-blue-400',
   infrastructure: 'text-slate-500 dark:text-slate-400',
   'computer-science': 'text-fuchsia-600 dark:text-fuchsia-400',
 }

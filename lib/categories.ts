@@ -7,6 +7,7 @@ export const CATEGORY_IDS = [
   'database',
   'redis',
   'kafka',
+  'kubernetes',
   'infrastructure',
   'knowledge',
   'computer-science',
@@ -50,6 +51,14 @@ export const CATEGORIES: readonly CategoryMeta[] = [
     id: 'kafka',
     label:       { en: 'KAFKA', ko: 'KAFKA' },
     description: { en: 'Kafka fundamentals and operations', ko: 'Kafka 기초와 운영' },
+  },
+  {
+    id: 'kubernetes',
+    label:       { en: 'Kubernetes', ko: '쿠버네티스' },
+    description: {
+      en: 'Kubernetes fundamentals (CKAD scope) and practical operations',
+      ko: 'CKAD 범위의 쿠버네티스 기초와 실무 운영',
+    },
   },
   {
     id: 'infrastructure',
