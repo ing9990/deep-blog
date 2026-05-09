@@ -28,7 +28,7 @@ draft: false
 
 쿠버네티스를 처음 만지면 Pod·Deployment·Service 같은 단어보다 먼저 마주치는 게 클러스터·노드·Control Plane·Worker 같은 어휘입니다. 이 글은 쿠버네티스 클러스터를 구성하는 기본 어휘와 컴포넌트가 어떻게 협업하는지를 한 자리에 정리하는 primer입니다. 깊은 동작은 후속 글에 미루고, 여기서는 <E>kubectl run nginx</E> 한 줄에 무슨 일이 일어나는가를 한 그림으로 따라갈 수 있을 만큼만 다룹니다.
 
-## 왜 클러스터인가
+## 단일 노드의 한계
 
 서버 한 대로 시스템을 운영하면 그 서버에 장애가 나는 순간 서비스가 멈춥니다. 트래픽이 늘어 한 대로 감당할 수 없을 때도 같은 한계가 드러납니다. 둘 다 <E>한 점에 모든 책임이 모여 있다</E>는 같은 원인입니다.
 
@@ -39,7 +39,7 @@ draft: false
 
 ## 노드와 클러스터
 
-이렇게 모인 서버 각각을 **노드(Node)**라 부르고, 같은 목적을 위해 묶인 노드의 집합을 **클러스터(Cluster)**라 부릅니다.
+이렇게 모인 서버 각각을 **노드**(Node)라 부르고, 같은 목적을 위해 묶인 노드의 집합을 **클러스터**(Cluster)라 부릅니다.
 
 노드가 늘어나면 새로운 질문이 따라옵니다. 클러스터의 상태는 누가 관리할까요. 노드 정보는 어디에 저장될까요. 어느 노드가 죽었는지는 어떻게 감지할까요. 죽은 노드 위에서 돌던 작업은 어떻게 다른 노드로 옮겨질까요. 이 네 질문이 곧 쿠버네티스가 푸는 문제의 전부이고, 답은 클러스터 안의 노드에 역할을 두 갈래로 나누는 데서 시작됩니다.
 
@@ -47,14 +47,14 @@ draft: false
 
 클러스터의 노드는 두 종류로 나뉩니다.
 
-- **Control Plane (과거에 Master Node로 불림)**: 클러스터 상태를 관리하고, 워커 노드를 감시하며, 어디에 무엇을 배치할지 결정하는 노드. 2020년 이후 공식 용어가 Master에서 Control Plane으로 바뀌었지만 강의·책에 따라 두 표현이 함께 보입니다.
+- **Control Plane**(과거에 Master Node로 불림): 클러스터 상태를 관리하고, 워커 노드를 감시하며, 어디에 무엇을 배치할지 결정하는 노드. 2020년 이후 공식 용어가 Master에서 Control Plane으로 바뀌었지만 강의·책에 따라 두 표현이 함께 보입니다.
 - **Worker Node**: 실제 컨테이너를 실행하는 노드. Control Plane이 결정한 작업을 자기 위에서 돌립니다.
 
 Control Plane은 보통 클러스터에 여러 인스턴스로 띄워 가용성을 확보하고, Worker는 워크로드 규모에 따라 수평으로 확장합니다. 같은 머신이 두 역할을 동시에 맡을 수도 있지만(개발용 단일 노드 클러스터), 실서비스에서는 분리하는 게 일반적입니다.
 
 ## 선언적 모델
 
-쿠버네티스의 사용 방식은 **선언적(Declarative)**입니다. 사용자는 <E>이 컨테이너 3개가 항상 떠 있어야 한다</E>처럼 **원하는 상태**(desired state)를 선언하고, 클러스터의 컴포넌트들은 **현재 상태**(current state)와의 차이를 끊임없이 좁히는 reconcile loop를 돌립니다. 어느 컨테이너가 죽으면 누군가 와서 새로 띄우고, 노드가 빠지면 그 위의 작업이 다른 노드로 옮겨지는 동작은 모두 이 단순한 패턴의 결과입니다. 다음 컴포넌트들이 협업하는 이유도 여기서 나옵니다.
+쿠버네티스의 사용 방식은 **선언적**(Declarative)입니다. 사용자는 <E>이 컨테이너 3개가 항상 떠 있어야 한다</E>처럼 **원하는 상태**(desired state)를 선언하고, 클러스터의 컴포넌트들은 **현재 상태**(current state)와의 차이를 끊임없이 좁히는 reconcile loop를 돌립니다. 예를 들어 `Deployment`로 관리되는 Pod이 죽으면 `Deployment Controller`가 즉시 새 Pod 객체를 API Server에 만들고, 노드가 빠지면 그 노드의 Pod이 정리된 뒤 같은 Controller가 다른 노드에 새 Pod을 띄웁니다. 다음 컴포넌트들이 협업하는 이유도 이 한 패턴에서 나옵니다.
 
 <Callout type="warning" title="이 구조를 이해하는 핵심">
   쿠버네티스의 모든 컴포넌트는 <E>원하는 상태와 실제 상태의 차이를 좁힌다</E>는 같은 문법으로 동작합니다. 사용자의 명령은 명령이 아니라 <E>이 상태가 되었으면 좋겠다</E>는 선언이고, 컴포넌트들이 그 선언을 향해 클러스터를 수렴시킵니다. 이 한 가지를 잡으면 컴포넌트의 역할이 자연스럽게 따라옵니다.
@@ -78,7 +78,7 @@ Control Plane 노드에는 네 가지 핵심 컴포넌트가 함께 돕니다.
 
 ### Controller Manager
 
-`kube-controller-manager`는 여러 종류의 reconciler가 함께 돌아가는 자리입니다. Node Controller가 노드 헬스를 감시하고, Deployment Controller가 Pod 개수를 맞추고, Job Controller가 작업 완료를 추적하는 식으로, 각 reconciler는 자기 영역의 원하는 상태와 실제 상태를 끊임없이 비교하고 차이를 좁힙니다. <E>오케스트레이션의 중심</E>이라기보다는 <E>여러 작은 reconcile loop의 모음</E>이 더 정확한 그림입니다.
+`kube-controller-manager`는 여러 종류의 reconciler가 함께 돌아가는 자리입니다. `Node Controller`가 노드 헬스를 감시하고, `Deployment Controller`가 Pod 개수를 맞추고, `Job Controller`가 작업 완료를 추적하는 식으로, 각 reconciler는 자기 영역의 원하는 상태와 실제 상태를 끊임없이 비교하고 차이를 좁힙니다. <E>오케스트레이션의 중심</E>이라기보다는 <E>여러 작은 reconcile loop의 모음</E>이 더 정확한 그림입니다.
 
 ## Worker Node 컴포넌트
 
@@ -94,7 +94,7 @@ Container Runtime은 컨테이너 이미지를 실제로 실행하는 도구입�
 
 `kubelet`은 어떤 런타임이 깔려 있어도 같은 방식으로 통신합니다. 이를 가능하게 하는 표준 인터페이스가 **CRI**(Container Runtime Interface)입니다.
 
-## 한 요청이 흐르는 길
+## kubectl run의 요청 흐름
 
 이제까지의 컴포넌트들이 어떻게 협업하는지를 한 명령으로 따라가 봅니다. 사용자가 `kubectl run nginx --image=nginx`를 실행하면 다음이 일어납니다.
 
@@ -124,7 +124,7 @@ Container Runtime은 컨테이너 이미지를 실제로 실행하는 도구입�
 
 1. `kubectl`이 사용자 명령을 REST 호출로 바꿔 API Server에 보냅니다.
 2. API Server가 Pod 객체를 etcd에 저장합니다. 이 시점의 Pod에는 `nodeName`이 비어 있습니다 (어디서 돌릴지 아직 안 정해진 상태).
-3. Scheduler가 `nodeName`이 비어 있는 Pod을 감지하고, 적합한 노드를 골라 API Server에 PATCH 합니다.
+3. Scheduler가 `nodeName`이 비어 있는 Pod을 감지하고, 적합한 노드를 골라 API Server에 `PATCH` 합니다.
 4. 해당 노드의 `kubelet`이 자기 앞으로 배정된 Pod을 발견하고 Container Runtime에 실행을 요청합니다.
 5. `kubelet`이 실행 결과를 API Server에 보고하고, 그 상태가 etcd에 기록됩니다.
 
@@ -134,7 +134,7 @@ Container Runtime은 컨테이너 이미지를 실제로 실행하는 도구입�
   쿠버네티스의 컴포넌트들은 서로 호출하지 않습니다. 각자 API Server에 원하는 상태를 쓰고, API Server에서 자기 관심사를 읽고, 자기 일을 합니다. <E>API Server를 보는 작은 reconciler들의 합</E>이 곧 클러스터입니다. 이 한 줄이 잡히면 새 컴포넌트(Operator·CSI·CNI 등)가 어디에 끼어드는지도 자연스럽게 따라옵니다.
 </Callout>
 
-## kubectl 첫 만남
+## kubectl 기본 명령
 
 지금은 명령 셋만 기억하면 충분합니다. 더 많은 명령은 후속 글에서 등장할 때마다 [Kubernetes Cheatsheet](/posts/kubernetes-cheatsheet)에 누적됩니다.
 
