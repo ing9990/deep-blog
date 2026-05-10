@@ -54,7 +54,7 @@ export const CATEGORIES: readonly CategoryMeta[] = [
   },
   {
     id: 'kubernetes',
-    label:       { en: 'Kubernetes', ko: '쿠버네티스' },
+    label:       { en: 'KUBERNETES', ko: 'KUBERNETES' },
     description: {
       en: 'Kubernetes fundamentals (CKAD scope) and practical operations',
       ko: 'CKAD 범위의 쿠버네티스 기초와 실무 운영',

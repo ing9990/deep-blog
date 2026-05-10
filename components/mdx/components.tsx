@@ -53,6 +53,7 @@ import { OffsetVsCursorScan } from '@/components/visualizations/OffsetVsCursorSc
 import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline'
 import { PACELCClassification } from '@/components/visualizations/PACELCClassification'
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
+import { PodCompositionViz } from '@/components/visualizations/PodCompositionViz'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
 import { RagPipeline } from '@/components/visualizations/RagPipeline'
@@ -174,6 +175,7 @@ export const mdxComponents: MDXComponents = {
   OptimizerPipeline,
   PACELCClassification,
   PERBetaSlider,
+  PodCompositionViz,
   QuickSort,
   QuickSortPivot,
   RagPipeline,
