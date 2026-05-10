@@ -53,6 +53,7 @@ import { OffsetVsCursorScan } from '@/components/visualizations/OffsetVsCursorSc
 import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline'
 import { PACELCClassification } from '@/components/visualizations/PACELCClassification'
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
+import { DeploymentLayerStack } from '@/components/visualizations/DeploymentLayerStack'
 import { NamespaceDnsBreakdown } from '@/components/visualizations/NamespaceDnsBreakdown'
 import { NamespaceIsolation } from '@/components/visualizations/NamespaceIsolation'
 import { PodCompositionViz } from '@/components/visualizations/PodCompositionViz'
@@ -150,6 +151,7 @@ export const mdxComponents: MDXComponents = {
   DDDAggregate,
   DDDBoundedContext,
   DDDTermConfusion,
+  DeploymentLayerStack,
   Diagram,
   DualWriteFailureWindows,
   E: Emphasis,
