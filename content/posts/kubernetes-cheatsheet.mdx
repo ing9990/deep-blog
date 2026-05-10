@@ -35,7 +35,7 @@ draft: false
 | 도메인 | 비중 | 다루는 리소스 |
 |---|---|---|
 | Application Design and Build | 20% | Pod |
-| Application Deployment | 20% | ReplicaSet |
+| Application Deployment | 20% | ReplicaSet, Deployment |
 | Observability and Maintenance | 15% | (추가 예정) |
 | Environment, Configuration and Security | 25% | (추가 예정) |
 | Services and Networking | 20% | (추가 예정) |
@@ -71,6 +71,49 @@ draft: false
 | `-o wide` | 추가 칼럼 (노드, IP) |
 | `-o jsonpath='{.spec.x}'` | 특정 필드 한 값 |
 | `--watch` | 변경 스트림 |
+
+## Deployment
+
+`ReplicaSet` 위에 한 층을 더 둬 롤링 업데이트와 롤백을 자동으로 처리하는 컨트롤러.
+
+### 명령
+
+| 명령 | 설명 | 비고 |
+|---|---|---|
+| `kubectl apply -f deployment.yaml` | Deployment 생성·갱신 | 선언적, 멱등 |
+| `kubectl create -f deployment.yaml` | Deployment 생성 | 이미 있으면 실패 |
+| `kubectl get deployments` | Deployment 목록 조회 | `deploy`로 단축 |
+| `kubectl describe deployment <name>` | 상세와 이벤트 | 디버깅 시작점 |
+| `kubectl delete deployment <name>` | Deployment·RS·Pod 삭제 | 자식 리소스 함께 정리 |
+| `kubectl scale --replicas=N deployment <name>` | 복제본 수 즉시 조정 | YAML은 변경 안 됨 |
+| `kubectl get all` | 워크로드 + Service 일괄 조회 | ConfigMap·Secret·Ingress 등은 빠짐 |
+
+### 최소 YAML
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-deployment
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      type: front-end
+  template:
+    metadata:
+      labels:
+        type: front-end
+    spec:
+      containers:
+        - name: nginx-container
+          image: nginx
+```
+
+<RelatedPost slug="deployment-primer" type="deep-dive" />
 
 ## Pod
 
