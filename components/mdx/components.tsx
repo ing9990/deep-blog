@@ -54,6 +54,8 @@ import { OptimizerPipeline } from '@/components/visualizations/OptimizerPipeline
 import { PACELCClassification } from '@/components/visualizations/PACELCClassification'
 import { PERBetaSlider } from '@/components/visualizations/PERBetaSlider'
 import { DeploymentLayerStack } from '@/components/visualizations/DeploymentLayerStack'
+import { NamespaceDnsBreakdown } from '@/components/visualizations/NamespaceDnsBreakdown'
+import { NamespaceIsolation } from '@/components/visualizations/NamespaceIsolation'
 import { PodCompositionViz } from '@/components/visualizations/PodCompositionViz'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
@@ -172,6 +174,8 @@ export const mdxComponents: MDXComponents = {
   AMLTermsHierarchy,
   BackpressureStrategyMatrix,
   Bm25Saturation,
+  NamespaceDnsBreakdown,
+  NamespaceIsolation,
   Note,
   OffsetVsCursorScan,
   OptimizerPipeline,
