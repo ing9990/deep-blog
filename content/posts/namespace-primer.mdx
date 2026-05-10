@@ -1,0 +1,202 @@
+---
+title:
+  ko: "Namespace Primer"
+  en: "Namespace Primer"
+slug: namespace-primer
+date: 2026-05-10
+tags:
+  - Backend
+  - Infrastructure
+  - Kubernetes
+  - CKAD
+keywords:
+  - Namespace
+  - 네임스페이스
+  - kube-system
+  - kube-public
+  - ResourceQuota
+  - FQDN
+summary:
+  ko: "쿠버네티스가 같은 이름의 리소스를 충돌 없이 공존시키는 방법인 Namespace를 정리합니다. 같은 Namespace 안에서는 짧은 이름, 다른 Namespace를 부를 때는 FQDN을 쓰는 호명 규칙, default·kube-system·kube-public 세 기본 Namespace, 만들기·전환 명령, ResourceQuota로 한도를 두는 방법을 한 자리에 다룹니다."
+  en: "How Kubernetes lets resources with the same name coexist without collision through Namespaces. Covers the naming rule (short name within a namespace, FQDN across namespaces), the three default namespaces, creation and context-switching commands, and ResourceQuota for per-namespace limits."
+category: kubernetes
+draft: false
+---
+
+같은 학교에 마크라는 이름의 남학생이 두 명 있다고 해봅시다. 둘을 구별하려고 사람들은 성을 붙여 마크 스미스, 마크 윌리엄스로 부릅니다. 두 사람은 서로 다른 집안 출신이며, 각 집 안에서는 식구들끼리 그냥 마크라고만 부릅니다. 같은 식탁에 앉은 가족이 마크라고 하면 듣는 마크는 한 명뿐이기 때문입니다. 그런데 스미스 집의 아버지가 윌리엄스 집의 마크를 가리키려는 순간에는 마크 스미스나 마크 윌리엄스 같은 풀네임이 다시 등장합니다.
+
+이 한 묶음의 비유가 쿠버네티스의 `Namespace`를 거의 그대로 설명합니다. K8s에서 <E>집</E>에 해당하는 것이 `Namespace`이고, <E>풀네임</E>에 해당하는 것이 잠시 뒤 보게 될 FQDN입니다.
+
+| 비유 | K8s |
+|---|---|
+| 한 집 (스미스 집, 윌리엄스 집) | 한 `Namespace` (`dev`, `prod`) |
+| 같은 집 안의 식구들 | 같은 `Namespace` 안의 리소스 |
+| 식구끼리는 이름만으로 부른다 | 같은 `Namespace` 안에서는 호스트명(서비스 이름)만으로 부른다 |
+| 다른 집의 마크를 부를 땐 풀네임 | 다른 `Namespace`의 서비스를 부를 땐 FQDN |
+| 집마다 자체 규칙·한도가 있다 | `Namespace`마다 RBAC·`ResourceQuota` 같은 자체 정책을 가질 수 있다 |
+
+<RelatedPost slug="kubernetes-primer" type="prerequisite" />
+
+## Namespace 정의
+
+`Namespace`는 한 클러스터 안에서 **리소스 이름을 위한 격리 단위**입니다. K8s는 리소스의 유일성을 클러스터 전체가 아니라 `(namespace, name)` 쌍 단위로 검사합니다. 그래서 `dev`라는 `Namespace`에 `db-service`가 있고, `prod`라는 `Namespace`에도 같은 이름의 `db-service`가 있어도 둘은 서로 다른 객체로 공존합니다.
+
+<NamespaceIsolation />
+
+`Namespace`가 격리하는 것은 이름·정책·한도이지 네트워크 연결 자체는 아닙니다. 한 `Namespace`의 파드가 다른 `Namespace`의 파드 IP로 직접 패킷을 보내는 것은 기본적으로 막히지 않습니다. 진짜 네트워크 차단은 별도의 `NetworkPolicy` 객체가 담당하며, 이 글의 범위를 벗어납니다.
+
+### default, kube-system, kube-public
+
+쿠버네티스는 클러스터를 처음 띄울 때 세 개의 `Namespace`를 자동으로 만듭니다. 지금까지 `kubectl get pods`로 본 모든 파드는 사실 그중 하나에서 돌고 있었습니다.
+
+| `Namespace` | 용도 | 사용자가 만지는 빈도 |
+|---|---|---|
+| `default` | 다른 `Namespace`를 지정하지 않을 때 들어가는 자리. 학습·실험에서 쓰는 곳. | 자주 |
+| `kube-system` | K8s 자체가 동작에 필요한 컴포넌트가 들어가는 곳. `coredns`, `kube-proxy`, 컨트롤러 매니저의 일부 보조 워크로드 등. | 거의 안 만짐 |
+| `kube-public` | 클러스터 안의 누구나 인증 없이 읽을 수 있어야 하는 리소스가 들어가는 곳. 클러스터 부트스트랩 정보 같은 것이 자리한다. | 거의 안 만짐 |
+
+`kube-system`이 따로 있는 이유는 분리입니다. 사용자가 `default`에서 작업하다 실수로 K8s 자체의 파드를 지우거나 수정하지 못하도록, 클러스터 운영에 필요한 객체들을 사용자 작업과 다른 자리에 둡니다. `kubectl get pods`가 기본적으로 `kube-system`의 파드를 보여주지 않는 것도 같은 이유입니다.
+
+학습용 단일 클러스터에서는 `Namespace`를 굳이 의식하지 않아도 됩니다. `Namespace`가 의미를 가지는 자리는 한 클러스터를 여러 환경(예: `dev`와 `prod`)이 공유하거나, 여러 팀이 같은 클러스터를 쓰면서 서로의 리소스를 건드리지 말아야 할 때입니다.
+
+## 같은 Namespace 안 / 다른 Namespace 사이
+
+같은 집 안의 식구가 식탁에서 마크라고 부르듯, 같은 `Namespace` 안의 리소스끼리는 짧은 이름만으로 서로를 부릅니다. 다른 `Namespace`의 리소스를 부를 때는 풀네임이 필요합니다. 풀네임이 곧 K8s의 FQDN입니다.
+
+<NamespaceDnsBreakdown />
+
+이 4 조각은 K8s가 서비스를 만들 때 자동으로 클러스터의 DNS 서버(`coredns`)에 등록하는 이름의 형식입니다. 사용자가 따로 등록하는 일은 없습니다.
+
+### 호스트명만으로 부르는 자리
+
+같은 `Namespace` 안이라면 짧은 호스트명만으로 충분합니다. `dev`에 있는 `web-pod`가 같은 `dev`의 `db-service`를 호출하는 코드는 다음 모양으로 짧습니다.
+
+```python
+# dev/web-pod 안에서 실행
+mysql.connect("db-service")
+```
+
+`coredns`는 호출자가 속한 `Namespace`를 알기 때문에, `db-service`라는 짧은 이름이 들어오면 자동으로 `db-service.dev.svc.cluster.local`로 풀어서 답을 돌려줍니다.
+
+### 다른 Namespace를 부를 때의 FQDN
+
+같은 `web-pod`가 `prod`의 `db-service`를 부르려면 풀네임이 필요합니다. K8s가 모든 서비스에 자동으로 만들어 주는 풀네임의 형식은 다음과 같이 고정되어 있습니다.
+
+```text
+<service-name>.<namespace>.svc.cluster.local
+```
+
+이 4 조각 중 사용자가 채우는 것은 앞의 두 칸뿐입니다. `svc`는 서비스를 가리키는 고정 토큰이고, `cluster.local`은 클러스터의 기본 DNS 루트입니다. 그래서 `dev`의 `db-service`는 `db-service.dev.svc.cluster.local`이 되고, `prod`의 `db-service`는 `db-service.prod.svc.cluster.local`이 됩니다.
+
+```python
+# dev/web-pod 안에서 실행 (목적지는 prod)
+mysql.connect("db-service.prod.svc.cluster.local")
+```
+
+호출자의 `Namespace`와 목적지의 `Namespace`가 다른 순간부터 짧은 이름은 충분하지 않습니다. 같은 학교에 마크가 둘인 상황에서 우리 집 마크와 옆집 마크를 구별해야 하는 그 자리에 정확히 대응합니다.
+
+## Namespace 만들기와 전환
+
+새 `Namespace`는 객체 하나를 만드는 일이라 매니페스트 파일이나 한 줄 명령으로 끝납니다.
+
+### Namespace 만들기
+
+```yaml title="namespace-dev.yaml"
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+```
+
+```bash
+kubectl apply -f namespace-dev.yaml
+# 또는 한 줄로
+kubectl create namespace dev
+```
+
+이미 만든 `Namespace` 안에 다른 리소스를 만들 때는 두 가지 방법이 있습니다. 첫째, 명령에 `--namespace` 플래그를 붙입니다.
+
+```bash
+kubectl apply -f pod.yaml --namespace=dev
+kubectl get pods --namespace=dev
+```
+
+둘째, 매니페스트 파일의 `metadata.namespace`에 직접 적습니다. 파일과 환경이 강하게 묶이는 자리에서 권장되는 방식입니다.
+
+```yaml
+metadata:
+  name: myapp-pod
+  namespace: dev
+```
+
+### 작업 Namespace 영구 전환
+
+매번 `--namespace=dev`를 붙이는 것이 번거로우면 현재 컨텍스트의 기본 `Namespace`를 `dev`로 바꿔 둘 수 있습니다.
+
+```bash
+kubectl config set-context --current --namespace=dev
+```
+
+`--current`는 <E>지금 사용 중인 컨텍스트</E>를 가리키는 약식 표기입니다. 이 명령 이후로 같은 터미널에서 `kubectl get pods`라고만 입력해도 `dev`의 파드만 보입니다. 다른 `Namespace`로 옮기고 싶으면 같은 명령에서 `--namespace`만 바꾸면 됩니다.
+
+`kubectl config use-context`와 헷갈리기 쉬운데, `use-context`는 클러스터·계정·기본 namespace 묶음을 통째로 바꾸는 명령이고 `set-context --current --namespace`는 그중 namespace 한 칸만 갈아 끼우는 명령입니다.
+
+### 모든 Namespace 한꺼번에 보기
+
+`Namespace`를 신경 쓰지 않고 클러스터 전체의 파드를 한꺼번에 보고 싶으면 `--all-namespaces`(`-A`)를 씁니다.
+
+```bash
+kubectl get pods --all-namespaces
+# 또는
+kubectl get pods -A
+```
+
+`kube-system`의 시스템 파드까지 포함된 한 화면이 나오므로, 클러스터의 전반 상태를 빠르게 훑을 때 유용합니다.
+
+<Callout type="warning" title="핵심 포인트: 이름은 Namespace 안에서만 유일하다">
+  K8s는 리소스 이름의 유일성을 클러스터 전체가 아니라 `(namespace, name)` 쌍 단위로 검사합니다. `dev`의 `db-service`와 `prod`의 `db-service`는 같은 이름이지만 서로 다른 객체이고, 한쪽을 지워도 다른 쪽은 그대로 남습니다. 자기 `Namespace` 안에서 짧은 이름으로 충분한 이유, 다른 `Namespace`를 부를 때 FQDN이 필요한 이유가 모두 이 한 가지 사실에서 따라 나옵니다.
+</Callout>
+
+## ResourceQuota로 한도 두기
+
+한 `Namespace`가 클러스터의 모든 자원을 가져가지 않도록, 각 `Namespace`에는 한도를 둘 수 있습니다. 이 한도를 표현하는 객체가 `ResourceQuota`입니다.
+
+```yaml title="compute-quota.yaml"
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: dev
+spec:
+  hard:
+    pods: "10"
+    requests.cpu: "4"
+    requests.memory: 5Gi
+    limits.cpu: "10"
+    limits.memory: 10Gi
+```
+
+```bash
+kubectl apply -f compute-quota.yaml
+```
+
+`hard`의 각 항목은 `dev`라는 `Namespace`가 동시에 가질 수 있는 상한선입니다. 이 한도를 넘기는 파드를 만들려고 하면 `kubectl apply` 단계에서 거절됩니다. 여러 환경이나 여러 팀이 한 클러스터를 공유하는 자리에서 한 쪽이 자원을 모두 차지해 다른 쪽이 굶는 상황을 막아 주는 가장 작은 단위의 안전장치입니다.
+
+자주 쓰는 `Namespace` 명령은 [Kubernetes Cheatsheet](/posts/kubernetes-cheatsheet)에 누적됩니다.
+
+<Callout type="error" title="핵심 통찰: Namespace는 이름의 격리이지 네트워크의 격리가 아니다">
+  `Namespace`가 분리하는 것은 이름·정책·한도입니다. 두 `Namespace`의 파드가 서로 IP로 직접 통신하는 것은 기본 동작에서 막혀 있지 않습니다. <E>같은 클러스터 안에서 dev와 prod를 같이 운영해도 안전하다</E>고 말하려면 `NetworkPolicy`로 트래픽을 명시적으로 차단해야 합니다. 이 한 줄을 잊으면 `Namespace`만으로 환경 분리를 했다고 믿게 되고, 그 위에서 운영 사고가 자주 만들어집니다.
+</Callout>
+
+## 마무리
+
+`Namespace`는 한 클러스터를 여러 환경·여러 팀이 안전하게 나눠 쓰기 위한 가장 작은 단위의 격리입니다. 이름의 유일성이 `(namespace, name)` 쌍 단위로 좁아지기 때문에 같은 이름의 리소스가 다른 `Namespace`에 공존할 수 있고, 그 결과로 짧은 이름과 FQDN이라는 두 호명 규칙이 등장합니다. `Namespace`마다 정책과 한도를 따로 둘 수 있으며, 한도는 `ResourceQuota`로 선언합니다.
+
+여기까지가 한 클러스터 안에서 객체에 이름을 붙이고 격리하는 이야기입니다. 다음 글에서는 그 객체들 위에서 트래픽을 받아 주는 `Service`로 옮겨 갑니다.
+
+## 참고 자료
+
+- [Namespaces (공식)](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/)
+- [DNS for Services and Pods (공식)](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
+- [Resource Quotas (공식)](https://kubernetes.io/docs/concepts/policy/resource-quotas/)
+- [CKAD Curriculum (CNCF)](https://github.com/cncf/curriculum)
