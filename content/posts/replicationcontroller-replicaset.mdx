@@ -1,0 +1,175 @@
+---
+title:
+  ko: "ReplicationController와 ReplicaSet"
+  en: "ReplicationController and ReplicaSet"
+slug: replicationcontroller-replicaset
+date: 2026-05-10
+tags:
+  - Backend
+  - Infrastructure
+  - Kubernetes
+  - CKAD
+keywords:
+  - ReplicationController
+  - ReplicaSet
+  - 레플리케이션컨트롤러
+  - 레플리카셋
+  - matchLabels
+  - matchExpressions
+summary:
+  ko: "쿠버네티스가 같은 Pod 여러 개를 항상 유지하는 방법인 ReplicationController와 ReplicaSet의 차이를 selector·복제본 수·label 매칭 관점에서 정리합니다. ReplicaSet이 자기 Pod을 어떻게 찾는지, 왜 직접 만들지 않고 Deployment를 쓰는지를 함께 다룹니다."
+  en: "How Kubernetes keeps a fixed number of identical Pods running, framed through the difference between ReplicationController and ReplicaSet. Covers selector semantics, label matching, scaling, and why production workloads delegate this to Deployment instead of touching ReplicaSet directly."
+category: kubernetes
+draft: false
+---
+
+Pod 한 개를 띄워두면 그 컨테이너가 죽는 순간 사용자는 더 이상 서비스에 접근할 수 없습니다. 같은 Pod을 여러 개 동시에 띄워두면 한쪽이 죽어도 다른 쪽이 받아주고, 트래픽이 늘어도 부하를 나눠 받을 수 있습니다. 이 단순한 요구를 쿠버네티스에서 채워주는 객체가 `ReplicationController`(RC)와 `ReplicaSet`(RS)입니다. 이 글은 두 객체가 무엇을 보장하고, 어떻게 다르며, 현대 K8s에서 어떤 자리를 차지하는지를 정리합니다.
+
+## 단일 Pod의 한계
+
+Pod 한 개로 애플리케이션을 운영하면 문제가 두 갈래로 모입니다.
+
+- **가용성 부재**: Pod이 죽는 순간 응답 가능한 인스턴스가 0이 됩니다. 운영자가 수동으로 다시 띄우기 전까지 서비스가 멈춥니다.
+- **부하 한계**: 한 Pod의 CPU·메모리·네트워크가 한계에 닿으면 그 위에서 더 받을 방법이 없습니다.
+
+해결은 같은 역할의 Pod을 여러 개 띄우는 것입니다. 한 Pod이 죽어도 나머지가 트래픽을 받고, 트래픽이 늘면 Pod 수를 키워 부하를 나눕니다. 그런데 <E>여러 개를 띄우고 항상 그 수를 유지한다</E>를 사람이 손으로 챙기긴 어렵습니다. 죽은 Pod을 누가 감지하고, 누가 새로 띄울까요. 이 일을 대신 해주는 객체가 `ReplicationController`와 `ReplicaSet`입니다.
+
+<RelatedPost slug="kubernetes-primer" type="prerequisite" />
+
+## ReplicationController와 ReplicaSet
+
+`ReplicationController`(RC)는 쿠버네티스 초창기에 등장한 컨트롤러로, **선언된 수만큼 같은 Pod이 항상 돌도록 유지**하는 일을 합니다. Pod이 죽으면 즉시 새 Pod을 만들고, 노드가 빠지면 다른 노드에 새 Pod을 띄웁니다. 복제본 수가 1이라도 RC를 쓸 수 있으며, 이 경우는 자동 재시작 보장만 받는 형태입니다.
+
+`ReplicaSet`(RS)은 RC의 후속 객체입니다. 같은 일을 하지만 selector 표현이 더 강력하고, `apiVersion`이 `apps/v1`로 올라갔으며, 현재 K8s가 권장하는 형태입니다. **RC를 새로 만들 이유는 없습니다.** 호환성 차원에서 클러스터에 남아 있을 뿐입니다.
+
+다만 한 발 더 있습니다. 실제로 사람이 손으로 만드는 것은 RS도 아닙니다. 운영에서는 거의 항상 `Deployment`를 만들고, `Deployment`가 RS를 만들고, RS가 Pod을 만듭니다. RS를 직접 다루는 자리는 (1) RS의 동작을 이해해 `Deployment`를 더 잘 다루기 위해서, (2) 롤링 업데이트 같은 `Deployment` 기능이 필요 없는 정적 워크로드에서 정도입니다. 이 글의 목적은 (1)에 가깝습니다.
+
+| 항목 | `ReplicationController` | `ReplicaSet` |
+|---|---|---|
+| `apiVersion` | `v1` | `apps/v1` |
+| `selector` 필드 | 생략 가능 (template 라벨 자동 사용) | 필수 |
+| selector 표현 | equality-based만 | equality + set-based(`matchExpressions`) |
+| 권장 여부 | 비권장 (legacy) | RS도 직접 만들지 않고 `Deployment`로 |
+
+## ReplicaSet YAML 구조
+
+가장 작은 RS 정의입니다.
+
+```yaml title="replicaset.yaml"
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: myapp-replicaset
+  labels:
+    app: myapp
+    tier: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        tier: frontend
+    spec:
+      containers:
+        - name: nginx
+          image: nginx
+```
+
+`spec`의 세 필드가 RS의 핵심입니다.
+
+- `replicas`: 항상 유지할 Pod 개수.
+- `selector`: 어떤 Pod을 자기 관리 대상으로 볼지 결정하는 라벨 매칭 규칙.
+- `template`: 부족할 때 새로 만들 Pod의 골격. Pod 정의의 `apiVersion`/`kind`만 빠진 형태.
+
+`metadata`가 두 번 등장하는 점이 처음에는 헷갈립니다. 바깥쪽 `metadata`는 RS 자신의 이름·라벨이고, `spec.template.metadata`는 RS가 만들 Pod에 붙을 이름·라벨입니다. 같은 이유로 `spec`도 두 번 등장하며, 안쪽 `spec`은 컨테이너 정의가 들어갑니다.
+
+```bash
+kubectl apply -f replicaset.yaml
+kubectl get replicaset
+kubectl get pods -l tier=frontend
+```
+
+## Selector와 라벨 매칭
+
+RS가 <E>관리할 Pod 3개</E>를 어디서 찾을까요. 답은 **selector**입니다. RS는 자기 `spec.selector.matchLabels`와 일치하는 라벨을 단 모든 Pod을 자기 관리 대상으로 봅니다. 매치되는 Pod이 selector가 요구하는 수보다 적으면 `template`로 새 Pod을 만들고, 많으면 초과분을 종료합니다.
+
+이 모델에는 작지만 본질적인 결과가 따릅니다.
+
+- **selector와 template label 일치 필수**: `spec.template.metadata.labels`가 `spec.selector`와 매치되지 않으면 RS는 자기가 만든 Pod을 자기 관리 대상으로 인식하지 못합니다. RS는 Pod을 만들고, 다음 reconcile에 <E>관리되는 Pod이 0개</E>로 보고, 또 만드는 무한 루프에 가까운 동작이 됩니다. `kubectl apply` 단계에서 K8s가 이 케이스를 거절합니다.
+- **기존 Pod 입양**(adoption): RS가 만들어지기 전에 같은 라벨을 단 Pod이 이미 클러스터에 있으면 RS는 그 Pod을 자기 관리 대상으로 받아들입니다. RS의 `replicas`가 3이고 매치되는 Pod이 이미 1개 있다면 RS는 2개만 새로 만듭니다.
+- **Pod을 직접 지우면**: `kubectl delete pod <name>`으로 RS가 관리하는 Pod을 지우면 RS는 다음 reconcile에서 즉시 새 Pod을 만들어 수를 맞춥니다. RS를 통째로 지우려면 `kubectl delete replicaset <name>`을 써야 합니다.
+
+### matchExpressions
+
+RS가 RC보다 표현력이 강한 부분이 `matchExpressions`입니다. equality 매칭만으로 부족할 때 set 단위 조건을 쓸 수 있습니다.
+
+```yaml title="set-based selector"
+spec:
+  selector:
+    matchLabels:
+      tier: frontend
+    matchExpressions:
+      - key: env
+        operator: In
+        values: [staging, production]
+```
+
+`In`, `NotIn`, `Exists`, `DoesNotExist` 네 연산자가 있고, `matchLabels`와 `matchExpressions`는 AND로 결합됩니다. 운영 환경 분리·카나리 배포 같은 자리에서 유용하지만, 실무에서는 보통 `Deployment`가 selector를 자동으로 관리해 주므로 직접 손댈 일은 드뭅니다.
+
+<Callout type="warning" title="핵심 포인트: selector와 template label은 한 글자도 어긋나면 안 된다">
+  RS는 selector로 Pod을 찾고 template으로 Pod을 만듭니다. 이 두 자리에 다른 라벨이 들어가면 RS가 만든 Pod을 자기가 인식하지 못해 관리 카운트가 영원히 0에 머뭅니다. K8s가 apply 단계에서 거절하지만, 이 거절 이유를 모르면 디버깅이 길어집니다. selector 라벨과 template 라벨은 한 글자도 어긋나지 않게 맞춥니다.
+</Callout>
+
+## 복제본 수 조정
+
+RS의 복제본 수를 3에서 6으로 키우는 방법은 두 갈래입니다.
+
+**1. YAML 수정 후 apply**: `replicas: 3`을 `replicas: 6`으로 바꾸고 apply 합니다. 선언적 흐름이라 이 방식을 권장합니다.
+
+```bash
+# replicaset.yaml의 replicas: 3 → 6 으로 수정 후
+kubectl apply -f replicaset.yaml
+```
+
+**2. `kubectl scale`**: 즉석 명령으로 복제본 수를 바꿉니다. YAML 파일은 변경되지 않으므로 다음 apply 때 다시 원래 값으로 돌아오는 점에 유의합니다.
+
+```bash
+# 객체 이름으로 지정
+kubectl scale --replicas=6 replicaset myapp-replicaset
+
+# 또는 YAML 파일을 입력으로 (파일은 수정되지 않음)
+kubectl scale --replicas=6 -f replicaset.yaml
+```
+
+`Deployment`로 RS를 관리하고 있다면 `kubectl scale deployment <name>`을 통해 같은 일을 합니다. 이 경우 RS는 `Deployment`의 `replicas` 변화를 따라 움직입니다.
+
+## 명령 요약
+
+| 명령 | 동작 |
+|---|---|
+| `kubectl apply -f replicaset.yaml` | RS 생성·갱신 |
+| `kubectl get replicaset` | RS 목록 조회 (`kubectl get rs`로 단축) |
+| `kubectl describe replicaset <name>` | 상세와 이벤트 |
+| `kubectl delete replicaset <name>` | RS와 관리 Pod 삭제 |
+| `kubectl scale --replicas=N replicaset <name>` | 복제본 수 즉시 조정 |
+| `kubectl replace -f replicaset.yaml` | 기존 RS를 파일 내용으로 통째 대체 |
+
+자주 쓰는 명령은 [Kubernetes Cheatsheet](/posts/kubernetes-cheatsheet)에 누적됩니다.
+
+<Callout type="error" title="핵심 통찰: 컨트롤러는 라벨로 Pod을 찾는다">
+  RS는 자기가 만든 Pod을 ID로 추적하지 않습니다. selector에 매치되는 모든 Pod이 자기 관리 대상이고, 그 수가 `replicas`와 다르면 차이를 좁힙니다. 이 모델 덕분에 Pod이 죽었을 때 RS는 <E>그 Pod이 죽었다</E>를 따로 알 필요가 없습니다. 매치되는 수가 줄어든 것만 보고 새로 만들면 됩니다. 이 단순함이 곧 K8s 컨트롤러 패턴 전체의 문법입니다. `Deployment`도, `StatefulSet`도, `DaemonSet`도 같은 방식으로 동작합니다.
+</Callout>
+
+## 마무리
+
+`ReplicationController`는 <E>같은 Pod을 N개 유지한다</E>를 처음 코드로 표현한 객체입니다. `ReplicaSet`은 그것을 set-based selector로 일반화했고, 현대 K8s는 RS도 직접 만들지 않고 `Deployment`로 관리하는 방향으로 한 단계 더 올라갔습니다. 다음 글에서는 `Deployment`가 RS 위에 어떤 동작을 더해 롤링 업데이트와 롤백을 만들어 내는지 다룹니다.
+
+## 참고 자료
+
+- [ReplicationController (공식)](https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller/)
+- [ReplicaSet (공식)](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/)
+- [Labels and Selectors (공식)](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/)
+- [CKAD Curriculum (CNCF)](https://github.com/cncf/curriculum)
