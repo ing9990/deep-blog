@@ -54,7 +54,7 @@ Control Plane은 보통 클러스터에 여러 인스턴스로 띄워 가용성�
 
 ## 선언적 모델
 
-쿠버네티스의 사용 방식은 **선언적**(Declarative)입니다. 사용자는 <E>이 컨테이너 3개가 항상 떠 있어야 한다</E>처럼 **원하는 상태**(desired state)를 선언하고, 클러스터의 컴포넌트들은 **현재 상태**(current state)와의 차이를 끊임없이 좁히는 reconcile loop를 돌립니다. 예를 들어 `Deployment`로 관리되는 Pod이 죽으면 `Deployment Controller`가 즉시 새 Pod 객체를 API Server에 만들고, 노드가 빠지면 그 노드의 Pod이 정리된 뒤 같은 Controller가 다른 노드에 새 Pod을 띄웁니다. 다음 컴포넌트들이 협업하는 이유도 이 한 패턴에서 나옵니다.
+쿠버네티스의 사용 방식은 **선언적**(Declarative)입니다. 사용자는 <E>이 컨테이너 3개가 항상 떠 있어야 한다</E>처럼 **원하는 상태**(desired state)를 선언하고, 클러스터의 컴포넌트들은 **현재 상태**(current state)와의 차이를 끊임없이 좁히는 reconcile loop를 돌립니다. 예를 들어 `Deployment`로 관리되는 파드가 죽으면 `Deployment Controller`가 즉시 새 Pod 객체를 API Server에 만들고, 노드가 빠지면 그 노드의 파드가 정리된 뒤 같은 Controller가 다른 노드에 새 파드를 띄웁니다. 다음 컴포넌트들이 협업하는 이유도 이 한 패턴에서 나옵니다.
 
 <Callout type="warning" title="이 구조를 이해하는 핵심">
   쿠버네티스의 모든 컴포넌트는 <E>원하는 상태와 실제 상태의 차이를 좁힌다</E>는 같은 문법으로 동작합니다. 사용자의 명령은 명령이 아니라 <E>이 상태가 되었으면 좋겠다</E>는 선언이고, 컴포넌트들이 그 선언을 향해 클러스터를 수렴시킵니다. 이 한 가지를 잡으면 컴포넌트의 역할이 자연스럽게 따라옵니다.
@@ -74,7 +74,7 @@ Control Plane 노드에는 네 가지 핵심 컴포넌트가 함께 돕니다.
 
 ### Scheduler
 
-`kube-scheduler`는 새로 생성된 Pod 중 노드가 정해지지 않은 것을 찾아 **어느 노드에서 돌릴지 결정**하는 컴포넌트입니다. CPU·메모리 여유, taint·toleration, affinity 규칙, topology 같은 조건을 종합해 적합한 노드를 고르고 결과를 API Server에 다시 기록합니다. Pod을 직접 실행하지는 않습니다.
+`kube-scheduler`는 새로 생성된 Pod 중 노드가 정해지지 않은 것을 찾아 **어느 노드에서 돌릴지 결정**하는 컴포넌트입니다. CPU·메모리 여유, taint·toleration, affinity 규칙, topology 같은 조건을 종합해 적합한 노드를 고르고 결과를 API Server에 다시 기록합니다. 파드를 직접 실행하지는 않습니다.
 
 ### Controller Manager
 
@@ -124,8 +124,8 @@ Container Runtime은 컨테이너 이미지를 실제로 실행하는 도구입�
 
 1. `kubectl`이 사용자 명령을 REST 호출로 바꿔 API Server에 보냅니다.
 2. API Server가 Pod 객체를 etcd에 저장합니다. 이 시점의 Pod에는 `nodeName`이 비어 있습니다 (어디서 돌릴지 아직 안 정해진 상태).
-3. Scheduler가 `nodeName`이 비어 있는 Pod을 감지하고, 적합한 노드를 골라 API Server에 `PATCH` 합니다.
-4. 해당 노드의 `kubelet`이 자기 앞으로 배정된 Pod을 발견하고 Container Runtime에 실행을 요청합니다.
+3. Scheduler가 `nodeName`이 비어 있는 파드를 감지하고, 적합한 노드를 골라 API Server에 `PATCH` 합니다.
+4. 해당 노드의 `kubelet`이 자기 앞으로 배정된 파드를 발견하고 Container Runtime에 실행을 요청합니다.
 5. `kubelet`이 실행 결과를 API Server에 보고하고, 그 상태가 etcd에 기록됩니다.
 
 직접 통신은 모두 API Server를 거칩니다. 컴포넌트끼리는 서로를 모르고, 각자 API Server를 보며 자기 일을 합니다. 이 분리가 곧 한 컴포넌트가 죽어도 나머지가 영향을 받지 않는 구조의 출발점입니다.

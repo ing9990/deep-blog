@@ -1,0 +1,142 @@
+---
+title:
+  ko: "Pod"
+  en: "Pod"
+slug: pod-primer
+date: 2026-05-10
+tags:
+  - Backend
+  - Infrastructure
+  - Kubernetes
+  - CKAD
+keywords:
+  - Pod
+  - 파드
+  - 사이드카 패턴
+  - Sidecar
+summary:
+  ko: "쿠버네티스가 컨테이너를 직접 띄우지 않고 파드라는 한 겹의 캡슐로 감싸는 이유를 이해할 수 있습니다. 같은 IP·IPC·볼륨을 공유하는 컨테이너 묶음을 한 단위로 다루는 모델, 단일 컨테이너 Pod와 사이드카 패턴, 스케일이 컨테이너 추가가 아니라 Pod 복제로 이루어지는 까닭을 한 자리에 정리합니다."
+  en: "Why Kubernetes wraps containers in an extra layer called a Pod. Covers the shared network/IPC/volume model, single-container vs sidecar Pods, and why scaling means cloning a Pod rather than adding containers to one."
+category: kubernetes
+draft: false
+---
+
+쿠버네티스는 컨테이너를 워커 노드에 직접 배포하지 않습니다. 그 대신 컨테이너를 `Pod`이라는 한 겹의 캡슐로 감싸 한 단위로 다룹니다. 이 글은 그 한 겹이 왜 필요한지, Pod 안에서 컨테이너들이 어떻게 묶이는지, 그리고 같은 어플리케이션을 더 띄울 때 왜 컨테이너가 아니라 파드를 복제하는지를 한 자리에 정리합니다.
+
+<RelatedPost slug="kubernetes-primer" type="prerequisite" />
+
+## 컨테이너를 한 겹 감싸는 이유
+
+노드와 클러스터, Control Plane과 Worker Node를 정리하고 나면 자연스러운 다음 질문이 따라옵니다. 워커 노드 위에서 도는 워크로드의 단위는 무엇일까요. 직관적으로는 컨테이너 그 자체일 것 같지만, 쿠버네티스는 한 겹을 더 둡니다.
+
+스케줄링과 재시작, 라이프사이클 관리의 최소 단위가 컨테이너 한 개가 아닙니다. 같은 IP를 공유하고 같은 노드에 함께 배치되며 함께 살고 함께 죽어야 하는 컨테이너 묶음이 자연스럽게 생기고, 이 묶음을 한 단위로 다루기 위해 `Pod`이라는 추상이 컨테이너 위에 자리 잡습니다. 컨테이너가 단 하나여도 그 컨테이너는 1개짜리 묶음 형태로 Pod 안에 들어갑니다.
+
+## Pod의 정의와 단위
+
+`Pod`은 쿠버네티스에서 직접 만들고 다루는 가장 작은 오브젝트입니다. 한 Pod은 어플리케이션의 한 인스턴스에 해당합니다. 같은 어플리케이션을 한 클러스터에서 두 인스턴스로 띄우려면 같은 모양의 파드를 두 개 만듭니다.
+
+Pod 안에는 컨테이너 1개가 들어갈 수도 있고, 라이프사이클이 강하게 묶이는 컨테이너 N개가 같이 들어갈 수도 있습니다. 어느 쪽이든 Pod은 외부 입장에서 IP 1개, 이름 1개를 가진 한 단위로 보입니다.
+
+<PodCompositionViz />
+
+## 단일 컨테이너 Pod
+
+Pod의 가장 흔한 모양은 컨테이너 1개를 담은 Pod입니다. 어플리케이션이 자기 안에 모든 책임을 가진 일반적인 경우에 해당합니다.
+
+이 한 가지 모양에서 Pod의 두 가지 약속이 보입니다.
+
+- 컨테이너 자체는 쿠버네티스가 직접 다루는 오브젝트가 아니라 Pod의 `spec` 안에 선언된 항목입니다.
+- 같은 컨테이너를 더 띄우려는 의도는 <E>컨테이너를 1개 더</E>가 아니라 <E>파드를 1개 더</E>로 표현됩니다. 쿠버네티스는 이미지 하나만 따로 더 띄우는 동작을 모릅니다.
+
+<Callout type="warning" title="이 구조를 이해하는 핵심">
+  쿠버네티스의 모든 워크로드 관리는 <E>Pod 단위로 만들고, Pod 단위로 복제하고, Pod 단위로 재시작한다</E>는 한 가지 약속에서 출발합니다. 컨테이너는 Pod 안의 항목이고, 파드가 곧 스케줄링과 라이프사이클의 단위입니다.
+</Callout>
+
+가장 작은 Pod 매니페스트는 이렇게 생겼습니다.
+
+```yaml title="myapp-pod.yaml"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: front-end
+spec:
+  containers:
+    - name: nginx-container
+      image: nginx
+```
+
+이 매니페스트의 네 필드 `apiVersion`·`kind`·`metadata`·`spec`은 Pod뿐 아니라 모든 K8s 오브젝트가 공유하는 골격입니다. 그 일반론은 별도 글로 미루고, 여기서는 `kind: Pod`과 `spec.containers`의 한 묶음으로 Pod 한 인스턴스를 선언한다는 점만 기억해 두면 충분합니다.
+
+## 멀티 컨테이너 Pod과 사이드카 패턴
+
+Pod 안에 컨테이너 N개를 두는 모양은 두 컨테이너의 라이프사이클을 강하게 묶어야 할 때 등장합니다. 표준 명칭은 사이드카(Sidecar) 패턴이고, 메인 컨테이너 옆에 보조 컨테이너를 같이 띄워 한 단위로 다룹니다.
+
+실제로 자주 보이는 사이드카 컨테이너는 다음 세 가지입니다.
+
+| 사이드카 | 역할 |
+|---|---|
+| `fluent-bit` 같은 로그 수집 에이전트 | 메인 컨테이너의 로그를 수집해 외부 시스템으로 전송 |
+| `envoy` 같은 서비스 메시 프록시 | 메인 컨테이너의 들고 나는 트래픽을 가로채 정책을 적용 |
+| 설정·인증서 동기화 컨테이너 | 외부 저장소의 변경을 메인 컨테이너의 볼륨에 반영 |
+
+같은 Pod에 들어 있다는 것은 두 컨테이너가 항상 같은 노드에 함께 배치되고, 함께 시작되며, 함께 종료된다는 뜻입니다. 보조 컨테이너만 따로 노드를 옮기거나 따로 스케일하는 일은 일어나지 않습니다.
+
+```yaml title="myapp-with-sidecar.yaml"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: front-end
+spec:
+  containers:
+    - name: app
+      image: myapp:1.0
+      ports:
+        - containerPort: 8080
+    - name: log-agent
+      image: fluent-bit:latest
+```
+
+## Pod의 공유 영역
+
+같은 Pod 안의 컨테이너들은 다음 세 가지를 공유합니다.
+
+- **network namespace**: Pod 단위로 IP 1개가 할당되고 그 IP를 모든 컨테이너가 같이 씁니다. 같은 포트를 두 컨테이너가 동시에 사용하면 충돌합니다. 컨테이너끼리는 `localhost`로 직접 호출할 수 있습니다.
+- **IPC namespace**: 같은 Pod 안에서는 SystemV 세마포어, POSIX 메시지 큐 같은 IPC 자원이 공유됩니다.
+- **volume**(선택): Pod의 `spec.volumes`에 선언된 볼륨이 여러 컨테이너의 마운트 경로에 동시에 잡힙니다. 명시적으로 선언했을 때만 공유되며 자동은 아닙니다.
+
+<Callout type="warning" title="흔한 오해">
+  같은 파드라면 디스크가 자동으로 공유될 것 같지만, 디스크 공유는 `spec.volumes` 선언이 있을 때만 일어납니다. 자동으로 공유되는 자원은 IP와 IPC입니다.
+</Callout>
+
+<Callout type="error" title="핵심 통찰: Pod은 IP의 단위입니다">
+  네트워크 시점에서 Pod은 IP 1개, 이름 1개를 가진 단일 호스트처럼 보입니다. 그 안에 컨테이너가 1개든 N개든, 외부에서 트래픽이 닿는 점은 Pod 단위로 정의됩니다. <E>Service가 파드를 가리킨다</E>는 표현이 곧 이 모델의 다른 이름입니다.
+</Callout>
+
+## 스케일과 복제의 단위
+
+같은 어플리케이션을 더 띄우려면 기존 Pod 안에 컨테이너를 추가하지 않습니다. 같은 모양의 파드를 한 개 더 만듭니다. 같은 Pod 안 컨테이너들은 항상 같은 노드에 함께 배치되고 라이프사이클을 공유하므로, 컨테이너만 늘리면 같은 어플리케이션 두 인스턴스가 한 노드에 묶이게 됩니다. 이는 가용성과 부하 분산의 의도와 맞지 않습니다.
+
+`kubectl scale --replicas=3` 같은 명령이 실제로는 Pod 1개를 3개로 늘리는 동작을 의미하는 이유도 같은 뿌리에 있습니다. 어플리케이션의 인스턴스를 표현하는 단위가 파드고, 그 단위를 복제하는 것이 인스턴스를 늘리는 방식입니다.
+
+## Pod의 한계와 다음 단계
+
+Pod은 자기 자신을 재시작하지 않습니다. 파드가 어떤 이유로 종료되면 그 Pod은 그대로 사라집니다. 노드가 빠지면 그 노드에 있던 Pod들도 같이 사라집니다. 자가 치유는 Pod 자신의 책임이 아니라 한 단계 위 컨트롤러의 책임입니다.
+
+`ReplicaSet`은 <E>같은 모양의 파드가 항상 N개 떠 있어야 한다</E>는 desired state를 받아 들고, 그 수에 미치지 못하면 새 파드를 만들고 넘치면 정리합니다. `Deployment Controller`는 그 위에서 ReplicaSet을 관리해 롤링 업데이트와 롤백을 책임집니다. Pod의 한계는 다음 단계로 자연스럽게 이어지고, 이 글의 후속이 됩니다.
+
+## 마무리
+
+쿠버네티스가 컨테이너 위에 한 겹의 캡슐을 더 두는 이유는 단순합니다. 같은 IP를 공유하고 같은 노드에서 같은 라이프사이클을 사는 컨테이너 묶음이 한 단위로 다뤄질 필요가 있고, 그 단위가 Pod입니다. 파드가 정해지면 매니페스트의 네 필드도, `kubectl scale`의 동작도, ReplicaSet의 책임도 같은 골격에서 따라옵니다.
+
+다음 글은 파드가 자기 자신을 재시작하지 않는다는 한계가 어떻게 컨트롤러로 풀리는지를 다룰 예정입니다.
+
+## 참고 자료
+
+- [Kubernetes Documentation: Pods](https://kubernetes.io/docs/concepts/workloads/pods/)
+- [Kubernetes Documentation: Pod Lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/)
+- [Brendan Burns et al., Design Patterns for Container-based Distributed Systems (HotCloud 2016)](https://www.usenix.org/system/files/conference/hotcloud16/hotcloud16_burns.pdf)
+- [Kubernetes Blog: Multi-container Pod Design Patterns](https://kubernetes.io/blog/2016/06/container-design-patterns/)
