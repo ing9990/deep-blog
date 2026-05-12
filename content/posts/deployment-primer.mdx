@@ -165,7 +165,7 @@ kubectl get all,configmap,secret,ingress
 자주 쓰는 `Deployment` 명령은 [Kubernetes Cheatsheet](/posts/kubernetes-cheatsheet)에 누적됩니다.
 
 <Callout type="error" title="핵심 통찰: 이름이 곧 계층의 단서다">
-  `Deployment`, `ReplicaSet`, `Pod`은 별개 객체이지만 K8s는 부모-자식 관계를 별도 그래프로 저장하지 않습니다. 대신 이름의 prefix와 라벨이 그 관계를 표현합니다. `myapp-deployment-7c9fbb-2k4sd`라는 한 이름 안에는 <E>어느 Deployment에서 왔는가</E>(`myapp-deployment`)와 <E>어느 ReplicaSet에서 왔는가</E>(`7c9fbb`)가 모두 들어 있고, 라벨은 `selector`로 누가 누구를 관리하는지를 결정합니다. 이름과 라벨이 곧 토폴로지라는 점이 K8s 컨트롤러 패턴의 일관된 문법입니다.
+  `Deployment`, `ReplicaSet`, `Pod`는 별개 객체이지만 K8s는 부모-자식 관계를 별도 그래프로 저장하지 않습니다. 대신 이름의 prefix와 라벨이 그 관계를 표현합니다. `myapp-deployment-7c9fbb-2k4sd`라는 한 이름 안에는 <E>어느 Deployment에서 왔는가</E>(`myapp-deployment`)와 <E>어느 ReplicaSet에서 왔는가</E>(`7c9fbb`)가 모두 들어 있고, 라벨은 `selector`로 누가 누구를 관리하는지를 결정합니다. 이름과 라벨이 곧 토폴로지라는 점이 K8s 컨트롤러 패턴의 일관된 문법입니다.
 </Callout>
 
 ## 마무리
