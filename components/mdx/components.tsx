@@ -57,6 +57,9 @@ import { DeploymentLayerStack } from '@/components/visualizations/DeploymentLaye
 import { NamespaceDnsBreakdown } from '@/components/visualizations/NamespaceDnsBreakdown'
 import { NamespaceIsolation } from '@/components/visualizations/NamespaceIsolation'
 import { PodCompositionViz } from '@/components/visualizations/PodCompositionViz'
+import { ServiceNodePortFlow } from '@/components/visualizations/ServiceNodePortFlow'
+import { ServiceSelectorEndpoints } from '@/components/visualizations/ServiceSelectorEndpoints'
+import { ServiceMultiNodeNodePort } from '@/components/visualizations/ServiceMultiNodeNodePort'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
 import { RagPipeline } from '@/components/visualizations/RagPipeline'
@@ -182,6 +185,9 @@ export const mdxComponents: MDXComponents = {
   PACELCClassification,
   PERBetaSlider,
   PodCompositionViz,
+  ServiceNodePortFlow,
+  ServiceSelectorEndpoints,
+  ServiceMultiNodeNodePort,
   QuickSort,
   QuickSortPivot,
   RagPipeline,
