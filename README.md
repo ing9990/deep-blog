@@ -11,8 +11,6 @@
 
 </div>
 
----
-
 <h2 align="center">🗂️ Categories</h2>
 
 <p align="center">
@@ -38,8 +36,6 @@
 - 📚 &nbsp;[**개략적인 규모 추정**](https://deep.ing9990.com/posts/back-of-the-envelope-estimation)
 
 <br/>
-
----
 
 <div align="center">
 
