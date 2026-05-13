@@ -55,6 +55,13 @@
      (landing sections, marketing pages). Pairs Pretendard Variable for
      Korean with the blog's standard fallbacks. */
   --font-reading: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Blog body display font: Tmoney 둥근바람 (TmoneyRoundWind) for a softer,
+     rounded reading texture inside .prose-kr. Pretendard fallback for any
+     glyph the Tmoney face doesn't cover. */
+  --font-tmoney: var(--font-tmoney-round), var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Heading display font for blog posts: Maplestory Light (Nexon). Paperlogy
+     fallback keeps the headline shape on any glyph Maplestory misses. */
+  --font-maple: var(--font-maplestory), var(--font-paperlogy), ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* ------------------------------------------------------------------
      Typography primitives — T-shirt scale. All sizes multiply through
@@ -254,6 +261,10 @@
      ------------------------------------------------------------------ */
   --text-body:            var(--text-base);
   --text-body-sm:         var(--text-md);
+  /* Blog post body uses a slightly smaller cap than the generic body size
+     so long-form Korean reading stays compact without shrinking buttons,
+     inputs, or other --text-body consumers. */
+  --text-prose:           calc(14px * var(--text-scale, 1));
   --text-meta:            var(--text-sm);
   --text-caption:         var(--text-xs);
   --text-hint:            var(--text-2xs);
@@ -491,17 +502,30 @@ body {
 }
 
 .prose-kr {
-  /* Blog post body uses Pretendard Variable — better hinting for long-form
-     Korean reading. Global default (Paperlogy) stays on everything else. */
-  font-family: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, sans-serif;
-  font-size: var(--text-body);
+  /* Blog post body uses Tmoney 둥근바람 (TmoneyRoundWind) for a softer,
+     rounded reading texture. Headings (h1~h4) override to Paperlogy via
+     the rule below. Global default (Paperlogy) stays on everything outside
+     .prose-kr. Pretendard remains the long-form fallback for glyphs the
+     Tmoney face doesn't cover. */
+  font-family: var(--font-tmoney);
+  font-size: var(--text-prose);
   line-height: var(--leading-relaxed);
   color: var(--foreground);
   /* Break long English tokens / URLs / inline code so they never force the
      article wider than the viewport on mobile. `anywhere` also lets the
      layout engine use a smaller min-content size for grid/flex tracks. */
   overflow-wrap: anywhere;
+}
+
+/* Headings inside the post body use Maplestory Light (Nexon) for a rounded,
+   casual display tone that contrasts with the Tmoney body copy. Paperlogy
+   stays as the fallback so the headline shape never collapses to a generic
+   sans on missing glyphs. */
+.prose-kr h1,
+.prose-kr h2,
+.prose-kr h3,
+.prose-kr h4 {
+  font-family: var(--font-maple);
 }
 
 .prose-kr h2 {
@@ -888,6 +912,7 @@ body {
     /* Responsive semantic re-declarations. Primitives already pick up
        --text-scale; these aliases swap to the larger size at md+. */
     --text-body:       var(--text-lg);
+    --text-prose:      calc(16px * var(--text-scale, 1));
     --text-h1:         calc(32px * var(--text-scale, 1));
     --text-h2:         var(--text-3xl);
     --text-h3:         var(--text-xl);

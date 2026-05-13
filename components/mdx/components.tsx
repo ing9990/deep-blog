@@ -86,6 +86,13 @@ import { HNSWLevelWalk } from '@/components/visualizations/HNSWLevelWalk'
 import { IVFNprobe } from '@/components/visualizations/IVFNprobe'
 import { SQPipeline } from '@/components/visualizations/SQPipeline'
 import { SQOptionMatrix } from '@/components/visualizations/SQOptionMatrix'
+import { IsolationLevelCards } from '@/components/visualizations/IsolationLevelCards'
+import { DirtyReadTimeline } from '@/components/visualizations/DirtyReadTimeline'
+import { NonRepeatableReadTimeline } from '@/components/visualizations/NonRepeatableReadTimeline'
+import { PhantomReadTimeline } from '@/components/visualizations/PhantomReadTimeline'
+import { IndexGapLockVisualizer } from '@/components/visualizations/IndexGapLockVisualizer'
+import { NextKeyLockRange } from '@/components/visualizations/NextKeyLockRange'
+import { DeadlockLifecycle } from '@/components/visualizations/DeadlockLifecycle'
 
 type AnchorProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   'data-keyword-link'?: string
@@ -218,5 +225,12 @@ export const mdxComponents: MDXComponents = {
   IVFNprobe,
   SQPipeline,
   SQOptionMatrix,
+  IsolationLevelCards,
+  DirtyReadTimeline,
+  NonRepeatableReadTimeline,
+  PhantomReadTimeline,
+  IndexGapLockVisualizer,
+  NextKeyLockRange,
+  DeadlockLifecycle,
   Tabs,
 }
