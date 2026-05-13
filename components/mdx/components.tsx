@@ -60,6 +60,8 @@ import { PodCompositionViz } from '@/components/visualizations/PodCompositionViz
 import { ServiceNodePortFlow } from '@/components/visualizations/ServiceNodePortFlow'
 import { ServiceSelectorEndpoints } from '@/components/visualizations/ServiceSelectorEndpoints'
 import { ServiceMultiNodeNodePort } from '@/components/visualizations/ServiceMultiNodeNodePort'
+import { ClusterIPVirtualHop } from '@/components/visualizations/ClusterIPVirtualHop'
+import { ClusterIPDnsResolution } from '@/components/visualizations/ClusterIPDnsResolution'
 import { QuickSort } from '@/components/visualizations/QuickSort'
 import { QuickSortPivot } from '@/components/visualizations/QuickSortPivot'
 import { RagPipeline } from '@/components/visualizations/RagPipeline'
@@ -188,6 +190,8 @@ export const mdxComponents: MDXComponents = {
   ServiceNodePortFlow,
   ServiceSelectorEndpoints,
   ServiceMultiNodeNodePort,
+  ClusterIPVirtualHop,
+  ClusterIPDnsResolution,
   QuickSort,
   QuickSortPivot,
   RagPipeline,
