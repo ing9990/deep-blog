@@ -37,7 +37,7 @@ export function KeywordLink({ href, children }: KeywordLinkProps) {
               side="top"
               align="start"
               sideOffset={6}
-              className="w-[320px] p-4"
+              className="w-[320px] p-4 font-[family-name:var(--font-tmoney)]"
             >
               <p className="text-[length:var(--text-body)] font-semibold leading-tight text-foreground">
                 {entry.title[lang]}
