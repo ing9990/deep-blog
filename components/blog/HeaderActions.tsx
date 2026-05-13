@@ -1,19 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect } from 'react'
+import { useEffect } from 'react'
 import { Menu, Search } from 'lucide-react'
 import { GithubMark } from './GithubMark'
 import { useMobileUI } from '@/components/providers/MobileUIProvider'
 import { ThemeToggle } from './ThemeToggle'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import { cn } from '@/lib/utils'
 
 export function HeaderActions() {
-  const { t, lang } = useTranslation()
-  const openSettings = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('deep-settings-open'))
-  }, [])
+  const { t } = useTranslation()
   const { openNav, openSearch } = useMobileUI()
 
   useEffect(() => {
@@ -76,23 +72,6 @@ export function HeaderActions() {
           </a>
           <span aria-hidden="true" className="mx-2 h-5 w-px bg-border" />
           <ThemeToggle />
-          <span aria-hidden="true" className="mx-2 h-5 w-px bg-border" />
-          <button
-            type="button"
-            onClick={openSettings}
-            aria-label={t('header.open.settings')}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                'text-[length:var(--text-menu)] font-bold leading-none',
-                lang === 'en' ? 'font-mono' : 'font-sans',
-              )}
-            >
-              {lang === 'ko' ? '가' : 'A'}
-            </span>
-          </button>
         </nav>
       </div>
     </div>

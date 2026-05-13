@@ -561,6 +561,7 @@ body {
 }
 
 .prose-kr a {
+  font-family: var(--font-tmoney);
   color: var(--keyword);
   font-weight: var(--weight-medium);
   text-decoration: none;
@@ -580,6 +581,7 @@ body {
    marker above the baseline; line-height: 0 keeps it from inflating the
    surrounding line height. Transform-based hover scale does not reflow text. */
 .prose-kr .keyword-link {
+  font-family: var(--font-tmoney);
   color: var(--keyword);
   font-weight: var(--weight-medium);
   text-decoration: none;
