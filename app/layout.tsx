@@ -39,6 +39,24 @@ const jetbrainsMono = localFont({
   weight: '100 800',
 })
 
+const tmoneyRoundWind = localFont({
+  src: [
+    { path: '../public/fonts/tmoney/TmoneyRoundWind-Regular.ttf', weight: '400', style: 'normal' },
+    { path: '../public/fonts/tmoney/TmoneyRoundWind-ExtraBold.ttf', weight: '800', style: 'normal' },
+  ],
+  display: 'swap',
+  variable: '--font-tmoney-round',
+})
+
+const maplestory = localFont({
+  src: [
+    { path: '../public/fonts/maplestory/Maplestory-Light.ttf', weight: '300', style: 'normal' },
+    { path: '../public/fonts/maplestory/Maplestory-Bold.ttf', weight: '700', style: 'normal' },
+  ],
+  display: 'swap',
+  variable: '--font-maplestory',
+})
+
 const SITE_URL = 'https://deep.ing9990.com'
 
 export const metadata: Metadata = {
@@ -79,7 +97,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ko" className={`${paperlogy.variable} ${pretendard.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="ko" className={`${paperlogy.variable} ${pretendard.variable} ${jetbrainsMono.variable} ${tmoneyRoundWind.variable} ${maplestory.variable}`} suppressHydrationWarning>
       <body>
         <Script id="settings-init" strategy="beforeInteractive">
           {`try{var d=document.documentElement;var s=localStorage.getItem('deep-settings');if(s){var p=JSON.parse(s);var f=p.fontSize;d.dataset.fontSize=(f==='small'||f==='large')?f:'small';d.dataset.codeTheme=(p.codeTheme==='floating')?'floating':'flat';var y=p.syntaxTheme;d.dataset.syntaxTheme=(y==='atom'||y==='vitesse')?y:'github'}else{d.dataset.fontSize='small';d.dataset.codeTheme='flat';d.dataset.syntaxTheme='github'}}catch(e){document.documentElement.dataset.fontSize='small';document.documentElement.dataset.codeTheme='flat';document.documentElement.dataset.syntaxTheme='github'}`}
