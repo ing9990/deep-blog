@@ -9,11 +9,6 @@
   <img src="https://img.shields.io/github/last-commit/ing9990/deep-blog?style=for-the-badge&label=%F0%9F%9A%80%20Deploy&color=14b8a6&labelColor=0f172a" alt="Last Deploy" />
 </p>
 
-<p>
-  <a href="https://deep.ing9990.com"><img src="https://img.shields.io/badge/%F0%9F%8C%90%20deep.ing9990.com-visit-6366f1?style=flat-square&labelColor=0f172a" alt="Visit blog" /></a>
-  <a href="https://books.ing9990.com"><img src="https://img.shields.io/badge/%F0%9F%93%9A%20books.ing9990.com-read-14b8a6?style=flat-square&labelColor=0f172a" alt="Visit books" /></a>
-</p>
-
 </div>
 
 ---
