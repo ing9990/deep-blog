@@ -10,7 +10,7 @@ export interface RemarkAutoLinkOptions {
   keywordToSlug: ReadonlyMap<string, string>
 }
 
-const EXCLUDED_ANCESTOR_TYPES = new Set<string>(['link', 'inlineCode', 'code'])
+const EXCLUDED_ANCESTOR_TYPES = new Set<string>(['link', 'inlineCode', 'code', 'heading'])
 
 const remarkAutoLink: Plugin<[RemarkAutoLinkOptions], Root> = (options) => {
   const { keywordsByLength, keywordToSlug } = options

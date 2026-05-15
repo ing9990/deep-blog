@@ -1,0 +1,219 @@
+---
+title:
+  ko: "Kubernetes Resources"
+  en: "Kubernetes Resources"
+slug: kubectl-explain
+date: 2026-05-14
+tags:
+  - Backend
+  - Infrastructure
+  - Kubernetes
+  - CKAD
+keywords:
+  - kubectl explain
+  - kubectl api-resources
+  - --recursive
+  - 쿠버네티스 리소스 스키마
+  - apiVersion
+summary:
+  ko: "매니페스트를 손으로 쓰다 보면 리소스의 정식 이름과 `apiVersion`, 필드의 자료형이 곧잘 헷갈립니다. `kubectl api-resources`는 클러스터가 다루는 리소스 카탈로그를, `kubectl explain`은 한 리소스의 스키마를 알려 줍니다. 두 명령의 응답은 클러스터의 OpenAPI 스펙에서 직접 가져온 것이라 버전과 정확히 일치하는 문서가 됩니다."
+  en: "Resource names, `apiVersion` strings, and field types are easy to forget. `kubectl api-resources` lists every resource the cluster knows; `kubectl explain` documents one resource's schema. Both pull from the cluster's OpenAPI spec, so answers match the running version."
+category: kubernetes
+draft: false
+---
+
+매니페스트를 손으로 쓰다 보면 두 가지가 자주 막힙니다. 하나는 리소스의 정식 이름과 `apiVersion`이 무엇이었는지, 다른 하나는 `spec` 아래 어떤 필드가 어떤 자료형으로 들어가는지입니다. `kubectl`은 이 두 질문에 답하는 명령을 따로 가지고 있습니다. `kubectl api-resources`로 클러스터가 아는 리소스 카탈로그를 꺼내고, `kubectl explain`으로 한 리소스의 스키마를 필드 단위로 들여다봅니다.
+
+<Callout type="warning" title="핵심 포인트">
+매니페스트의 필드 이름과 자료형은 외우는 대상이 아닙니다. `kubectl api-resources`로 리소스를 찾고, `kubectl explain <리소스>[.<필드>]`로 그 자리에서 조회합니다.
+</Callout>
+
+## YAML을 외울 필요가 없다
+
+`Pod`의 `apiVersion`은 `v1`이지만 `Deployment`는 `apps/v1`입니다. `Service`의 단축 이름은 `svc`이고 `ConfigMap`은 `cm`입니다. 매니페스트를 쓸 때마다 이런 사실을 떠올리려고 검색창을 켜는 대신, 클러스터에 직접 물어보는 편이 빠릅니다. `kubectl`이 다음 두 명령을 그 용도로 마련해 두고 있습니다.
+
+- `kubectl api-resources`: 클러스터가 다루는 모든 리소스의 목록과 정식 이름, `apiVersion`을 한 표로 보여줍니다.
+- `kubectl explain <리소스>`: 그 리소스의 스키마를 필드 단위로 풀어 줍니다.
+
+두 명령은 클러스터의 `kube-apiserver`가 노출하는 OpenAPI 스펙에서 답을 가져옵니다. 따라서 응답은 항상 그 클러스터의 실제 버전과 정확히 일치하는 문서가 됩니다.
+
+## `kubectl api-resources`로 리소스 카탈로그 꺼내기
+
+리소스 이름이 가물가물할 때 가장 먼저 쓰는 명령입니다.
+
+```bash
+$ kubectl api-resources
+NAME                     SHORTNAMES   APIVERSION   NAMESPACED   KIND
+bindings                              v1           true         Binding
+componentstatuses        cs           v1           false        ComponentStatus
+configmaps               cm           v1           true         ConfigMap
+endpoints                ep           v1           true         Endpoints
+events                   ev           v1           true         Event
+limitranges              limits       v1           true         LimitRange
+namespaces               ns           v1           false        Namespace
+nodes                    no           v1           false        Node
+persistentvolumeclaims   pvc          v1           true         PersistentVolumeClaim
+persistentvolumes        pv           v1           false        PersistentVolume
+pods                     po           v1           true         Pod
+podtemplates                          v1           true         PodTemplate
+replicationcontrollers   rc           v1           true         ReplicationController
+resourcequotas           quota        v1           true         ResourceQuota
+secrets                                v1           true         Secret
+serviceaccounts          sa           v1           true         ServiceAccount
+services                 svc          v1           true         Service
+```
+
+### 컬럼이 알려 주는 것
+
+| 컬럼 | 의미 |
+|---|---|
+| `NAME` | `kubectl get <name>`에 넣는 복수형 이름 |
+| `SHORTNAMES` | 단축 이름. 비어 있는 행은 단축형이 없음 |
+| `APIVERSION` | 매니페스트의 `apiVersion` 필드에 그대로 들어갈 문자열 |
+| `NAMESPACED` | namespace 안에 사는 리소스(`true`) 인지 클러스터 전역(`false`) 인지 |
+| `KIND` | 매니페스트의 `kind` 필드에 들어갈 PascalCase 이름 |
+
+매니페스트의 첫 두 줄을 쓰는 데 필요한 정보가 한 줄에 다 들어 있습니다. `pods` 행을 보면 `apiVersion: v1`, `kind: Pod`로 시작하면 된다는 사실이 바로 드러납니다.
+
+### `SHORTNAMES`와 `APIVERSION`의 쓸모
+
+`SHORTNAMES`는 그저 타자 절약이 아닙니다. 시험이나 운영 중 빠르게 친 명령에서 `po`, `svc`, `cm`, `pvc`가 일관되게 동작하는 이유가 이 컬럼에 있습니다. 출력에 적힌 단축 이름은 `kubectl get`, `kubectl describe`, `kubectl delete` 어디에서나 그대로 동작합니다.
+
+`APIVERSION`은 더 중요합니다. `Pod`처럼 코어 그룹(`v1`)에 있는 리소스가 있고, `Deployment`처럼 그룹이 붙는 리소스(`apps/v1`)가 있습니다. 새로 추가된 CRD는 사용자가 지정한 그룹 이름으로 등장합니다. 매니페스트의 `apiVersion`을 잘못 쓰면 `kubectl apply`가 "no matches for kind" 오류로 거부하므로, 여기서 정확한 문자열을 받아 가는 편이 안전합니다.
+
+특정 API 그룹의 리소스만 보고 싶다면 `--api-group` 플래그를 붙입니다.
+
+```bash
+kubectl api-resources --api-group=apps
+```
+
+`Deployment`, `ReplicaSet`, `StatefulSet`, `DaemonSet` 네 행만 출력됩니다.
+
+## `kubectl explain`으로 한 리소스의 스키마 보기
+
+리소스 이름을 찾았으면 그 안의 필드를 봐야 합니다. `kubectl explain`이 그 자리입니다.
+
+```bash
+$ kubectl explain pods
+KIND:       Pod
+VERSION:    v1
+
+DESCRIPTION:
+    Pod is a collection of containers that can run on a host. This resource is
+    created by clients and scheduled onto hosts.
+
+FIELDS:
+  apiVersion    <string>
+    ...
+  kind          <string>
+    ...
+  metadata      <ObjectMeta>
+    Standard object's metadata. ...
+  spec          <PodSpec>
+    Specification of the desired behavior of the pod. ...
+  status        <PodStatus>
+    Most recently observed status of the pod. ...
+```
+
+### 최상위 필드와 자료형
+
+기본 출력은 한 단계까지만 펼칩니다. `Pod`의 다섯 최상위 필드(`apiVersion`, `kind`, `metadata`, `spec`, `status`)가 보이고, 각 필드의 자료형이 꺾쇠 안에 적힙니다. `<string>`처럼 원시 타입은 그 자리에서 끝나지만, `<ObjectMeta>`나 `<PodSpec>` 같은 객체 타입은 다음 단계로 더 펼쳐 봐야 내부가 보입니다.
+
+### 점 표기법으로 하위 필드 파고들기
+
+객체 타입의 내부를 보려면 점 표기법으로 필드를 이어 붙입니다.
+
+```bash
+$ kubectl explain pods.spec
+KIND:       Pod
+VERSION:    v1
+
+FIELD: spec <PodSpec>
+
+FIELDS:
+  containers              <[]Container>  -required-
+    List of containers belonging to the pod.
+  initContainers          <[]Container>
+  nodeName                <string>
+  nodeSelector            <map[string]string>
+  restartPolicy           <string>
+    enum: Always, OnFailure, Never
+  serviceAccountName      <string>
+  tolerations             <[]Toleration>
+  volumes                 <[]Volume>
+  ...
+```
+
+`pods.spec`은 `pods` 응답의 `spec` 필드 하나만 펼쳐 줍니다. 같은 방식으로 더 깊이 들어갈 수 있습니다.
+
+```bash
+kubectl explain pods.spec.containers
+kubectl explain pods.spec.containers.livenessProbe
+kubectl explain pods.spec.containers.livenessProbe.httpGet
+```
+
+표기법 자체가 매니페스트의 YAML 경로와 같은 모양이라서, "내가 만지려던 필드가 어디에 있더라"를 추측할 필요 없이 그대로 옮겨 적으면 됩니다. 자료형이 배열이면 `<[]Container>`처럼 대괄호가 붙어 알려 주고, `-required-`가 붙은 필드는 매니페스트에서 빠지면 거부됩니다. `enum`이 명시된 필드는 받는 값의 후보까지 알려 주므로 `restartPolicy`에 `Always`, `OnFailure`, `Never` 중 무엇을 써야 할지 검색하지 않아도 됩니다.
+
+### `--recursive`로 전체 트리 보기
+
+깊이 파고드는 대신 한 번에 전체 구조만 보고 싶을 때가 있습니다. 가령 `Pod`이 받을 수 있는 모든 필드 이름을 한눈에 훑어보고 싶다면 `--recursive` 플래그를 붙입니다.
+
+```bash
+$ kubectl explain pods --recursive
+KIND:       Pod
+VERSION:    v1
+
+FIELDS:
+  apiVersion   <string>
+  kind         <string>
+  metadata     <ObjectMeta>
+    annotations         <map[string]string>
+    creationTimestamp   <string>
+    labels              <map[string]string>
+    name                <string>
+    namespace           <string>
+    ...
+  spec         <PodSpec>
+    containers          <[]Container>
+      args              <[]string>
+      command           <[]string>
+      env               <[]EnvVar>
+        name            <string>
+        value           <string>
+        valueFrom       <EnvVarSource>
+      image             <string>
+      livenessProbe     <Probe>
+        httpGet         <HTTPGetAction>
+          path          <string>
+          port          <IntOrString>
+        ...
+      ...
+    ...
+```
+
+`--recursive`는 설명 문구를 빼고 필드 이름·자료형 트리만 들여쓰기로 펼칩니다. 매니페스트의 한 자리에 어떤 자식 키가 들어갈 수 있는지 한 화면에서 확인하고 싶을 때 가장 빠릅니다. 문구가 빠진 자리는 좁아진 단위로 다시 점 표기법으로 들어가 채우면 됩니다.
+
+## 두 명령은 어디서 답을 가져오는가
+
+`kubectl api-resources`와 `kubectl explain`의 응답은 클러스터의 `kube-apiserver`가 노출하는 OpenAPI 스펙에서 그대로 가져옵니다. `kubectl`은 컨텍스트의 클러스터로 OpenAPI 문서를 요청하고, 거기 적힌 리소스 카탈로그와 스키마를 사람이 읽기 좋게 표·트리로 출력합니다.
+
+이 점은 두 가지로 이어집니다. 첫째, 같은 명령이 클러스터마다 다른 답을 줄 수 있습니다. CRD가 등록되어 있는 클러스터에서는 `api-resources`에 그 CRD가 한 행으로 추가되고, 새로 추가된 필드는 `explain`에서 바로 보입니다. 둘째, 응답은 그 클러스터가 실제로 받아들이는 스펙과 일치합니다. `kubectl explain`이 알려 준 필드를 그대로 적은 매니페스트는 그 클러스터에서 `kubectl apply`로 거부될 일이 없습니다.
+
+<Callout type="error" title="핵심 통찰">
+`api-resources`와 `explain`은 정적 문서가 아니라 클러스터의 OpenAPI 스펙에서 실시간으로 가져온 응답입니다. 그래서 클러스터 버전·등록된 CRD에 따라 답이 달라지고, 그 답은 그 클러스터가 실제로 받아들이는 스펙과 일치합니다.
+</Callout>
+
+## 빠르게 쓰는 흐름
+
+매니페스트를 새로 쓸 때 흐름은 단순합니다.
+
+1. `kubectl api-resources`로 리소스의 정식 이름과 `apiVersion`을 확인합니다.
+2. `kubectl explain <리소스>`로 최상위 필드를 봅니다.
+3. 손대려는 자리(`spec`, `metadata.labels`, `spec.containers.livenessProbe` 등)를 점 표기법으로 이어 붙여 그 자리만 펼칩니다.
+4. 전체 구조를 한눈에 보고 싶으면 `kubectl explain <리소스> --recursive`로 트리만 출력합니다.
+
+문서 검색 없이도 이 네 단계로 매니페스트의 모든 필드 이름과 자료형, 허용 enum, 필수 여부를 확인할 수 있습니다. 같은 자리에서 [`--dry-run=client -o yaml`](/posts/imperative-commands)로 뼈대를 뽑아 두면, 손으로 채울 자리만 남고 키 이름 실수가 사라집니다.
+
+<RelatedPost slug="imperative-commands" type="parallel" />
+
+<RelatedPost slug="kubernetes-cheatsheet" type="parallel" />
