@@ -3,7 +3,7 @@ title:
   ko: "Kubernetes Cheatsheet"
   en: "Kubernetes Cheatsheet"
 slug: kubernetes-cheatsheet
-date: 2026-05-13
+date: 2026-05-14
 tags:
   - Backend
   - Infrastructure
@@ -82,6 +82,18 @@ draft: false
 | `--dry-run=client -o yaml > <file>.yaml` | 매니페스트 뼈대 생성 후 손으로 보완 → `kubectl apply` |
 
 <RelatedPost slug="imperative-commands" type="deep-dive" />
+
+### 리소스 스키마 탐색 (`api-resources` · `explain`)
+
+| 명령 | 효과 |
+|---|---|
+| `kubectl api-resources` | 클러스터가 다루는 모든 리소스 카탈로그. `NAME`·`SHORTNAMES`·`APIVERSION`·`NAMESPACED`·`KIND` 컬럼 |
+| `kubectl api-resources --api-group=<group>` | 특정 API 그룹(`apps`, `batch`, `networking.k8s.io` 등)만 필터 |
+| `kubectl explain <resource>` | 리소스의 최상위 필드와 자료형. 한 단계까지만 펼침 |
+| `kubectl explain <resource>.<field>` | 점 표기법으로 하위 필드 펼치기 (`pods.spec.containers.livenessProbe.httpGet`) |
+| `kubectl explain <resource> --recursive` | 설명 문구 없이 필드 트리 전체를 들여쓰기로 출력 |
+
+<RelatedPost slug="kubectl-explain" type="deep-dive" />
 
 ## Deployment
 

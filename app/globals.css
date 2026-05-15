@@ -517,15 +517,14 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* Headings inside the post body use Maplestory Light (Nexon) for a rounded,
-   casual display tone that contrasts with the Tmoney body copy. Paperlogy
-   stays as the fallback so the headline shape never collapses to a generic
-   sans on missing glyphs. */
+/* Headings inside the post body use Pretendard for a clean modern display
+   tone that contrasts crisply with the rounded Tmoney body copy. The
+   variable font carries Bold/Black via font-weight on each heading level. */
 .prose-kr h1,
 .prose-kr h2,
 .prose-kr h3,
 .prose-kr h4 {
-  font-family: var(--font-maple);
+  font-family: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 .prose-kr h2 {
