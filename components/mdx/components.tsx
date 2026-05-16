@@ -84,6 +84,7 @@ import { TrieDeleteSnapshot } from '@/components/visualizations/TrieDeleteSnapsh
 import { TwoGeneralsMessenger } from '@/components/visualizations/TwoGeneralsMessenger'
 import { VectorSearchSpace } from '@/components/visualizations/VectorSearchSpace'
 import { HNSWLevelWalk } from '@/components/visualizations/HNSWLevelWalk'
+import { WebRtcConnectionFlow } from '@/components/visualizations/WebRtcConnectionFlow'
 import { IVFNprobe } from '@/components/visualizations/IVFNprobe'
 import { SQPipeline } from '@/components/visualizations/SQPipeline'
 import { SQOptionMatrix } from '@/components/visualizations/SQOptionMatrix'
@@ -224,6 +225,7 @@ export const mdxComponents: MDXComponents = {
   TwoGeneralsMessenger,
   VectorSearchSpace,
   HNSWLevelWalk,
+  WebRtcConnectionFlow,
   IVFNprobe,
   SQPipeline,
   SQOptionMatrix,
