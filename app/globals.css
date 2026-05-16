@@ -503,10 +503,11 @@ body {
 
 .prose-kr {
   /* Blog post body uses Tmoney 둥근바람 (TmoneyRoundWind) for a softer,
-     rounded reading texture. Headings (h1~h4) override to Paperlogy via
-     the rule below. Global default (Paperlogy) stays on everything outside
-     .prose-kr. Pretendard remains the long-form fallback for glyphs the
-     Tmoney face doesn't cover. */
+     rounded reading texture. Headings (h1~h4) share the same Tmoney face
+     (see the rule below), separated from body copy by weight and size
+     rather than a different family. Global default (Paperlogy) stays on
+     everything outside .prose-kr. Pretendard remains the long-form
+     fallback for glyphs the Tmoney face doesn't cover. */
   font-family: var(--font-tmoney);
   font-size: var(--text-prose);
   line-height: var(--leading-relaxed);
@@ -517,14 +518,16 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* Headings inside the post body use Pretendard for a clean modern display
-   tone that contrasts crisply with the rounded Tmoney body copy. The
-   variable font carries Bold/Black via font-weight on each heading level. */
+/* Headings inside the post body use the same Tmoney 둥근바람 face as the
+   body copy, matching the rounded heading style used by visualization
+   titles. They stand apart from body text through weight and size, not a
+   different family. --font-tmoney already carries the Pretendard fallback
+   for glyphs the Tmoney face doesn't cover. */
 .prose-kr h1,
 .prose-kr h2,
 .prose-kr h3,
 .prose-kr h4 {
-  font-family: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-tmoney);
 }
 
 .prose-kr h2 {
