@@ -11,15 +11,15 @@
  *     stay on the current host. Middleware falls through there, so all surfaces
  *     coexist via filesystem path prefixes (/books).
  *
- * Use {@link getCrossHostUrls} from server components / route handlers.
- * Use {@link resolveCrossHostUrls} when you already have a host string.
+ * This module is pure (no next/headers) so client components may import
+ * {@link resolveCrossHostUrls} and {@link PROD_URLS}. The server-only
+ * {@link getCrossHostUrls} helper that reads request headers lives in
+ * `cross-host-url.server.ts`.
  *
  * Note: SEO-related URLs (canonical, og:url, sitemap) intentionally use the
  * production domain regardless of the request and stay hardcoded in metadata
  * blocks. Do NOT use this helper for those.
  */
-
-import { headers } from 'next/headers'
 
 const APEX_HOST = 'ing9990.com'
 const BLOG_HOST = 'deep.ing9990.com'
@@ -33,7 +33,7 @@ export interface CrossHostUrls {
   books: string
 }
 
-const PROD_URLS: CrossHostUrls = {
+export const PROD_URLS: CrossHostUrls = {
   blog: `https://${BLOG_HOST}`,
   books: `https://${BOOKS_HOST}`,
 }
@@ -57,9 +57,4 @@ export function resolveCrossHostUrls(rawHost: string | null | undefined): CrossH
     blog: `http://${rawHost}`,
     books: `http://${rawHost}/books`,
   }
-}
-
-export async function getCrossHostUrls(): Promise<CrossHostUrls> {
-  const h = await headers()
-  return resolveCrossHostUrls(h.get('host'))
 }

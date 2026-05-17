@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Settings } from 'lucide-react'
 import { SettingsPanel } from './SettingsPanel'
-import { SettingsFabIntro } from './SettingsFabIntro'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function SettingsFab() {
@@ -39,7 +38,6 @@ export function SettingsFab() {
             style={{ transition: 'transform 0.4s cubic-bezier(0.22,1,0.36,1)' }}
           />
         </button>
-        <SettingsFabIntro />
       </div>
     </>
   )

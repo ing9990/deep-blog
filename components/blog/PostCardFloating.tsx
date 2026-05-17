@@ -1,14 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import type { Post } from '@/lib/posts'
+import type { CardPost } from '@/lib/client-post'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { getCategoryColor } from '@/lib/category-colors'
 import { cn, formatDate } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
-export function PostCardFloating({ post }: { post: Post }) {
+export function PostCardFloating({ post }: { post: CardPost }) {
   const { lang } = useTranslation()
   const meta = getCategory(post.category)
   const Icon = CATEGORY_ICONS[post.category]

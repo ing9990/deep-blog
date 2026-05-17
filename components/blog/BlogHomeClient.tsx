@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo } from 'react'
-import type { Post } from '@/lib/posts'
+import type { CardPost } from '@/lib/client-post'
 import { applyFilters, extractAllTags } from '@/lib/filters'
 import { PostList } from './PostList'
 import { TagFilterBar } from './TagFilterBar'
@@ -10,7 +10,7 @@ import { useIndexFilter } from './IndexFilterContext'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface BlogHomeClientProps {
-  allPosts: Post[]
+  allPosts: CardPost[]
 }
 
 export function BlogHomeClient({ allPosts }: BlogHomeClientProps) {

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { CategoryId } from '@/lib/categories'
+import { CATEGORY_IDS, type CategoryId } from '@/lib/categories'
 import type { SortKey } from '@/lib/filters'
 import { buildPostsUrl } from '@/lib/utils'
 
@@ -25,27 +25,32 @@ const IndexFilterCtx = createContext<IndexFilterState | null>(null)
 
 interface IndexFilterProviderProps {
   children: ReactNode
-  initialCategory?: CategoryId
-  initialTag?: string
-  initialSort: SortKey
 }
 
-export function IndexFilterProvider({
-  children,
-  initialCategory,
-  initialTag,
-  initialSort,
-}: IndexFilterProviderProps) {
-  const [category, setCategoryRaw] = useState<CategoryId | null>(
-    initialCategory ?? null,
-  )
-  const [tag, setTag] = useState<string | undefined>(initialTag)
-  const [sort, setSort] = useState<SortKey>(initialSort)
+export function IndexFilterProvider({ children }: IndexFilterProviderProps) {
+  const [category, setCategoryRaw] = useState<CategoryId | null>(null)
+  const [tag, setTag] = useState<string | undefined>(undefined)
+  const [sort, setSort] = useState<SortKey>('latest')
 
   function setCategory(next: CategoryId | null) {
     setCategoryRaw(next)
     setTag(undefined)
   }
+
+  /* Apply deep-link filters from the URL once, after hydration. The index
+     page is statically prerendered with default (unfiltered) state, so the
+     filters are read client-side here instead of from server searchParams. */
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const catParam = sp.get('cat')
+    const tagParam = sp.get('tag')
+    const sortParam = sp.get('sort')
+    if (catParam && (CATEGORY_IDS as readonly string[]).includes(catParam)) {
+      setCategoryRaw(catParam as CategoryId)
+    }
+    if (tagParam) setTag(tagParam)
+    if (sortParam === 'oldest' || sortParam === 'title') setSort(sortParam)
+  }, [])
 
   /* URL sync — replaceState only, never router.push */
   const isFirstRun = useRef(true)

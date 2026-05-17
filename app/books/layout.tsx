@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { BookOpen, Sparkles } from 'lucide-react'
-import { getCrossHostUrls } from '@/lib/cross-host-url'
+import { getCrossHostUrls } from '@/lib/cross-host-url.server'
 import { ThemeToggle } from '@/components/blog/ThemeToggle'
 import { SettingsFab } from '@/components/layout/SettingsFab'
 
