@@ -6,20 +6,18 @@ import { MobilePostTocFab } from '@/components/blog/MobilePostTocFab'
 import { CopyToast } from '@/components/blog/CopyToast'
 import { SettingsFab } from '@/components/layout/SettingsFab'
 import { getAllPosts } from '@/lib/posts'
-import { toClientPost } from '@/lib/client-post'
-import { getCrossHostUrls } from '@/lib/cross-host-url'
+import { toCardPost } from '@/lib/client-post'
 import { CrossHostProvider } from '@/lib/cross-host-context'
 
-export default async function BlogLayout({
+export default function BlogLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const clientPosts = getAllPosts().map(toClientPost)
-  const crossHostUrls = await getCrossHostUrls()
+  const clientPosts = getAllPosts().map(toCardPost)
 
   return (
-    <CrossHostProvider value={crossHostUrls}>
+    <CrossHostProvider>
       <MobileUIProvider posts={clientPosts}>
         <div className="flex min-h-screen flex-col">
           <Header />

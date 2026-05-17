@@ -1,6 +1,6 @@
 import { BookCover } from '@/components/books/BookCover'
 import { getAllBooks } from '@/lib/books'
-import { getCrossHostUrls } from '@/lib/cross-host-url'
+import { getCrossHostUrls } from '@/lib/cross-host-url.server'
 
 export default async function BooksIndexPage() {
   const books = getAllBooks()

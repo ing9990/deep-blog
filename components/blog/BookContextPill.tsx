@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { BookOpen } from 'lucide-react'
 import type { BookPosition } from '@/lib/books'
-import { getCrossHostUrls } from '@/lib/cross-host-url'
+import { getCrossHostUrls } from '@/lib/cross-host-url.server'
 
 interface BookContextPillProps {
   position: BookPosition

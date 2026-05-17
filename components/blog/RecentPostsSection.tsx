@@ -1,14 +1,14 @@
 // components/blog/RecentPostsSection.tsx
 'use client'
 
-import type { Post } from '@/lib/posts'
+import type { CardPost } from '@/lib/client-post'
 import { useSettings } from '@/components/providers/SettingsProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { PostCardTimeline } from './PostCardTimeline'
 import { PostCardFloating } from './PostCardFloating'
 
 interface RecentPostsSectionProps {
-  posts: Post[]
+  posts: CardPost[]
 }
 
 function toDateKey(date: string): string {

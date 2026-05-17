@@ -3,6 +3,7 @@ import { getAllPosts } from '@/lib/posts'
 import { extractAllTags, filterByTag, sortPosts } from '@/lib/filters'
 import type { Language } from '@/components/providers/SettingsProvider'
 import { PostList } from '@/components/blog/PostList'
+import { toCardPost } from '@/lib/client-post'
 import { TagPageHeader } from '@/components/blog/TagPageHeader'
 import { DocShell } from '@/components/layout/DocShell'
 
@@ -25,7 +26,7 @@ export default async function TagPage({
     <DocShell>
       <TagPageHeader tag={tag} count={posts.length} />
       <div className="mt-8">
-        <PostList posts={posts} />
+        <PostList posts={posts.map(toCardPost)} />
       </div>
     </DocShell>
   )

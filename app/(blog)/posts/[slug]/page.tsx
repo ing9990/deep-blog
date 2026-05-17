@@ -8,6 +8,7 @@ import { PostBreadcrumbs } from '@/components/blog/PostBreadcrumbs'
 import { RecentPostsSection } from '@/components/blog/RecentPostsSection'
 import { flattenToc, type VeliteTocEntry } from '@/lib/toc'
 import { getRecentPosts } from '@/lib/related-posts'
+import { toCardPost } from '@/lib/client-post'
 import { DocShell } from '@/components/layout/DocShell'
 import { PostTitle } from '@/components/blog/PostTitle'
 import { BookContextPill } from '@/components/blog/BookContextPill'
@@ -60,7 +61,7 @@ export default async function PostPage({
   const post = getPostBySlug(slug)
   if (!post) notFound()
 
-  const recentPosts = getRecentPosts(slug, 4)
+  const recentPosts = getRecentPosts(slug, 4).map(toCardPost)
   const tocItems = flattenToc(post.toc as unknown as VeliteTocEntry[])
   const bookPosition = getBookPosition(slug)
 

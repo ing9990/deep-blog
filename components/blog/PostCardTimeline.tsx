@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import type { Post } from '@/lib/posts'
+import type { CardPost } from '@/lib/client-post'
 import { getCategory } from '@/lib/categories'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { getCategoryColor } from '@/lib/category-colors'
@@ -9,7 +9,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import { cn, EN_MONTHS } from '@/lib/utils'
 
 interface PostCardTimelineProps {
-  post: Post
+  post: CardPost
   isFirst?: boolean
   isLast?: boolean
   showDate?: boolean

@@ -8,11 +8,11 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { ClientPost } from '@/lib/client-post'
+import type { CardPost } from '@/lib/client-post'
 import type { FlatTocItem } from '@/lib/toc'
 
 interface MobileUIState {
-  posts: ClientPost[]
+  posts: CardPost[]
 
   navOpen: boolean
   tocOpen: boolean
@@ -43,7 +43,7 @@ export function useMobileUI(): MobileUIState {
 }
 
 interface MobileUIProviderProps {
-  posts: ClientPost[]
+  posts: CardPost[]
   children: ReactNode
 }
 

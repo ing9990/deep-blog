@@ -2,13 +2,13 @@
 
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
-import type { ClientPost } from '@/lib/client-post'
+import type { CardPost } from '@/lib/client-post'
 import { groupPostsByCategory } from '@/lib/categories'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface CategoryNavProps {
-  posts: ClientPost[]
+  posts: CardPost[]
   currentSlug?: string | null
   onLinkClick?: () => void
 }

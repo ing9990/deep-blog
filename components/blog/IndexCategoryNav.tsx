@@ -6,12 +6,12 @@ import { CATEGORY_ICONS } from '@/lib/category-icons'
 import { getCategoryColor } from '@/lib/category-colors'
 import { cn } from '@/lib/utils'
 import { useIndexFilter } from './IndexFilterContext'
-import type { Post } from '@/lib/posts'
+import type { CardPost } from '@/lib/client-post'
 import { useMemo } from 'react'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 interface IndexCategoryNavProps {
-  allPosts: Post[]
+  allPosts: CardPost[]
 }
 
 export function IndexCategoryNav({ allPosts }: IndexCategoryNavProps) {

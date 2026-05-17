@@ -5,14 +5,14 @@ import { useSettings } from '@/components/providers/SettingsProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { PostCardTimeline } from './PostCardTimeline'
 import { PostCardFloating } from './PostCardFloating'
-import type { Post } from '@/lib/posts'
+import type { CardPost } from '@/lib/client-post'
 
 function toDateKey(date: string): string {
   const d = new Date(date)
   return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`
 }
 
-export function PostList({ posts }: { posts: Post[] }) {
+export function PostList({ posts }: { posts: CardPost[] }) {
   const { t } = useTranslation()
   const { settings } = useSettings()
 
