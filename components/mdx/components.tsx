@@ -58,6 +58,7 @@ import { NamespaceDnsBreakdown } from '@/components/visualizations/NamespaceDnsB
 import { NamespaceIsolation } from '@/components/visualizations/NamespaceIsolation'
 import { PodCompositionViz } from '@/components/visualizations/PodCompositionViz'
 import { ConfigMapInjectionViz } from '@/components/visualizations/ConfigMapInjectionViz'
+import { Base64RoundTrip } from '@/components/visualizations/Base64RoundTrip'
 import { ServiceNodePortFlow } from '@/components/visualizations/ServiceNodePortFlow'
 import { ServiceSelectorEndpoints } from '@/components/visualizations/ServiceSelectorEndpoints'
 import { ServiceMultiNodeNodePort } from '@/components/visualizations/ServiceMultiNodeNodePort'
@@ -197,6 +198,7 @@ export const mdxComponents: MDXComponents = {
   PERBetaSlider,
   PodCompositionViz,
   ConfigMapInjectionViz,
+  Base64RoundTrip,
   ServiceNodePortFlow,
   ServiceSelectorEndpoints,
   ServiceMultiNodeNodePort,
