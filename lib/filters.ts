@@ -19,10 +19,10 @@ export function filterByTag<T extends Pick<Post, 'tags'>>(
   return posts.filter((p) => p.tags.some((t) => t.toLowerCase() === needle))
 }
 
-type Searchable = Pick<Post, 'title' | 'summary' | 'tags' | 'keywords'> & {
-  plainBody?: string
-}
+type Searchable = Pick<Post, 'title' | 'summary'>
 
+// Search matches the title and summary only — tags, keywords, and the
+// full-text plainBody are intentionally excluded from the query surface.
 export function searchPosts<T extends Searchable>(
   posts: readonly T[],
   query?: string,
@@ -34,9 +34,6 @@ export function searchPosts<T extends Searchable>(
     if (p.title.en.toLowerCase().includes(q)) return true
     if (p.summary.ko.toLowerCase().includes(q)) return true
     if (p.summary.en.toLowerCase().includes(q)) return true
-    if (p.tags.some((t) => t.toLowerCase().includes(q))) return true
-    if (p.keywords.some((k) => k.toLowerCase().includes(q))) return true
-    if (p.plainBody && p.plainBody.toLowerCase().includes(q)) return true
     return false
   })
 }
@@ -64,7 +61,7 @@ export function sortPosts<T extends Pick<Post, 'date' | 'title'>>(
 }
 
 export function applyFilters<
-  T extends Searchable & Pick<Post, 'date'>,
+  T extends Searchable & Pick<Post, 'tags' | 'date'>,
 >(posts: readonly T[], filters: PostFilters, lang: Language): T[] {
   const afterTag = filterByTag(posts, filters.tag)
   const afterSearch = searchPosts(afterTag, filters.query)

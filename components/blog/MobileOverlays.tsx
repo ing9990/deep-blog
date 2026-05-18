@@ -7,7 +7,6 @@ import { useMobileUI } from '@/components/providers/MobileUIProvider'
 import { CategoryNav } from './CategoryNav'
 import { TableOfContents } from './TableOfContents'
 import { searchPosts } from '@/lib/filters'
-import type { CardPost, ClientPost } from '@/lib/client-post'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 
 export function MobileOverlays() {
@@ -92,25 +91,8 @@ function SearchDialog() {
   const { searchOpen, closeSearch, posts } = useMobileUI()
   const { lang } = useTranslation()
   const [query, setQuery] = useState('')
-  const [searchIndex, setSearchIndex] = useState<ClientPost[] | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const ref = useDialogEffect(searchOpen, closeSearch)
-
-  /* Lazy-load the full-text index on first open. Its plainBody blob stays
-     off the first page load and arrives only when search is actually used. */
-  useEffect(() => {
-    if (!searchOpen || searchIndex) return
-    let cancelled = false
-    fetch('/search-index')
-      .then((res) => (res.ok ? (res.json() as Promise<ClientPost[]>) : null))
-      .then((data) => {
-        if (!cancelled && data) setSearchIndex(data)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [searchOpen, searchIndex])
 
   /* rAF focus — 10ms setTimeout was unreliable on iOS Safari */
   useEffect(() => {
@@ -149,14 +131,13 @@ function SearchDialog() {
   }, [searchOpen])
 
   const results = useMemo(() => {
-    // searchIndex (ClientPost[], with plainBody) is a superset of CardPost,
-    // so it is assignable to CardPost[]. Until it loads, fall back to the
-    // light card list so search still matches title/summary/tags.
-    const source: CardPost[] = searchIndex ?? posts
+    // `posts` is the full post list (CardPost[]), server-hydrated via
+    // MobileUIProvider. searchPosts matches title and summary, both of
+    // which CardPost carries, so no separate search index fetch is needed.
     const trimmed = query.trim()
-    if (!trimmed) return source.slice(0, 8)
-    return searchPosts(source, trimmed).slice(0, 12)
-  }, [searchIndex, posts, query])
+    if (!trimmed) return posts.slice(0, 8)
+    return searchPosts(posts, trimmed).slice(0, 12)
+  }, [posts, query])
 
   const handleSelect = useCallback(() => {
     inputRef.current?.blur()

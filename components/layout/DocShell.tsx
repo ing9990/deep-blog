@@ -3,7 +3,7 @@ import { TableOfContents } from '@/components/blog/TableOfContents'
 import { CategoryNav } from '@/components/blog/CategoryNav'
 import { DocShellRegister } from './DocShellRegister'
 import { getAllPosts } from '@/lib/posts'
-import { toClientPost } from '@/lib/client-post'
+import { toCardPost } from '@/lib/client-post'
 import type { FlatTocItem } from '@/lib/toc'
 
 interface DocShellProps {
@@ -23,7 +23,7 @@ export function DocShell({
 }: DocShellProps) {
   const hasToc = !!toc && toc.length > 0
 
-  const posts = getAllPosts().map(toClientPost)
+  const posts = getAllPosts().map(toCardPost)
 
   return (
     <>

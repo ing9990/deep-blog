@@ -90,26 +90,27 @@ describe('searchPosts', () => {
   it('matches English summary', () => {
     expect(searchPosts(sample, 'rebalancing strategies').map((p) => p.slug)).toEqual(['p2'])
   })
-  it('matches tag', () => {
-    expect(searchPosts(sample, 'JVM').map((p) => p.slug)).toEqual(['p3'])
-  })
-  it('matches keyword', () => {
-    expect(searchPosts(sample, 'b-tree').map((p) => p.slug)).toEqual(['p1'])
-  })
   it('is case-insensitive for Latin', () => {
     expect(searchPosts(sample, 'KAFKA').map((p) => p.slug)).toEqual(['p2'])
   })
-  it('matches plainBody content when the field is present', () => {
+  it('does not match tags', () => {
+    // 'Backend' appears only in p2/p3 tags, never in their title or summary
+    expect(searchPosts(sample, 'Backend')).toEqual([])
+  })
+  it('does not match keywords', () => {
+    // 'B-Tree' appears only in p1 keywords, never in its title or summary
+    expect(searchPosts(sample, 'b-tree')).toEqual([])
+  })
+  it('does not match plainBody content', () => {
     const withBody: TestPost[] = [
       makePost({
-        slug: 'bodymatch',
+        slug: 'bodyonly',
         title: { ko: '다른 제목', en: 'Other Title' },
-        summary: { ko: '본문 검색', en: 'Body-only match' },
+        summary: { ko: '다른 요약', en: 'Other summary' },
         plainBody: '실제 본문 어딘가에 쿼리 토큰이 등장합니다.',
       }),
-      makePost({ slug: 'nomatch', plainBody: '전혀 관련 없는 본문' }),
     ]
-    expect(searchPosts(withBody, '쿼리 토큰').map((p) => p.slug)).toEqual(['bodymatch'])
+    expect(searchPosts(withBody, '쿼리 토큰')).toEqual([])
   })
 })
 
