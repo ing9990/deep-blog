@@ -3,7 +3,7 @@ title:
   ko: "Kubernetes Cheatsheet"
   en: "Kubernetes Cheatsheet"
 slug: kubernetes-cheatsheet
-date: 2026-05-16
+date: 2026-05-18
 tags:
   - Backend
   - Infrastructure
@@ -385,6 +385,63 @@ spec:
 `hard`의 각 항목이 해당 `Namespace`의 동시 보유 상한선입니다. `pods`는 개수, `requests.*`는 스케줄링 시 요청 합, `limits.*`는 컨테이너 한도 합을 가리킵니다.
 
 <RelatedPost slug="namespace-primer" type="deep-dive" />
+
+## Secret
+
+비밀번호·토큰 같은 민감한 구성 데이터를 `base64`로 담아 `Pod`에 주입하는 오브젝트.
+
+### 명령
+
+| 명령 | 설명 | 비고 |
+|---|---|---|
+| `kubectl create secret generic <name> --from-literal=<k>=<v>` | 키-값을 명령줄에 적어 생성 | 평문 입력, 인코딩은 자동 |
+| `kubectl create secret generic <name> --from-file=<path>` | 파일을 통째로 담아 생성 | 항목이 많을 때 |
+| `kubectl apply -f <file>.yaml` | YAML로 생성·갱신 | 선언적 |
+| `kubectl get secrets` | `Secret` 목록 조회 | |
+| `kubectl describe secret <name>` | 키와 바이트 길이 확인 | 값은 표시 안 됨 |
+| `echo -n '<value>' \| base64` | 평문을 `base64`로 인코딩 | `data` 필드에 적을 값 |
+| `echo -n '<encoded>' \| base64 --decode` | `base64`를 평문으로 디코딩 | |
+
+### 최소 YAML
+
+#### data 필드 (base64 인코딩한 값)
+
+```yaml title="secret.yaml"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+data:
+  DB_PASSWORD: UEBzc3cwcmQh
+```
+
+#### stringData 필드 (평문 입력)
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+stringData:
+  DB_PASSWORD: P@ssw0rd!
+```
+
+#### secretKeyRef 주입 (키 하나)
+
+```yaml
+spec:
+  containers:
+    - name: app
+      image: myapp:1.0
+      env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: DB_PASSWORD
+```
+
+<RelatedPost slug="secret-primer" type="deep-dive" />
 
 ## Service
 
