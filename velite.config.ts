@@ -5,7 +5,6 @@ import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
 import { transformerNotationHighlight } from '@shikijs/transformers'
 import { calculateReadingTime } from './lib/reading-time'
-import { extractPlainText } from './lib/plain-text'
 import remarkAutoLink from './plugins/remark-auto-link'
 import rehypeCodeLanguageBadge from './plugins/rehype-code-language-badge'
 import { KEYWORD_MAP, KEYWORDS_BY_LENGTH } from './lib/generated/keyword-map'
@@ -146,9 +145,6 @@ const posts = defineCollection({
       toc: s.toc(),
       readingTime: s.custom<number>().transform((_, { meta }) =>
         calculateReadingTime(typeof meta.content === 'string' ? meta.content : ''),
-      ),
-      plainBody: s.custom<string>().transform((_, { meta }) =>
-        extractPlainText(typeof meta.content === 'string' ? meta.content : ''),
       ),
     })
     .refine(
