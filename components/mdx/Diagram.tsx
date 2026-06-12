@@ -70,7 +70,6 @@ export function Diagram({ children, code, caption }: DiagramProps) {
       {svg ? (
         <div
           className="flex justify-center [&>svg]:max-w-full [&>svg]:h-auto"
-          // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       ) : error ? (

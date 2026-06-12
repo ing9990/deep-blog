@@ -16,29 +16,29 @@ keywords:
   - "I/O Multiplexing"
   - "epoll"
 summary:
-  ko: "Sync/Async와 Blocking/Non-Blocking은 서로 다른 축임을 음식점 비유로 먼저 이해하고, 4가지 조합을 실제 기술(Tomcat, Nginx, Node.js, io_uring, Virtual Thread)에 매핑합니다. 직관 → 두 단계 read() → C10K → 실제 시스템 순서로 따라갑니다."
-  en: "Build intuition for Sync/Async vs Blocking/Non-Blocking through a restaurant analogy, then map the four combinations to real systems (Tomcat, Nginx, Node.js, io_uring, Virtual Threads). Goes intuition → two-stage read() → C10K → real systems."
+  ko: "Sync/Async와 Blocking/Non-Blocking은 서로 다른 두 가지 질문임을 음식점 비유로 먼저 이해하고, 4가지 조합을 실제 기술(Tomcat, Nginx, Node.js, io_uring, Virtual Thread)에 매핑합니다. 직관 → 두 단계 read() → C10K → 실제 시스템 순서로 따라갑니다."
+  en: "Build intuition for Sync/Async vs Blocking/Non-Blocking as two independent questions through a restaurant analogy, then map the four combinations to real systems (Tomcat, Nginx, Node.js, io_uring, Virtual Threads). Goes intuition → two-stage read() → C10K → real systems."
 category: computer-science
 draft: false
 ---
 
-동기와 비동기, 블로킹과 논블로킹. 네 단어가 한 줄에 등장하면 대부분 어느 쪽이 어느 쪽과 반대말인지 헷갈립니다. 실은 이 둘은 **서로 다른 두 개의 축**이고, 섞어 쓰는 순간부터 혼란이 시작됩니다. 이 글은 음식점 비유로 4가지 조합의 직관을 먼저 잡은 뒤, OS 단계의 동작과 실제 시스템(Tomcat, Nginx, Node.js, io_uring, Virtual Thread)으로 차례차례 내려갑니다.
+동기와 비동기, 블로킹과 논블로킹. 네 단어가 한 줄에 등장하면 대부분 어느 쪽이 어느 쪽과 반대말인지 헷갈립니다. 두 쌍은 **서로 다른 두 가지 질문**을 던지는 개념이라, 한 쌍의 반대말로 받아들이면 혼란이 시작됩니다. 이 글은 음식점 비유로 4가지 조합의 직관을 먼저 잡은 뒤, OS 단계의 동작과 실제 시스템(`Tomcat`, `Nginx`, `Node.js`, `io_uring`, Virtual Thread)으로 차례차례 내려갑니다.
 
-## 두 축이 다르다
+## 두 개의 독립된 질문
 
-많은 글에서 이 개념들을 같은 축의 반대말처럼 섞어서 설명합니다. 그 결과 <E>Non-Blocking = Async</E>라는 오해가 널리 퍼져 있습니다. 혼란의 뿌리는 간단합니다. **이 개념은 2차원이고, 각 차원이 묻는 질문이 다릅니다.**
+두 개념을 같은 기준의 반대말로 받아들이면 <E>Non-Blocking = Async</E>라는 결론에 도달하지만, 두 쌍은 서로 다른 질문을 던지는 개념입니다. **두 가지 질문이 무엇을 묻는지가 다르므로, 동일시할 수 없습니다.**
 
-**축 1. Sync vs Async** 호출자가 결과를 어떻게 받는가를 묻습니다.
+**Sync vs Async** 는 호출자가 결과를 어떻게 받는가를 묻습니다.
 
 - Sync(동기): 호출자가 결과를 **직접** 확인한다. <E>다 됐어?</E> <E>아직.</E> <E>다 됐어?</E> 또는 <E>다 될 때까지 여기서 기다릴게</E> 방식.
 - Async(비동기): 피호출자(또는 커널)가 **완료 통보**를 보낸다. 호출자는 다른 일을 하다가 콜백·이벤트·Future로 결과를 받는다.
 
-**축 2. Blocking vs Non-Blocking** 호출한 순간 제어권이 어디로 가는가를 묻습니다.
+**Blocking vs Non-Blocking** 은 호출한 순간 제어권이 어디로 가는가를 묻습니다.
 
 - Blocking: 작업이 끝나야 함수가 리턴한다. 그동안 호출 스레드는 sleeping 상태로 멈춘다.
 - Non-Blocking: 즉시 리턴한다. 결과가 없으면 <E>아직 없음</E>(`EAGAIN`)이라고 답하고 바로 돌려보낸다.
 
-두 축은 **직교**(orthogonal)이므로 4가지 조합이 실제로 존재합니다. 각 조합이 어떤 모습인지는 추상적인 정의보다 음식점에서 음식이 손님 손에 도달하는 과정으로 보면 한눈에 잡힙니다.
+두 질문은 서로 독립적이므로 4가지 조합이 실제로 존재합니다. 각 조합이 어떤 모습인지는 추상적인 정의보다 음식점에서 음식이 손님 손에 도달하는 과정으로 보면 한눈에 잡힙니다.
 
 ## 음식점 4가지 조합
 
@@ -57,7 +57,7 @@ draft: false
 
 손님이 카운터로 가서 주문하고, 음식이 나올 때까지 카운터 앞에 서서 기다리는 방식입니다. 음식이 도착할 때까지 손님은 다른 어떤 일도 못 합니다. 가장 단순하고 가장 직관적입니다.
 
-이게 전통적인 Tomcat의 servlet 처리, blocking JDBC 호출, 옛날 HTTP 클라이언트의 동작입니다. 코드도 가장 단순합니다.
+이게 전통적인 `Tomcat`의 servlet 처리, blocking `JDBC` 호출, 옛날 `HTTP` 클라이언트의 동작입니다. 코드도 가장 단순합니다.
 
 ```java title="BlockingRead.java"
 InputStream in = socket.getInputStream();
@@ -89,13 +89,13 @@ while (true) {
 
 코드 레벨에서는 직원이 <E>어떤 벨이 울렸는지</E>를 묻는 것이 비동기적이기 때문에 이 모델이 Async로 분류됩니다. 단, 음식 자체를 주방에서 받아 손님에게 가져다주는 동작은 여전히 sync입니다.
 
-이 모델이 바로 Nginx, Node.js, Redis가 쓰는 구조이고, 1만 동시 접속(C10K)을 푸는 방법입니다. 구체적인 시스템 콜 이름(select, poll, epoll, kqueue)은 뒤에서 다룹니다. 지금은 <E>**한 명이 N명을 챙긴다**</E>만 기억하세요.
+이 모델이 바로 `Nginx`, `Node.js`, `Redis`가 쓰는 구조이고, 1만 동시 접속(C10K)을 푸는 방법입니다. 구체적인 시스템 콜 이름(`select`, `poll`, `epoll`, `kqueue`)은 뒤에서 다룹니다. 지금은 <E>**한 명이 N명을 챙긴다**</E>만 기억하세요.
 
 ### Async + Non-Blocking
 
 손님은 주문만 하고 자리에 앉아 자유롭게 다른 일을 합니다. 직원도 주방에 <E>X 자리로 배달</E>이라는 메모만 남기고 다른 일을 합니다. 음식이 완성되면 주방이 직접 손님 자리로 가져다 놓습니다. 손님도 직원도 음식 때문에 멈추지 않았습니다.
 
-OS 레벨에서는 커널이 데이터 도착부터 유저 버퍼로 복사까지 모두 처리하고, 완료된 후에야 애플리케이션에 알림을 보내는 구조입니다. Linux의 `io_uring`(5.1+), Windows의 IOCP(I/O Completion Port)가 여기 해당합니다.
+OS 레벨에서는 커널이 데이터 도착부터 유저 버퍼로 복사까지 모두 처리하고, 완료된 후에야 애플리케이션에 알림을 보내는 구조입니다. `Linux`의 `io_uring`(5.1+), `Windows`의 `IOCP`(I/O Completion Port)가 여기 해당합니다.
 
 ```kt title="KotlinCoroutineAsync.kt"
 suspend fun fetchOrder(id: Long): Order {
@@ -104,20 +104,20 @@ suspend fun fetchOrder(id: Long): Order {
 }
 ```
 
-JVM 관점에서 `suspend` 지점에서 스레드는 **해제되어 다른 coroutine으로 전환**되고, 결과가 도착하면 event loop가 continuation을 호출합니다.
+`JVM` 관점에서 `suspend` 지점에서 스레드는 **해제되어 다른 coroutine으로 전환**되고, 결과가 도착하면 event loop가 continuation을 호출합니다.
 
-### 한눈에 보는 매핑
+### 음식점-시스템 매핑
 
 | 음식점 시나리오 | I/O 모델 | 대표 기술 |
 |---|---|---|
-| 카운터 앞에서 직접 기다리기 | Sync + Blocking | 전통 Tomcat, JDBC |
+| 카운터 앞에서 직접 기다리기 | Sync + Blocking | 전통 `Tomcat`, `JDBC` |
 | 자리에서 자꾸 와서 묻기 | Sync + Non-Blocking | `O_NONBLOCK` 폴링 |
-| 진동벨 한 명이 N명 챙기기 | Async + Blocking | Nginx, Node.js, Redis |
-| 직원이 자리까지 자동 배달 | Async + Non-Blocking | io_uring, IOCP |
+| 진동벨 한 명이 N명 챙기기 | Async + Blocking | `Nginx`, `Node.js`, `Redis` |
+| 직원이 자리까지 자동 배달 | Async + Non-Blocking | `io_uring`, `IOCP` |
 
 여기까지가 직관입니다. 이제 OS 단계로 한 층 내려갑니다.
 
-## OS 관점에서
+## OS 수준의 두 단계
 
 겉보기엔 한 번의 `read()` 호출이지만, 내부는 두 단계로 나뉩니다. 모든 I/O 모델의 차이는 **이 두 단계를 누가 기다리고 누가 복사하느냐**에 있습니다.
 
@@ -136,14 +136,14 @@ JVM 관점에서 `suspend` 지점에서 스레드는 **해제되어 다른 corou
 - **Async + Non-Blocking** 두 단계 모두 커널이 처리, 완료 시 알림.
 
 <Callout type="info" title="epoll은 readiness 감시일 뿐 데이터 복사는 sync다">
-  epoll은 <E>어떤 fd에 데이터가 도착했는가</E>만 감시해 주는 readiness notification 메커니즘이기 때문에, 알림을 받은 뒤 호출하는 `read()`는 여전히 sync + blocking입니다. 이 구분을 잡고 있으면 Node.js가 single-thread임에도 빠른 이유(I/O 대기 시간을 다른 요청 처리에 쓰는 것)와 Java NIO의 non-blocking read가 여전히 sync인 이유(데이터 복사 단계는 호출자 책임)가 같은 모델로 설명됩니다.
+  `epoll`은 <E>어떤 fd에 데이터가 도착했는가</E>만 감시해 주는 readiness notification 메커니즘이기 때문에, 알림을 받은 뒤 호출하는 `read()`는 여전히 sync + blocking입니다. 이 구분을 잡고 있으면 `Node.js`가 single-thread임에도 빠른 이유(I/O 대기 시간을 다른 요청 처리에 쓰는 것)와 `Java NIO`의 non-blocking read가 여전히 sync인 이유(데이터 복사 단계는 호출자 책임)가 같은 모델로 설명됩니다.
 </Callout>
 
 ## C10K 문제
 
 1만 명이 동시에 주문하는 식당을 상상해봅시다. 전통 방식은 손님 1명당 직원 1명을 붙여 주문부터 서빙까지 전담시키는 구조입니다(Sync + Blocking). 작은 식당은 괜찮지만 1만 명이 몰리면 직원 1만 명이 필요하고, 각 직원이 서 있을 공간(스레드 스택)부터 부족해집니다. 이게 1999년 Dan Kegel이 제기한 **C10K 문제**(1만 동시 연결 문제)입니다.
 
-전통 Java Tomcat이 정확히 이 구조입니다.
+전통 `Java` `Tomcat`이 정확히 이 구조입니다.
 
 ```java title="ThreadPerRequestServer.java"
 ServerSocket server = new ServerSocket(8080);
@@ -156,9 +156,9 @@ while (true) {
 
 `client.getInputStream().read()`가 데이터를 기다리는 동안 OS는 그 스레드를 sleeping 상태로 만듭니다. CPU는 다른 스레드를 돌릴 수 있으니 낭비처럼 보이지 않지만, **스레드 자체의 메모리와 컨텍스트 스위칭 비용이 병목**입니다. <E>사용자 1명 = 스레드 1개</E>라는 가정 자체를 깨야 했습니다.
 
-해결책이 위에서 본 **진동벨 시스템**(Async + Blocking)입니다. 직원 1명이 모든 주문의 진동벨을 들고 있다가 울리는 벨만 확인합니다. 이게 Linux의 `epoll`이고, Nginx와 Node.js가 이 방식으로 1만 커넥션을 수백 MB로 처리합니다.
+해결책이 위에서 본 **진동벨 시스템**(Async + Blocking)입니다. 직원 1명이 모든 주문의 진동벨을 들고 있다가 울리는 벨만 확인합니다. 이게 `Linux`의 `epoll`이고, `Nginx`와 `Node.js`가 이 방식으로 1만 커넥션을 수백 MB로 처리합니다.
 
-## 실제 시스템에서
+## OS 시스템 콜로 본 실제 구현
 
 이제 진동벨 시스템과 자동 배달 시스템이 OS에서 실제로 어떤 시스템 콜로 구현되는지 봅니다.
 
@@ -186,11 +186,11 @@ for (SelectionKey k : selector.selectedKeys()) {
 | `epoll` | $O(1)$ | 제한 없음 | Linux 2.6+, ready list만 리턴 |
 | `kqueue` | $O(1)$ | 제한 없음 | BSD/macOS, epoll의 유사체 |
 
-epoll은 커널이 내부에 ready list를 유지하므로 감시 대상 fd가 아무리 많아도 알림 비용이 $O(1)$입니다. Nginx, Redis, Node.js가 모두 epoll(또는 kqueue)을 기반으로 합니다.
+`epoll`은 커널이 내부에 ready list를 유지하므로 감시 대상 fd가 아무리 많아도 알림 비용이 $O(1)$입니다. `Nginx`, `Redis`, `Node.js`가 모두 `epoll`(또는 `kqueue`)을 기반으로 합니다.
 
 ### True Async (자동 배달 시스템)
 
-두 단계 모두 커널이 처리하고 완료 시 알림을 주는 방식입니다. Linux의 `io_uring`(5.1+), Windows의 IOCP, POSIX AIO가 여기 속합니다. 커널 레벨에서 `io_uring`은 submission queue에 요청을 넣고 completion queue로 결과를 받는 구조이므로 단계 1과 2 모두 진짜 비동기화됩니다.
+두 단계 모두 커널이 처리하고 완료 시 알림을 주는 방식입니다. `Linux`의 `io_uring`(5.1+), `Windows`의 `IOCP`, `POSIX AIO`가 여기 속합니다. 커널 레벨에서 `io_uring`은 submission queue에 요청을 넣고 completion queue로 결과를 받는 구조이므로 단계 1과 2 모두 진짜 비동기화됩니다.
 
 ### 모델별 OS 타임라인
 
@@ -200,7 +200,7 @@ epoll은 커널이 내부에 ready list를 유지하므로 감시 대상 fd가 �
 
 ### Virtual Thread (제4의 선택지)
 
-JDK 21+의 Virtual Thread(Project Loom)는 blocking 코드 스타일을 그대로 두면서 C10K를 해결합니다. JVM이 내부에서 스레드를 un-mount/remount하는 방식이라, 수백만 개의 virtual thread를 만들어도 메모리가 폭발하지 않습니다.
+`JDK 21+`의 Virtual Thread(`Project Loom`)는 blocking 코드 스타일을 그대로 두면서 C10K를 해결합니다. `JVM`이 내부에서 스레드를 un-mount/remount하는 방식이라, 수백만 개의 virtual thread를 만들어도 메모리가 폭발하지 않습니다.
 
 ```java title="VirtualThread.java"
 try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -213,11 +213,11 @@ try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
 }
 ```
 
-Reactive 스택의 러닝 커브와 디버깅 난이도 없이 동시성을 얻을 수 있으므로, 많은 JVM 팀이 coroutine이나 reactive 대신 virtual thread로 이동하고 있습니다. 단, JNI 경계나 `synchronized` 블록 안에서는 여전히 OS 스레드를 점유(pin)하므로 라이브러리 호환성을 확인해야 합니다.
+Reactive 스택의 러닝 커브와 디버깅 난이도 없이 동시성을 얻을 수 있으므로, 많은 `JVM` 팀이 coroutine이나 reactive 대신 virtual thread로 이동하고 있습니다. 단, `JNI` 경계나 `synchronized` 블록 안에서는 여전히 OS 스레드를 점유(pin)하므로 라이브러리 호환성을 확인해야 합니다.
 
 ### 실무 매핑
 
-사내 관리자 API처럼 동시성이 낮고 로직이 단순하면 전통 Tomcat이 정답입니다.
+사내 관리자 API처럼 동시성이 낮고 로직이 단순하면 전통 `Tomcat`이 정답입니다.
 
 ```kt title="AdminApi.kt"
 @RestController
@@ -258,52 +258,52 @@ suspend fun placeOrder(req: OrderRequest): Order = coroutineScope {
 
 | 모델 | 스택 메모리 | 동시 커넥션 한도 | 개발 복잡도 |
 |---|---|---|---|
-| Tomcat Blocking | $\approx$ 1MB × 200 (default) | 200 | 낮음 |
-| Netty + NIO | 코어 × 2 event loop | 수만–수십만 | 높음 |
-| Kotlin Coroutines | KB 단위 × 수백만 | 수백만 | 중간 |
-| Virtual Thread (JDK 21+) | KB 단위 × 수백만 | 수백만 | 낮음 |
+| `Tomcat` Blocking | $\approx$ 1MB × 200 (default) | 200 | 낮음 |
+| `Netty` + `NIO` | 코어 × 2 event loop | 수만–수십만 | 높음 |
+| `Kotlin Coroutines` | KB 단위 × 수백만 | 수백만 | 중간 |
+| Virtual Thread (`JDK 21+`) | KB 단위 × 수백만 | 수백만 | 낮음 |
 
 ### 숨은 복잡도
 
 Async 모델의 진짜 비용은 코드 바깥에 있습니다.
 
-**스택 트레이스 분절**: `CompletableFuture.thenCompose()` 체인에서 예외가 터지면 실제 원인 지점이 스택에 드러나지 않습니다. Kotlin coroutines는 `CoroutineStackFrame`으로 일부 개선했지만 여전히 한계가 있습니다.
+**스택 트레이스 분절**: `CompletableFuture.thenCompose()` 체인에서 예외가 터지면 실제 원인 지점이 스택에 드러나지 않습니다. `Kotlin Coroutines`는 `CoroutineStackFrame`으로 일부 개선했지만 여전히 한계가 있습니다.
 
-**ThreadLocal 단절**: MDC 로그 컨텍스트, security context가 suspension 경계에서 사라집니다. `ThreadContextElement`, `MDCContext`로 명시적 전파가 필요합니다.
+**ThreadLocal 단절**: `MDC` 로그 컨텍스트, security context가 suspension 경계에서 사라집니다. `ThreadContextElement`, `MDCContext`로 명시적 전파가 필요합니다.
 
-**백프레셔**(backpressure): 생산자가 소비자보다 빠르면 이벤트가 쌓여 OOM으로 이어집니다. Reactor는 `Flux.onBackpressureBuffer()`로 명시 관리해야 하지만, blocking 모델은 자연스러운 흐름 제어로 이 문제가 아예 없습니다.
+**백프레셔**(backpressure): 생산자가 소비자보다 빠르면 이벤트가 쌓여 OOM으로 이어집니다. `Reactor`는 `Flux.onBackpressureBuffer()`로 명시 관리해야 하지만, blocking 모델은 자연스러운 흐름 제어로 이 문제가 아예 없습니다.
 
 **디버깅 환경**: 브레이크포인트가 suspension point에서 이상하게 동작하고, IDE 스텝 디버깅이 예상 흐름과 다릅니다.
 
 <Callout type="success" title="실무 교훈">
-  <E>일단 async/reactive로 시작</E>은 안티패턴입니다. Blocking으로 단순하게 시작해 실제 한계에 부딪혔을 때 NIO나 coroutine을 도입하거나, JDK 21+의 Virtual Thread로 blocking 코드를 그대로 수평 확장하는 경로가 가장 낮은 리스크입니다.
+  <E>일단 async/reactive로 시작</E>은 안티패턴입니다. Blocking으로 단순하게 시작해 실제 한계에 도달했을 때 `NIO`나 coroutine을 도입하거나, `JDK 21+`의 Virtual Thread로 blocking 코드를 그대로 수평 확장하는 경로가 가장 낮은 리스크입니다.
 </Callout>
 
-## 자주 마주치는 구분
+## 네 가지 흔한 오해
 
 이 개념들이 헷갈리는 가장 큰 이유는 **프로그래밍 언어의 추상화가 OS 레벨의 실체를 숨기기** 때문입니다. 코드에 `await`라고 쓰여 있어도 런타임이 실제로 어떤 시스템 콜을 호출하는지는 언어마다 다릅니다.
 
-### 1. Non-Blocking이면 곧 Async다?
+### Non-Blocking vs Async
 
-다른 축입니다. Java NIO의 `SocketChannel.read()`는 `configureBlocking(false)`면 non-blocking이지만 여전히 sync입니다. 호출자가 `read()`를 직접 호출하고 결과를 직접 받으니까요. True async는 커널이 완료를 통보하는 방식입니다(음식점 비유의 자동 배달).
+서로 다른 질문입니다. `Java NIO`의 `SocketChannel.read()`는 `configureBlocking(false)`면 non-blocking이지만 여전히 sync입니다. 호출자가 `read()`를 직접 호출하고 결과를 직접 받으니까요. True async는 커널이 완료를 통보하는 방식입니다(음식점 비유의 자동 배달).
 
-### 2. epoll은 async다?
+### epoll의 readiness 감시
 
-epoll은 <E>어느 fd가 ready되었는지</E> 감시만 해주는 도구입니다(진동벨 감시). 실제 데이터 복사(`read()`)는 여전히 sync + blocking입니다. Nginx, Redis, Node.js가 epoll을 쓰지만 내부의 `read()` 지점은 여전히 커널에서 유저 버퍼로의 복사를 수행합니다.
+`epoll`은 <E>어느 fd가 ready되었는지</E> 감시만 해주는 도구입니다(진동벨 감시). 실제 데이터 복사(`read()`)는 여전히 sync + blocking입니다. `Nginx`, `Redis`, `Node.js`가 `epoll`을 쓰지만 내부의 `read()` 지점은 여전히 커널에서 유저 버퍼로의 복사를 수행합니다.
 
-### 3. Promise/Future를 쓰면 async다?
+### Promise/Future의 실체
 
-런타임이 실제 async I/O(io_uring, IOCP)를 쓰지 않으면 Promise는 **스레드 풀에 blocking 작업을 떠넘기는 것**에 불과합니다. JDBC를 Reactor로 감싸면 논리적으로는 non-blocking처럼 보이지만, 실제로는 별도 스레드에서 blocking `read()`가 일어나고 있습니다. Spring의 `@Async`도 동일합니다.
+런타임이 실제 async I/O(`io_uring`, `IOCP`)를 쓰지 않으면 Promise는 **스레드 풀에 blocking 작업을 떠넘기는 것**에 불과합니다. `JDBC`를 `Reactor`로 감싸면 논리적으로는 non-blocking처럼 보이지만, 실제로는 별도 스레드에서 blocking `read()`가 일어나고 있습니다. `Spring`의 `@Async`도 동일합니다.
 
-### 4. Node.js는 single-thread라 async다?
+### Node.js single-thread의 인과
 
-인과 관계가 반대입니다. Node.js는 **async I/O(libuv + epoll)를 쓰니까 single-thread로 C10K를 해결할 수 있는 것**이지, single-thread여서 async가 된 게 아닙니다. 실제로 libuv 내부에는 파일 I/O용 스레드 풀이 따로 돌고 있습니다.
+인과 관계가 반대입니다. `Node.js`는 **async I/O(`libuv` + `epoll`)를 쓰니까 single-thread로 C10K를 해결할 수 있는 것**이지, single-thread여서 async가 된 게 아닙니다. 실제로 `libuv` 내부에는 파일 I/O용 스레드 풀이 따로 돌고 있습니다.
 
 ## 마무리
 
-네 가지 I/O 모델을 구분하는 핵심은 <E>축이 두 개</E>라는 사실 하나입니다. **Sync/Async는 호출자가 결과를 받는 방식**, **Blocking/Non-Blocking은 호출 순간 제어권의 방향**입니다. 두 축이 독립적이므로 4가지 조합이 실제로 존재하고, 각 조합은 음식점에서 손님이 음식을 받는 방식이 다른 것과 같습니다.
+네 가지 I/O 모델을 구분하는 핵심은 <E>두 가지 독립된 질문이 있다</E>는 사실 하나입니다. **Sync/Async는 호출자가 결과를 받는 방식**, **Blocking/Non-Blocking은 호출 순간 제어권의 방향**입니다. 두 질문이 독립적이므로 4가지 조합이 실제로 존재하고, 각 조합은 음식점에서 손님이 음식을 받는 방식이 다른 것과 같습니다.
 
-실전에서는 무조건 async를 고르지 마세요. 동시 커넥션이 적고 로직이 단순하면 blocking이 가장 빠르고 싸게 먹힙니다(작은 식당은 카운터 줄서기로도 충분합니다). C10K 규모의 연결을 감당해야 하면 I/O Multiplexing 기반 서버(Nginx, Netty, Ktor)로 가거나, JDK 21+이라면 Virtual Thread로 blocking 코드 스타일 그대로 수평 확장하는 길을 먼저 고려하세요. Reactive와 Coroutine은 외부 API 체이닝이나 고도의 I/O-bound 처리량이 필요할 때의 선택지입니다.
+실전에서 async가 기본 선택지가 될 필요는 없습니다. 동시 커넥션이 적고 로직이 단순하면 blocking이 가장 빠르고 싸게 먹힙니다(작은 식당은 카운터 줄서기로도 충분합니다). C10K 규모의 연결을 감당해야 하면 I/O Multiplexing 기반 서버(`Nginx`, `Netty`, `Ktor`)로 가거나, `JDK 21+`이라면 Virtual Thread로 blocking 코드 스타일 그대로 수평 확장하는 길이 가장 낮은 비용입니다. Reactive와 Coroutine은 외부 API 체이닝이나 고도의 I/O-bound 처리량이 필요할 때의 선택지입니다.
 
 ## 참고 자료
 
