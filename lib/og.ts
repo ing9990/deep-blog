@@ -56,3 +56,16 @@ export async function loadOgFonts(): Promise<
 export function truncateOgTitle(title: string, max = 64): string {
   return title.length > max ? `${title.slice(0, max - 1)}…` : title
 }
+
+/**
+ * Inlines a book cover from public/ as a data URI for Satori's <img>.
+ * Satori cannot decode webp, so unsupported formats return null and the
+ * card falls back to a text-only layout.
+ */
+export async function loadBookCoverDataUri(cover: string): Promise<string | null> {
+  const ext = cover.split('.').pop()?.toLowerCase()
+  const mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : null
+  if (!mime) return null
+  const data = await readFile(join(process.cwd(), 'public', cover))
+  return `data:${mime};base64,${data.toString('base64')}`
+}
