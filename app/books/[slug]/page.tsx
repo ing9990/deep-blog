@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { MDXContent } from '@/components/mdx/MDXContent'
@@ -8,6 +9,41 @@ import { getCrossHostUrls } from '@/lib/cross-host-url.server'
 
 export function generateStaticParams() {
   return getAllBookSlugs().map((slug) => ({ slug }))
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const book = getBookBySlug(slug)
+  if (!book) return {}
+
+  // External canonical URL drops the internal /books prefix (middleware
+  // rewrites books.ing9990.com/<slug> onto /books/<slug>).
+  const url = `https://books.ing9990.com/${book.slug}`
+
+  return {
+    title: book.title.ko,
+    description: book.summary.ko,
+    openGraph: {
+      type: 'article',
+      title: book.title.ko,
+      description: book.summary.ko,
+      url,
+      siteName: 'DEEP',
+      locale: 'ko_KR',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: book.title.ko,
+      description: book.summary.ko,
+    },
+    alternates: {
+      canonical: url,
+    },
+  }
 }
 
 export default async function BookDetailPage({
