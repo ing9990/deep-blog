@@ -51,17 +51,10 @@
 
   --font-sans: var(--font-paperlogy), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* Reading-optimized stack for long-form Korean copy outside .prose-kr
-     (landing sections, marketing pages). Pairs Pretendard Variable for
-     Korean with the blog's standard fallbacks. */
-  --font-reading: var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   /* Blog body display font: Tmoney 둥근바람 (TmoneyRoundWind) for a softer,
      rounded reading texture inside .prose-kr. Pretendard fallback for any
      glyph the Tmoney face doesn't cover. */
   --font-tmoney: var(--font-tmoney-round), var(--font-pretendard), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* Heading display font for blog posts: Maplestory Light (Nexon). Paperlogy
-     fallback keeps the headline shape on any glyph Maplestory misses. */
-  --font-maple: var(--font-maplestory), var(--font-paperlogy), ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* ------------------------------------------------------------------
      Typography primitives — T-shirt scale. All sizes multiply through

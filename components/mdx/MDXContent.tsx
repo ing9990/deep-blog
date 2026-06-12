@@ -27,7 +27,6 @@ type MDXModule = {
  * compiler output from version-controlled MDX files, never user input.
  */
 const useMDXComponent = (code: string): ComponentType<{ components?: MDXComponents }> => {
-  // eslint-disable-next-line no-new-func
   const fn = new Function(code) as (rt: RuntimeModule) => MDXModule
   return fn(runtime).default
 }
